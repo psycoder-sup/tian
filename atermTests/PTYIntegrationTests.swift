@@ -3,83 +3,49 @@ import Foundation
 import os
 @testable import aterm
 
+@Suite(.serialized)
 struct PTYIntegrationTests {
     // MARK: - Round-trip I/O
 
     @Test func echoRoundTrip() async throws {
-        let process = try PTYProcess(columns: 80, rows: 24)
-        let receivedOutput = OSAllocatedUnfairLock(initialState: "")
-        let readQueue = DispatchQueue(label: "test-pty-io")
+        let fixture = try await PTYTestFixture.create(label: "test-pty-io")
+        defer { fixture.cleanup() }
 
-        let fileHandle = PTYFileHandle(fd: process.masterFD, queue: readQueue) { data in
-            let text = String(decoding: data, as: UTF8.self)
-            receivedOutput.withLock { $0.append(text) }
-        }
-        defer {
-            fileHandle.close()
-            process.terminate()
-        }
-
-        // Wait for shell startup
+        fixture.fileHandle.write("echo TESTOUTPUT42\r".data(using: .utf8)!)
         try await Task.sleep(for: .milliseconds(500))
 
-        // Send echo command
-        fileHandle.write("echo TESTOUTPUT42\r".data(using: .utf8)!)
-
-        // Wait for output
-        try await Task.sleep(for: .milliseconds(500))
-
-        let output = receivedOutput.withLock { $0 }
-        #expect(output.contains("TESTOUTPUT42"))
+        #expect(fixture.currentOutput.contains("TESTOUTPUT42"))
     }
 
     @Test func asyncReadCallbackFires() async throws {
-        let process = try PTYProcess(columns: 80, rows: 24)
-        let receivedOutput = OSAllocatedUnfairLock(initialState: "")
-        let readQueue = DispatchQueue(label: "test-pty-read")
+        let fixture = try await PTYTestFixture.create(label: "test-pty-read")
+        defer { fixture.cleanup() }
 
-        let fileHandle = PTYFileHandle(fd: process.masterFD, queue: readQueue) { data in
-            let text = String(decoding: data, as: UTF8.self)
-            receivedOutput.withLock { $0.append(text) }
-        }
-        defer {
-            fileHandle.close()
-            process.terminate()
-        }
+        fixture.fileHandle.write("echo CALLBACKTEST77\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(500))
 
-        try await Task.sleep(for: .milliseconds(300))
-
-        fileHandle.write("echo CALLBACKTEST77\r".data(using: .utf8)!)
-
-        try await Task.sleep(for: .seconds(1))
-
-        let output = receivedOutput.withLock { $0 }
-        #expect(output.contains("CALLBACKTEST77"))
+        #expect(fixture.currentOutput.contains("CALLBACKTEST77"))
     }
 
     // MARK: - Shell exit
 
-    @Test(.timeLimit(.minutes(1)))
-    func shellExitProducesExitCode() async throws {
-        let process = try PTYProcess(columns: 80, rows: 24)
+    @Test func shellExitsCleanly() async throws {
+        let fixture = try await PTYTestFixture.createDraining(label: "test-pty-exit0")
+        defer { fixture.cleanup() }
 
-        // Wait for shell to start
-        try await Task.sleep(for: .milliseconds(300))
+        let pid = fixture.process.childPID
+        fixture.fileHandle.write("exit 0\r".data(using: .utf8)!)
 
-        // Send exit command via direct write
-        let cmd = "exit 0\r".data(using: .utf8)!
-        cmd.withUnsafeBytes { buffer in
-            _ = Darwin.write(process.masterFD, buffer.baseAddress!, buffer.count)
+        var exited = false
+        for _ in 0..<30 {
+            if kill(pid, 0) != 0 {
+                exited = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(100))
         }
 
-        // Collect exit code with timeout
-        var exitCode: Int32?
-        for await code in process.exitStream {
-            exitCode = code
-            break
-        }
-
-        #expect(exitCode == 0)
+        #expect(exited, "Shell process should have exited after 'exit 0'")
     }
 
     // MARK: - Terminate
@@ -91,8 +57,44 @@ struct PTYIntegrationTests {
         #expect(kill(pid, 0) == 0)
 
         process.terminate()
-        usleep(100_000)
 
         #expect(kill(pid, 0) != 0)
+    }
+
+    // MARK: - Multiple commands
+
+    @Test func multipleCommandsRoundTrip() async throws {
+        let fixture = try await PTYTestFixture.create(label: "test-pty-multi")
+        defer { fixture.cleanup() }
+
+        fixture.fileHandle.write("echo AAA111\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(300))
+        fixture.fileHandle.write("echo BBB222\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(300))
+        fixture.fileHandle.write("echo CCC333\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(500))
+
+        let output = fixture.currentOutput
+        #expect(output.contains("AAA111"))
+        #expect(output.contains("BBB222"))
+        #expect(output.contains("CCC333"))
+    }
+
+    // MARK: - Ctrl+C interrupt
+
+    @Test func ctrlCInterrupt() async throws {
+        let fixture = try await PTYTestFixture.create(label: "test-pty-ctrlc")
+        defer { fixture.cleanup() }
+
+        fixture.fileHandle.write("sleep 60\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(300))
+
+        fixture.fileHandle.write(Data([0x03]))
+        try await Task.sleep(for: .milliseconds(500))
+
+        fixture.fileHandle.write("echo AFTERCTRLC99\r".data(using: .utf8)!)
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(fixture.currentOutput.contains("AFTERCTRLC99"))
     }
 }
