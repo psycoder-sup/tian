@@ -16,3 +16,7 @@ build/
 # Swift Package Manager
 .build/
 Package.resolved
+
+# Ghostty build artifacts (run scripts/build-ghostty.sh to generate)
+.ghostty-src/
+aterm/Vendor/ghostty/lib/
