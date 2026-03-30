@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(xcodebuild test:*)",
-      "Bash(xcodegen:*)"
+      "Bash(xcodegen:*)",
+      "Bash(xcrun swiftc -typecheck:*)",
+      "Bash(zig build:*)"
     ]
   }
 }
