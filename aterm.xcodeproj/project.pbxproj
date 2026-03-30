@@ -8,17 +8,20 @@
 
 /* Begin PBXBuildFile section */
 		00480B683220EF013CAFB22E /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452FA3D568FD9150E0D64A60 /* Colors.swift */; };
+		4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */; };
+		4EE394D17D4A5F9184028CED /* SplitLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */; };
+		6C3D15D2E6F5B3261879B31A /* GhosttyTerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C62388AAC06EEE96FD89874 /* GhosttyTerminalSurface.swift */; };
+		6F117927663C99EA286A5AE0 /* SplitLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808CE94D10E6FBFDBF1A5CA1 /* SplitLayout.swift */; };
+		6F969E602A9B32033332210A /* PaneNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A97EF99F4161552B5D89CA1 /* PaneNode.swift */; };
 		826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE60D02A012008C5B7C077A /* TerminalContentView.swift */; };
 		91DBC6B0CD7A01A55D9C6A20 /* TerminalWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B688BD7353CEA68D57A8BBB1 /* TerminalWindow.swift */; };
+		AD015DC13689C71E9B609CC8 /* SplitTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246FA3D2D1A4503A3F208ADD /* SplitTree.swift */; };
 		B7A094E67D56DF927E2DB5ED /* AtermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003B4EB9F499098DBD761D58 /* AtermApp.swift */; };
 		B9CD36DFA0FE29A070816343 /* ANSIStripperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F904991148280D4B79C115 /* ANSIStripperTests.swift */; };
-		DD054F519F0F20BF3134B2A6 /* PTYTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB2B60DD967DE996C51D12EB /* PTYTestHelpers.swift */; };
+		BE9FFD13FBCEBA334FDAA132 /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */; };
 		DE5252EABE963251E8A33C45 /* ANSIStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */; };
+		E054DB65B3C665FEE6DEBC11 /* GhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F98E3B09C59DAF38D7D68B5 /* GhosttyApp.swift */; };
 		EF5A8041A3A3B51A8763CD79 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB2FB9351DA3F5FC2CCBF61 /* Logger.swift */; };
-		AA0001000000000000000001 /* GhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0002000000000000000001 /* GhosttyApp.swift */; };
-		BB0001000000000000000001 /* GhosttyTerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0002000000000000000001 /* GhosttyTerminalSurface.swift */; };
-		CC0001000000000000000001 /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0002000000000000000001 /* TerminalSurfaceView.swift */; };
-		DD0001000000000000000001 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD0002000000000000000001 /* GhosttyKit.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,33 +36,25 @@
 
 /* Begin PBXFileReference section */
 		003B4EB9F499098DBD761D58 /* AtermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtermApp.swift; sourceTree = "<group>"; };
+		246FA3D2D1A4503A3F208ADD /* SplitTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTree.swift; sourceTree = "<group>"; };
+		35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitLayoutTests.swift; sourceTree = "<group>"; };
+		43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeTests.swift; sourceTree = "<group>"; };
 		452FA3D568FD9150E0D64A60 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		4F98E3B09C59DAF38D7D68B5 /* GhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyApp.swift; sourceTree = "<group>"; };
 		4FE60D02A012008C5B7C077A /* TerminalContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalContentView.swift; sourceTree = "<group>"; };
 		6AB2FB9351DA3F5FC2CCBF61 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
+		7A97EF99F4161552B5D89CA1 /* PaneNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneNode.swift; sourceTree = "<group>"; };
 		7A9D9B4CF4EDDF461D96BCF0 /* aterm-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "aterm-Bridging-Header.h"; sourceTree = "<group>"; };
+		808CE94D10E6FBFDBF1A5CA1 /* SplitLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitLayout.swift; sourceTree = "<group>"; };
 		8B219CB73D2192C8472356C0 /* aterm.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = aterm.entitlements; sourceTree = "<group>"; };
+		9C62388AAC06EEE96FD89874 /* GhosttyTerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalSurface.swift; sourceTree = "<group>"; };
 		A98B0F8DDAFDE2C656302EEF /* atermTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = atermTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B688BD7353CEA68D57A8BBB1 /* TerminalWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalWindow.swift; sourceTree = "<group>"; };
 		CDF7F8753E641B0600CC34B9 /* aterm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = aterm.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D5F904991148280D4B79C115 /* ANSIStripperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripperTests.swift; sourceTree = "<group>"; };
-		EB2B60DD967DE996C51D12EB /* PTYTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTYTestHelpers.swift; sourceTree = "<group>"; };
 		EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripper.swift; sourceTree = "<group>"; };
-		AA0002000000000000000001 /* GhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyApp.swift; sourceTree = "<group>"; };
-		BB0002000000000000000001 /* GhosttyTerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalSurface.swift; sourceTree = "<group>"; };
-		CC0002000000000000000001 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
-		DD0002000000000000000001 /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = GhosttyKit.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		EE0001000000000000000001 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DD0001000000000000000001 /* GhosttyKit.xcframework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		1888D8E7AEE868A8CEEDA490 /* aterm */ = {
@@ -69,8 +64,8 @@
 				8B219CB73D2192C8472356C0 /* aterm.entitlements */,
 				D3ADFC359DEE66686252F109 /* App */,
 				EECE075F3F3844C46CC55E08 /* Core */,
+				C7CCFD5EC921E98CD4DE9059 /* Pane */,
 				6C4411415871C2F5695DE648 /* Utilities */,
-				FF0001000000000000000001 /* Vendor */,
 				FC75859E24B35E634AF7FF5F /* View */,
 			);
 			path = aterm;
@@ -107,9 +102,20 @@
 			isa = PBXGroup;
 			children = (
 				D5F904991148280D4B79C115 /* ANSIStripperTests.swift */,
-				EB2B60DD967DE996C51D12EB /* PTYTestHelpers.swift */,
+				35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */,
+				43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */,
 			);
 			path = atermTests;
+			sourceTree = "<group>";
+		};
+		C7CCFD5EC921E98CD4DE9059 /* Pane */ = {
+			isa = PBXGroup;
+			children = (
+				7A97EF99F4161552B5D89CA1 /* PaneNode.swift */,
+				808CE94D10E6FBFDBF1A5CA1 /* SplitLayout.swift */,
+				246FA3D2D1A4503A3F208ADD /* SplitTree.swift */,
+			);
+			path = Pane;
 			sourceTree = "<group>";
 		};
 		D3ADFC359DEE66686252F109 /* App */ = {
@@ -125,8 +131,8 @@
 			isa = PBXGroup;
 			children = (
 				EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */,
-				AA0002000000000000000001 /* GhosttyApp.swift */,
-				BB0002000000000000000001 /* GhosttyTerminalSurface.swift */,
+				4F98E3B09C59DAF38D7D68B5 /* GhosttyApp.swift */,
+				9C62388AAC06EEE96FD89874 /* GhosttyTerminalSurface.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -135,17 +141,9 @@
 			isa = PBXGroup;
 			children = (
 				4FE60D02A012008C5B7C077A /* TerminalContentView.swift */,
-				CC0002000000000000000001 /* TerminalSurfaceView.swift */,
+				788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */,
 			);
 			path = View;
-			sourceTree = "<group>";
-		};
-		FF0001000000000000000001 /* Vendor */ = {
-			isa = PBXGroup;
-			children = (
-				DD0002000000000000000001 /* GhosttyKit.xcframework */,
-			);
-			path = Vendor;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -174,7 +172,6 @@
 			buildConfigurationList = 67F01F12A06D81A220386E62 /* Build configuration list for PBXNativeTarget "aterm" */;
 			buildPhases = (
 				DB47D104030C9574D75AD295 /* Sources */,
-				EE0001000000000000000001 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -195,10 +192,9 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2630;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 80FB72C6B9C1583AE8925302 /* Build configuration list for PBXProject "aterm" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -208,7 +204,6 @@
 			mainGroup = 6D6A1E5FBCD6EB4DAE4F665C;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 29B1853D43339785DE006E47 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -224,7 +219,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B9CD36DFA0FE29A070816343 /* ANSIStripperTests.swift in Sources */,
-				DD054F519F0F20BF3134B2A6 /* PTYTestHelpers.swift in Sources */,
+				4EE394D17D4A5F9184028CED /* SplitLayoutTests.swift in Sources */,
+				4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,11 +231,14 @@
 				DE5252EABE963251E8A33C45 /* ANSIStripper.swift in Sources */,
 				B7A094E67D56DF927E2DB5ED /* AtermApp.swift in Sources */,
 				00480B683220EF013CAFB22E /* Colors.swift in Sources */,
-				AA0001000000000000000001 /* GhosttyApp.swift in Sources */,
-				BB0001000000000000000001 /* GhosttyTerminalSurface.swift in Sources */,
+				E054DB65B3C665FEE6DEBC11 /* GhosttyApp.swift in Sources */,
+				6C3D15D2E6F5B3261879B31A /* GhosttyTerminalSurface.swift in Sources */,
 				EF5A8041A3A3B51A8763CD79 /* Logger.swift in Sources */,
+				6F969E602A9B32033332210A /* PaneNode.swift in Sources */,
+				6F117927663C99EA286A5AE0 /* SplitLayout.swift in Sources */,
+				AD015DC13689C71E9B609CC8 /* SplitTree.swift in Sources */,
 				826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */,
-				CC0001000000000000000001 /* TerminalSurfaceView.swift in Sources */,
+				BE9FFD13FBCEBA334FDAA132 /* TerminalSurfaceView.swift in Sources */,
 				91DBC6B0CD7A01A55D9C6A20 /* TerminalWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -262,7 +261,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/aterm/Vendor",
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -282,7 +281,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/aterm/Vendor",
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers",
 				);
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -304,7 +303,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/aterm/Vendor",
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers",
 				);
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = aterm;
@@ -313,19 +312,14 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64",
+				);
 				OTHER_LDFLAGS = (
+					"-lghostty-fat",
 					"-lc",
 					"-lc++",
-					"-framework",
-					Metal,
-					"-framework",
-					QuartzCore,
-					"-framework",
-					IOSurface,
-					"-framework",
-					UniformTypeIdentifiers,
-					"-framework",
-					Carbon,
+					"-framework Carbon",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.aterm.app;
 				PRODUCT_NAME = aterm;
@@ -407,7 +401,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(SRCROOT)/aterm/Vendor",
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers",
 				);
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = aterm;
@@ -416,19 +410,14 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64",
+				);
 				OTHER_LDFLAGS = (
+					"-lghostty-fat",
 					"-lc",
 					"-lc++",
-					"-framework",
-					Metal,
-					"-framework",
-					QuartzCore,
-					"-framework",
-					IOSurface,
-					"-framework",
-					UniformTypeIdentifiers,
-					"-framework",
-					Carbon,
+					"-framework Carbon",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.aterm.app;
 				PRODUCT_NAME = aterm;

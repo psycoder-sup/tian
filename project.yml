@@ -42,13 +42,14 @@ targets:
         ENABLE_APP_SANDBOX: false
         SWIFT_OBJC_BRIDGING_HEADER: aterm/aterm-Bridging-Header.h
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/ghostty/include
+          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
         LIBRARY_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/ghostty/lib
+          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64
         OTHER_LDFLAGS:
-          - -lghostty-vt
+          - -lghostty-fat
           - -lc
           - -lc++
+          - -framework Carbon
 
   atermTests:
     type: bundle.unit-test
@@ -64,4 +65,4 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm
         BUNDLE_LOADER: $(TEST_HOST)
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/ghostty/include
+          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
