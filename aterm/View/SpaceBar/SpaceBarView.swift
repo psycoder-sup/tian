@@ -43,8 +43,6 @@ struct SpaceBarView: View {
             .accessibilityLabel("New space")
             .padding(.trailing, 6)
         }
-        .frame(height: 28)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.7))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Spaces")
     }
