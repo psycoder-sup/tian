@@ -11,16 +11,20 @@
 		08F605D548DE961777918C36 /* PaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B8F5D9F8D8AB8EFE4C60E06 /* PaneView.swift */; };
 		0DC1CEB4F5CD44F4516641D1 /* KeyAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8A3E72A60CBF3FF523FFD3 /* KeyAction.swift */; };
 		11CBD8B4561751391BE93A77 /* TabModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452B783CB449086E5D923E97 /* TabModel.swift */; };
+		23288F245641D955D596DB28 /* Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */; };
 		4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */; };
 		487C5765FAD4759E87DCC2CC /* PaneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F29973BF00B9522849B08FE /* PaneViewModel.swift */; };
 		4EE394D17D4A5F9184028CED /* SplitLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */; };
+		5D9BABA189C7FD43E6DD91C0 /* WorkspaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A12E56E28418852B337D523 /* WorkspaceManager.swift */; };
 		6C3D15D2E6F5B3261879B31A /* GhosttyTerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C62388AAC06EEE96FD89874 /* GhosttyTerminalSurface.swift */; };
 		6F117927663C99EA286A5AE0 /* SplitLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808CE94D10E6FBFDBF1A5CA1 /* SplitLayout.swift */; };
 		6F969E602A9B32033332210A /* PaneNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A97EF99F4161552B5D89CA1 /* PaneNode.swift */; };
+		7041FDD37A7E955107826C45 /* WorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */; };
 		739C468E214CB7695446A996 /* SpaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0BC24C498E99A701D837F92 /* SpaceModel.swift */; };
 		7D35164BEA0B8A9A41831D19 /* SpaceDragItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6698394DE535B9FBB88FE2 /* SpaceDragItem.swift */; };
 		7D4FA2A3ED2DA5E6E7D936AA /* SpaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785E7B61836E96CBD22AD496 /* SpaceCollection.swift */; };
 		826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE60D02A012008C5B7C077A /* TerminalContentView.swift */; };
+		85110F0B31FC6E958B8AD25A /* WorkingDirectoryResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C0A1AB2246BF762531CAD0 /* WorkingDirectoryResolver.swift */; };
 		91DBC6B0CD7A01A55D9C6A20 /* TerminalWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B688BD7353CEA68D57A8BBB1 /* TerminalWindow.swift */; };
 		952DEFA5F0C6826E5E60DA65 /* TabBarItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB98C5FAE75C8562E5011DD1 /* TabBarItemView.swift */; };
 		9731E85D5FDC27DDB3C2EB53 /* SplitNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9271C21D13FE00F8A8B08D4 /* SplitNavigationTests.swift */; };
@@ -32,6 +36,7 @@
 		B9CD36DFA0FE29A070816343 /* ANSIStripperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F904991148280D4B79C115 /* ANSIStripperTests.swift */; };
 		BE9FFD13FBCEBA334FDAA132 /* TerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */; };
 		C0B78448B75CBE580BC264A6 /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A008EBB40777828D519B9D6 /* TabBarView.swift */; };
+		C10A762122E3E3DAE7288927 /* WorkingDirectoryResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */; };
 		C1F30EAAA44CBAB1FF21A7E5 /* SpaceCollectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA38B1419B85C286BA9BCFF2 /* SpaceCollectionTests.swift */; };
 		D1037DBB8957F557798C4275 /* SplitTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572175B5CC97E13C714B239E /* SplitTreeView.swift */; };
 		DE5252EABE963251E8A33C45 /* ANSIStripper.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */; };
@@ -56,6 +61,7 @@
 /* Begin PBXFileReference section */
 		003B4EB9F499098DBD761D58 /* AtermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtermApp.swift; sourceTree = "<group>"; };
 		246FA3D2D1A4503A3F208ADD /* SplitTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTree.swift; sourceTree = "<group>"; };
+		2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitLayoutTests.swift; sourceTree = "<group>"; };
 		43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeTests.swift; sourceTree = "<group>"; };
 		452B783CB449086E5D923E97 /* TabModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabModel.swift; sourceTree = "<group>"; };
@@ -66,8 +72,11 @@
 		572175B5CC97E13C714B239E /* SplitTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeView.swift; sourceTree = "<group>"; };
 		5F29973BF00B9522849B08FE /* PaneViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneViewModel.swift; sourceTree = "<group>"; };
 		67B4E938E404841534F9ADDE /* SpaceBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceBarView.swift; sourceTree = "<group>"; };
+		68C0A1AB2246BF762531CAD0 /* WorkingDirectoryResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDirectoryResolver.swift; sourceTree = "<group>"; };
+		6A12E56E28418852B337D523 /* WorkspaceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceManager.swift; sourceTree = "<group>"; };
 		6AB2FB9351DA3F5FC2CCBF61 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		6B8F5D9F8D8AB8EFE4C60E06 /* PaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneView.swift; sourceTree = "<group>"; };
+		6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDirectoryResolverTests.swift; sourceTree = "<group>"; };
 		6E8A3E72A60CBF3FF523FFD3 /* KeyAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyAction.swift; sourceTree = "<group>"; };
 		785E7B61836E96CBD22AD496 /* SpaceCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCollection.swift; sourceTree = "<group>"; };
 		788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
@@ -88,6 +97,7 @@
 		D8EBD33B2140ADC629998047 /* KeyBindingRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBindingRegistry.swift; sourceTree = "<group>"; };
 		D9271C21D13FE00F8A8B08D4 /* SplitNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitNavigationTests.swift; sourceTree = "<group>"; };
 		DA38B1419B85C286BA9BCFF2 /* SpaceCollectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCollectionTests.swift; sourceTree = "<group>"; };
+		DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTests.swift; sourceTree = "<group>"; };
 		E0BC24C498E99A701D837F92 /* SpaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceModel.swift; sourceTree = "<group>"; };
 		E64EC6247296A9294A831FE1 /* InlineRenameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineRenameView.swift; sourceTree = "<group>"; };
 		EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripper.swift; sourceTree = "<group>"; };
@@ -104,6 +114,7 @@
 				EECE075F3F3844C46CC55E08 /* Core */,
 				CCB4A6783AC6B5E8665B022F /* DragAndDrop */,
 				A66726DC7F987C772EA211FC /* Input */,
+				CE46D525964361E3A7B31F5B /* Models */,
 				C7CCFD5EC921E98CD4DE9059 /* Pane */,
 				B0E3AFEDABC4806B6C568552 /* Tab */,
 				6C4411415871C2F5695DE648 /* Utilities */,
@@ -135,6 +146,7 @@
 			children = (
 				452FA3D568FD9150E0D64A60 /* Colors.swift */,
 				6AB2FB9351DA3F5FC2CCBF61 /* Logger.swift */,
+				68C0A1AB2246BF762531CAD0 /* WorkingDirectoryResolver.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -183,6 +195,8 @@
 				35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */,
 				D9271C21D13FE00F8A8B08D4 /* SplitNavigationTests.swift */,
 				43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */,
+				6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */,
+				DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */,
 			);
 			path = atermTests;
 			sourceTree = "<group>";
@@ -206,6 +220,15 @@
 				FFF04023EC7EB940CD026F3F /* TabDragItem.swift */,
 			);
 			path = DragAndDrop;
+			sourceTree = "<group>";
+		};
+		CE46D525964361E3A7B31F5B /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */,
+				6A12E56E28418852B337D523 /* WorkspaceManager.swift */,
+			);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		D3ADFC359DEE66686252F109 /* App */ = {
@@ -328,6 +351,8 @@
 				4EE394D17D4A5F9184028CED /* SplitLayoutTests.swift in Sources */,
 				9731E85D5FDC27DDB3C2EB53 /* SplitNavigationTests.swift in Sources */,
 				4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */,
+				C10A762122E3E3DAE7288927 /* WorkingDirectoryResolverTests.swift in Sources */,
+				7041FDD37A7E955107826C45 /* WorkspaceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -364,6 +389,9 @@
 				826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */,
 				BE9FFD13FBCEBA334FDAA132 /* TerminalSurfaceView.swift in Sources */,
 				91DBC6B0CD7A01A55D9C6A20 /* TerminalWindow.swift in Sources */,
+				85110F0B31FC6E958B8AD25A /* WorkingDirectoryResolver.swift in Sources */,
+				23288F245641D955D596DB28 /* Workspace.swift in Sources */,
+				5D9BABA189C7FD43E6DD91C0 /* WorkspaceManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

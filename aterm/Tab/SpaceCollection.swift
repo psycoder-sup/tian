@@ -10,10 +10,14 @@ final class SpaceCollection {
     /// Set to `true` when the last space is closed; the app should quit.
     var shouldQuit: Bool = false
 
+    /// Called when the last space is closed. When set, `shouldQuit` is not set;
+    /// the callback owner is responsible for propagating the quit signal.
+    var onEmpty: (() -> Void)?
+
     private var spaceCounter: Int = 1
 
-    init() {
-        let initialTab = TabModel(name: "Tab 1")
+    init(workingDirectory: String = "~") {
+        let initialTab = TabModel(name: "Tab 1", workingDirectory: workingDirectory)
         let initialSpace = SpaceModel(name: "default", initialTab: initialTab)
         self.spaces = [initialSpace]
         self.activeSpaceID = initialSpace.id
@@ -48,7 +52,11 @@ final class SpaceCollection {
         spaces.remove(at: index)
 
         if spaces.isEmpty {
-            shouldQuit = true
+            if let onEmpty {
+                onEmpty()
+            } else {
+                shouldQuit = true
+            }
             return
         }
 

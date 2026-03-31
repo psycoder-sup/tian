@@ -9,6 +9,7 @@ final class SpaceModel: Identifiable {
     private(set) var tabs: [TabModel]
     var activeTabID: UUID
     let createdAt: Date
+    var defaultWorkingDirectory: URL?
 
     /// Called when the space's last tab is closed. The owning SpaceCollection should remove this space.
     var onEmpty: (() -> Void)?
