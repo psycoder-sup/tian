@@ -3,19 +3,17 @@ import SwiftUI
 
 @MainActor
 final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
-    let workspaceID: UUID
-    private weak var workspace: Workspace?
+    let workspaceCollection: WorkspaceCollection
     private weak var workspaceManager: WorkspaceManager?
     private weak var windowCoordinator: WindowCoordinator?
     private var eventMonitor: Any?
 
     init(
-        workspace: Workspace,
+        workspaceCollection: WorkspaceCollection,
         workspaceManager: WorkspaceManager,
         windowCoordinator: WindowCoordinator
     ) {
-        self.workspaceID = workspace.id
-        self.workspace = workspace
+        self.workspaceCollection = workspaceCollection
         self.workspaceManager = workspaceManager
         self.windowCoordinator = windowCoordinator
 
@@ -25,16 +23,13 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = workspace.name
+        window.title = workspaceCollection.activeWorkspace?.name ?? "aterm"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = .terminalBackground
-        window.setFrameAutosaveName("workspace-\(workspace.id.uuidString)")
         window.center()
 
-        let contentView = WorkspaceWindowContent(workspaceID: workspace.id)
-            .environment(workspaceManager)
-
+        let contentView = WorkspaceWindowContent(workspaceCollection: workspaceCollection)
         let hostingView = NSHostingView(rootView: contentView)
         window.contentView = hostingView
         window.initialFirstResponder = hostingView
@@ -42,9 +37,13 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
 
+        workspaceCollection.onEmpty = { [weak self] in
+            self?.window?.close()
+        }
+
         installTrafficLightAligner(window: window)
-        observeNameChanges(workspace: workspace)
-        installKeyboardMonitor(workspace: workspace)
+        observeActiveWorkspaceName()
+        installKeyboardMonitor()
     }
 
     @available(*, unavailable)
@@ -62,43 +61,63 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
 
     // MARK: - Name Observation
 
-    private func observeNameChanges(workspace: Workspace) {
+    private func observeActiveWorkspaceName() {
         withObservationTracking {
-            _ = workspace.name
+            _ = workspaceCollection.activeWorkspaceID
+            _ = workspaceCollection.activeWorkspace?.name
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, let window = self.window else { return }
-                window.title = workspace.name
-                self.observeNameChanges(workspace: workspace)
+                window.title = self.workspaceCollection.activeWorkspace?.name ?? "aterm"
+                self.observeActiveWorkspaceName()
             }
         }
     }
 
     // MARK: - Keyboard Monitor
 
-    private func installKeyboardMonitor(workspace: Workspace) {
-        let collection = workspace.spaceCollection
-
+    private func installKeyboardMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
 
-            // Only handle events for our window
             guard event.window === self.window else { return event }
 
             guard let action = KeyBindingRegistry.shared.action(for: event) else {
                 return event
             }
 
-            // Don't consume shortcuts when a text field is focused,
-            // except for workspace/sidebar-level actions that should always work.
             if let responder = event.window?.firstResponder, responder is NSText {
                 switch action {
                 case .toggleSidebar, .focusSidebar:
-                    break  // allow through
+                    break
                 default:
                     return event
                 }
             }
+
+            switch action {
+            case .newWorkspace:
+                self.workspaceCollection.createWorkspace()
+                return nil
+            case .closeWorkspace:
+                self.workspaceCollection.removeWorkspace(id: self.workspaceCollection.activeWorkspaceID)
+                return nil
+            case .toggleWorkspaceSwitcher:
+                return nil
+            case .toggleSidebar:
+                self.handleSidebarToggle()
+                return nil
+            case .focusSidebar:
+                NotificationCenter.default.post(
+                    name: .focusSidebar,
+                    object: self.workspaceCollection
+                )
+                return nil
+            default:
+                break
+            }
+
+            guard let collection = self.workspaceCollection.activeSpaceCollection else { return event }
 
             switch action {
             case .newTab:
@@ -118,26 +137,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 collection.nextSpace()
             case .previousSpace:
                 collection.previousSpace()
-            case .newWorkspace:
-                let manager = self.workspaceManager
-                let count = manager?.workspaces.count ?? 0
-                manager?.createWorkspace(name: "Workspace \(count + 1)")
-                return nil
-            case .closeWorkspace:
-                self.workspaceManager?.deleteWorkspace(id: self.workspaceID)
-                return nil
-            case .toggleWorkspaceSwitcher:
-                // Legacy: no binding maps here; kept for compilation (Phase 5 removes)
-                return nil
-            case .toggleSidebar:
-                self.handleSidebarToggle()
-                return nil
-            case .focusSidebar:
-                NotificationCenter.default.post(
-                    name: .focusSidebar,
-                    object: self.workspaceID
-                )
-                return nil
+            default:
+                return event
             }
 
             return nil
@@ -149,7 +150,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     private func handleSidebarToggle() {
         NotificationCenter.default.post(
             name: .toggleSidebar,
-            object: self.workspaceID
+            object: self.workspaceCollection
         )
     }
 
@@ -163,9 +164,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if windowCoordinator?.closingWorkspaceIDs.contains(workspaceID) == false {
-            // User-initiated close (red button)
-            workspaceManager?.deleteWorkspace(id: workspaceID)
+        for workspace in workspaceCollection.workspaces {
+            workspace.cleanup()
         }
         return true
     }
@@ -173,10 +173,10 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         trafficLightAligner?.tearDown()
         removeKeyboardMonitor()
-        windowCoordinator?.removeController(for: workspaceID)
+        windowCoordinator?.removeController(self)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        workspaceManager?.activeWorkspaceID = workspaceID
+        workspaceManager?.activeWorkspaceID = workspaceCollection.activeWorkspaceID
     }
 }

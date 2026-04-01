@@ -98,213 +98,235 @@ struct WorkspaceTests {
     }
 }
 
-// MARK: - WorkspaceManager Tests
+// MARK: - WorkspaceCollection Tests
 
 @MainActor
-struct WorkspaceManagerTests {
+struct WorkspaceCollectionTests {
+    // MARK: - Init
+
+    @Test func initCreatesOneDefaultWorkspace() {
+        let collection = WorkspaceCollection()
+        #expect(collection.workspaces.count == 1)
+        #expect(collection.workspaces[0].name == "default")
+        #expect(collection.activeWorkspaceID == collection.workspaces[0].id)
+    }
+
     // MARK: - Creation
 
     @Test func createWorkspaceAppendsAndActivates() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "project")
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "project")
         #expect(ws != nil)
-        #expect(manager.workspaces.count == 1)
-        #expect(manager.activeWorkspaceID == ws?.id)
+        #expect(collection.workspaces.count == 2)
+        #expect(collection.activeWorkspaceID == ws?.id)
     }
 
     @Test func createMultipleWorkspaces() {
-        let manager = WorkspaceManager()
-        let ws1 = manager.createWorkspace(name: "first")
-        let ws2 = manager.createWorkspace(name: "second")
-        #expect(manager.workspaces.count == 2)
-        #expect(manager.activeWorkspaceID == ws2?.id)
-        #expect(manager.workspaces[0].id == ws1?.id)
-        #expect(manager.workspaces[1].id == ws2?.id)
+        let collection = WorkspaceCollection()
+        let ws2 = collection.createWorkspace(name: "second")
+        let ws3 = collection.createWorkspace(name: "third")
+        #expect(collection.workspaces.count == 3)
+        #expect(collection.activeWorkspaceID == ws3?.id)
+        #expect(collection.workspaces[1].id == ws2?.id)
+        #expect(collection.workspaces[2].id == ws3?.id)
     }
 
     @Test func createWorkspaceRejectsEmptyName() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "")
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "")
         #expect(ws == nil)
-        #expect(manager.workspaces.isEmpty)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func createWorkspaceRejectsWhitespaceOnlyName() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "   \t\n  ")
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "   \t\n  ")
         #expect(ws == nil)
-        #expect(manager.workspaces.isEmpty)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func createWorkspaceTrimsWhitespace() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "  my project  ")
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "  my project  ")
         #expect(ws?.name == "my project")
-    }
-
-    @Test func createWorkspaceWithWorkingDirectory() {
-        let manager = WorkspaceManager()
-        let dir = URL(filePath: "/tmp/project")
-        let ws = manager.createWorkspace(name: "project", workingDirectory: dir)
-        #expect(ws?.defaultWorkingDirectory == dir)
     }
 
     // MARK: - Rename
 
     @Test func renameWorkspaceUpdatesName() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "old")!
-        let result = manager.renameWorkspace(id: ws.id, newName: "new")
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        let result = collection.renameWorkspace(id: ws.id, newName: "new")
         #expect(result)
         #expect(ws.name == "new")
     }
 
     @Test func renameWorkspaceRejectsEmptyName() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "project")!
-        let result = manager.renameWorkspace(id: ws.id, newName: "")
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        let result = collection.renameWorkspace(id: ws.id, newName: "")
         #expect(!result)
-        #expect(ws.name == "project")
+        #expect(ws.name == "default")
     }
 
     @Test func renameWorkspaceTrimsWhitespace() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "old")!
-        manager.renameWorkspace(id: ws.id, newName: "  new name  ")
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        collection.renameWorkspace(id: ws.id, newName: "  new name  ")
         #expect(ws.name == "new name")
     }
 
     @Test func renameNonexistentWorkspaceReturnsFalse() {
-        let manager = WorkspaceManager()
-        let result = manager.renameWorkspace(id: UUID(), newName: "name")
+        let collection = WorkspaceCollection()
+        let result = collection.renameWorkspace(id: UUID(), newName: "name")
         #expect(!result)
     }
 
-    // MARK: - Delete
+    // MARK: - Remove
 
-    @Test func deleteWorkspaceRemovesFromList() {
-        let manager = WorkspaceManager()
-        manager.createWorkspace(name: "first")
-        let ws2 = manager.createWorkspace(name: "second")!
-        manager.deleteWorkspace(id: ws2.id)
-        #expect(manager.workspaces.count == 1)
-        #expect(manager.workspaces[0].name == "first")
+    @Test func removeWorkspaceRemovesFromList() {
+        let collection = WorkspaceCollection()
+        let ws2 = collection.createWorkspace(name: "second")!
+        collection.removeWorkspace(id: ws2.id)
+        #expect(collection.workspaces.count == 1)
+        #expect(collection.workspaces[0].name == "default")
     }
 
-    @Test func deleteWorkspaceActivatesNearest() {
-        let manager = WorkspaceManager()
-        manager.createWorkspace(name: "first")
-        manager.createWorkspace(name: "second")
-        let ws3 = manager.createWorkspace(name: "third")!
-        let ws2ID = manager.workspaces[1].id
+    @Test func removeWorkspaceActivatesNearest() {
+        let collection = WorkspaceCollection()
+        collection.createWorkspace(name: "second")
+        let ws3 = collection.createWorkspace(name: "third")!
+        let ws2ID = collection.workspaces[1].id
 
-        manager.deleteWorkspace(id: ws3.id)
-        #expect(manager.activeWorkspaceID == ws2ID)
+        collection.removeWorkspace(id: ws3.id)
+        #expect(collection.activeWorkspaceID == ws2ID)
     }
 
-    @Test func deleteFirstWorkspaceActivatesRight() {
-        let manager = WorkspaceManager()
-        let ws1 = manager.createWorkspace(name: "first")!
-        let ws2 = manager.createWorkspace(name: "second")!
-        manager.switchToWorkspace(id: ws1.id)
+    @Test func removeFirstWorkspaceActivatesRight() {
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        let ws2 = collection.createWorkspace(name: "second")!
+        collection.activateWorkspace(id: ws1.id)
 
-        manager.deleteWorkspace(id: ws1.id)
-        #expect(manager.activeWorkspaceID == ws2.id)
+        collection.removeWorkspace(id: ws1.id)
+        #expect(collection.activeWorkspaceID == ws2.id)
     }
 
-    @Test func deleteLastWorkspaceSetsQuit() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "only")!
-        manager.deleteWorkspace(id: ws.id)
-        #expect(manager.workspaces.isEmpty)
-        #expect(manager.shouldQuit)
+    @Test func removeLastWorkspaceCallsOnEmpty() {
+        let collection = WorkspaceCollection()
+        var emptyCalled = false
+        collection.onEmpty = { emptyCalled = true }
+        let ws = collection.workspaces[0]
+
+        collection.removeWorkspace(id: ws.id)
+        #expect(collection.workspaces.isEmpty)
+        #expect(emptyCalled)
     }
 
-    @Test func deleteNonexistentWorkspaceIsNoOp() {
-        let manager = WorkspaceManager()
-        manager.createWorkspace(name: "test")
-        manager.deleteWorkspace(id: UUID())
-        #expect(manager.workspaces.count == 1)
+    @Test func removeLastWorkspaceSetsQuitWhenNoCallback() {
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+
+        collection.removeWorkspace(id: ws.id)
+        #expect(collection.workspaces.isEmpty)
+        #expect(collection.shouldQuit)
     }
 
-    // MARK: - Switch
-
-    @Test func switchToWorkspaceChangesActiveID() {
-        let manager = WorkspaceManager()
-        let ws1 = manager.createWorkspace(name: "first")!
-        manager.createWorkspace(name: "second")
-
-        manager.switchToWorkspace(id: ws1.id)
-        #expect(manager.activeWorkspaceID == ws1.id)
+    @Test func removeNonexistentWorkspaceIsNoOp() {
+        let collection = WorkspaceCollection()
+        collection.removeWorkspace(id: UUID())
+        #expect(collection.workspaces.count == 1)
     }
 
-    @Test func switchToNonexistentWorkspaceIsNoOp() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "test")!
-        manager.switchToWorkspace(id: UUID())
-        #expect(manager.activeWorkspaceID == ws.id)
+    // MARK: - Activate
+
+    @Test func activateWorkspaceChangesActiveID() {
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        collection.createWorkspace(name: "second")
+
+        collection.activateWorkspace(id: ws1.id)
+        #expect(collection.activeWorkspaceID == ws1.id)
+    }
+
+    @Test func activateNonexistentWorkspaceIsNoOp() {
+        let collection = WorkspaceCollection()
+        let originalID = collection.activeWorkspaceID
+        collection.activateWorkspace(id: UUID())
+        #expect(collection.activeWorkspaceID == originalID)
+    }
+
+    // MARK: - Navigation
+
+    @Test func nextWorkspaceWraps() {
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        collection.createWorkspace(name: "second")
+
+        collection.activateWorkspace(id: ws1.id)
+        collection.nextWorkspace()
+        #expect(collection.activeWorkspaceID == collection.workspaces[1].id)
+
+        collection.nextWorkspace()
+        #expect(collection.activeWorkspaceID == ws1.id)
+    }
+
+    @Test func previousWorkspaceWraps() {
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        collection.createWorkspace(name: "second")
+
+        collection.activateWorkspace(id: ws1.id)
+        collection.previousWorkspace()
+        #expect(collection.activeWorkspaceID == collection.workspaces[1].id)
     }
 
     // MARK: - Reorder
 
     @Test func reorderWorkspace() {
-        let manager = WorkspaceManager()
-        let ws1 = manager.createWorkspace(name: "first")!
-        let ws2 = manager.createWorkspace(name: "second")!
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        let ws2 = collection.createWorkspace(name: "second")!
 
-        manager.reorderWorkspace(from: 0, to: 1)
-        #expect(manager.workspaces[0].id == ws2.id)
-        #expect(manager.workspaces[1].id == ws1.id)
+        collection.reorderWorkspace(from: 0, to: 1)
+        #expect(collection.workspaces[0].id == ws2.id)
+        #expect(collection.workspaces[1].id == ws1.id)
     }
 
     @Test func reorderOutOfBoundsIsNoOp() {
-        let manager = WorkspaceManager()
-        manager.createWorkspace(name: "only")
-        manager.reorderWorkspace(from: 0, to: 5)
-        #expect(manager.workspaces.count == 1)
+        let collection = WorkspaceCollection()
+        collection.reorderWorkspace(from: 0, to: 5)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func reorderSameIndexIsNoOp() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "only")!
-        manager.reorderWorkspace(from: 0, to: 0)
-        #expect(manager.workspaces[0].id == ws.id)
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        collection.reorderWorkspace(from: 0, to: 0)
+        #expect(collection.workspaces[0].id == ws.id)
     }
 
-    // MARK: - Default Working Directory
+    // MARK: - Computed Properties
 
-    @Test func setWorkspaceDefaultWorkingDirectory() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "test")!
-        let dir = URL(filePath: "/tmp/project")
-        manager.setDefaultWorkingDirectory(workspaceID: ws.id, directory: dir)
-        #expect(ws.defaultWorkingDirectory == dir)
+    @Test func activeWorkspaceReturnsCorrectWorkspace() {
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        #expect(collection.activeWorkspace?.id == ws.id)
     }
 
-    @Test func clearWorkspaceDefaultWorkingDirectory() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(
-            name: "test",
-            workingDirectory: URL(filePath: "/tmp")
-        )!
-        manager.setDefaultWorkingDirectory(workspaceID: ws.id, directory: nil)
-        #expect(ws.defaultWorkingDirectory == nil)
-    }
-
-    @Test func setSpaceDefaultWorkingDirectory() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "test")!
-        let space = ws.spaces[0]
-        let dir = URL(filePath: "/tmp/space-dir")
-        manager.setDefaultWorkingDirectory(spaceID: space.id, directory: dir)
-        #expect(space.defaultWorkingDirectory == dir)
+    @Test func activeSpaceCollectionReturnsCorrectCollection() {
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        #expect(collection.activeSpaceCollection === ws.spaceCollection)
     }
 
     // MARK: - Cascading Close
 
-    @Test func fullCascadeFromPaneToQuit() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "only")!
+    @Test func fullCascadeFromPaneToOnEmpty() {
+        let collection = WorkspaceCollection()
+        var emptyCalled = false
+        collection.onEmpty = { emptyCalled = true }
+        let ws = collection.workspaces[0]
         let space = ws.spaceCollection.spaces[0]
         let tab = space.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
@@ -313,13 +335,13 @@ struct WorkspaceManagerTests {
 
         #expect(space.tabs.isEmpty)
         #expect(ws.spaceCollection.spaces.isEmpty)
-        #expect(manager.workspaces.isEmpty)
-        #expect(manager.shouldQuit)
+        #expect(collection.workspaces.isEmpty)
+        #expect(emptyCalled)
     }
 
     @Test func cascadeStopsWhenTabsRemain() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "test")!
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
         let space = ws.spaceCollection.spaces[0]
         space.createTab()
         let tab1 = space.tabs[0]
@@ -328,13 +350,12 @@ struct WorkspaceManagerTests {
         tab1.paneViewModel.closePane(paneID: paneID)
 
         #expect(space.tabs.count == 1)
-        #expect(manager.workspaces.count == 1)
-        #expect(!manager.shouldQuit)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func cascadeStopsWhenSpacesRemain() {
-        let manager = WorkspaceManager()
-        let ws = manager.createWorkspace(name: "test")!
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
         ws.spaceCollection.createSpace()
         let space1 = ws.spaceCollection.spaces[0]
         let tab = space1.tabs[0]
@@ -343,21 +364,20 @@ struct WorkspaceManagerTests {
         tab.paneViewModel.closePane(paneID: paneID)
 
         #expect(ws.spaceCollection.spaces.count == 1)
-        #expect(manager.workspaces.count == 1)
-        #expect(!manager.shouldQuit)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func cascadeStopsWhenWorkspacesRemain() {
-        let manager = WorkspaceManager()
-        let ws1 = manager.createWorkspace(name: "first")!
-        manager.createWorkspace(name: "second")
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        collection.createWorkspace(name: "second")
         let space = ws1.spaceCollection.spaces[0]
         let tab = space.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
         tab.paneViewModel.closePane(paneID: paneID)
 
-        #expect(manager.workspaces.count == 1)
-        #expect(!manager.shouldQuit)
+        #expect(collection.workspaces.count == 1)
+        #expect(!collection.shouldQuit)
     }
 }

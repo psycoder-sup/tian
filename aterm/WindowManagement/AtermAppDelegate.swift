@@ -6,10 +6,8 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
     let windowCoordinator = WindowCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        workspaceManager.windowCoordinator = windowCoordinator
         windowCoordinator.workspaceManager = workspaceManager
-
-        workspaceManager.createWorkspace(name: "default")
+        windowCoordinator.openWindow()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -17,8 +15,10 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        for workspace in workspaceManager.workspaces {
-            workspace.cleanup()
+        for collection in windowCoordinator.allWorkspaceCollections {
+            for workspace in collection.workspaces {
+                workspace.cleanup()
+            }
         }
         return .terminateNow
     }

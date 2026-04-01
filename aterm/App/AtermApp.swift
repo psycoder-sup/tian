@@ -19,7 +19,7 @@ struct AtermApp: App {
             EmptyView()
         }
         .commands {
-            WorkspaceCommands(workspaceManager: appDelegate.workspaceManager)
+            WorkspaceCommands(windowCoordinator: appDelegate.windowCoordinator)
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
@@ -6,26 +7,31 @@ extension Notification.Name {
 }
 
 struct SidebarContainerView: View {
-    let workspaceID: UUID
-    let spaceCollection: SpaceCollection
+    let workspaceCollection: WorkspaceCollection
 
     @State private var sidebarState = SidebarState()
     @State private var lastContainerSize: CGSize = .zero
+    @State private var nsWindow: NSWindow?
+
+    private var displayedSpaceCollection: SpaceCollection? {
+        workspaceCollection.activeSpaceCollection
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Sidebar panel — extends full height behind the titlebar
-            SidebarPanelView()
+            if sidebarState.isExpanded {
+                SidebarPanelView(
+                    workspaceCollection: workspaceCollection,
+                    sidebarState: sidebarState
+                )
                 .frame(width: sidebarState.mode.width)
+            }
 
-            // Content layer
             VStack(spacing: 0) {
-                // Tab bar row — traffic lights + sidebar toggle + tabs
                 HStack(spacing: 6) {
-                    // Traffic light clearance + sidebar toggle (always visible)
                     HStack(spacing: 6) {
                         Color.clear.frame(width: 80)
-                        SidebarToggleButton(workspaceID: workspaceID)
+                        SidebarToggleButton(workspaceCollection: workspaceCollection)
                     }
                     .frame(width: max(sidebarState.mode.width, 104), alignment: .leading)
 
@@ -33,20 +39,33 @@ struct SidebarContainerView: View {
                 }
                 .frame(height: 44)
 
-                // Terminal area — offset to the right of the sidebar
                 terminalZStack
                     .padding(.leading, sidebarState.mode.width)
             }
         }
         .ignoresSafeArea(.container, edges: .top)
+        .background(WindowAccessor(window: $nsWindow))
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { notification in
-            guard let id = notification.object as? UUID, id == workspaceID else { return }
+            guard let obj = notification.object as? WorkspaceCollection,
+                  obj === workspaceCollection else { return }
             sidebarState.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusSidebar)) { notification in
-            guard let id = notification.object as? UUID, id == workspaceID else { return }
+            guard let obj = notification.object as? WorkspaceCollection,
+                  obj === workspaceCollection else { return }
             if !sidebarState.isExpanded {
                 sidebarState.toggle()
+            }
+            sidebarState.focusTarget = .sidebar
+        }
+        .onChange(of: sidebarState.focusTarget) { _, newTarget in
+            if newTarget == .terminal {
+                returnFocusToTerminal()
+            }
+        }
+        .onChange(of: workspaceCollection.activeWorkspaceID) { _, _ in
+            if let spaceCollection = displayedSpaceCollection {
+                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
             }
         }
     }
@@ -55,7 +74,8 @@ struct SidebarContainerView: View {
 
     @ViewBuilder
     private var tabBar: some View {
-        if let space = spaceCollection.activeSpace {
+        if let spaceCollection = displayedSpaceCollection,
+           let space = spaceCollection.activeSpace {
             TabBarView(space: space) {
                 let wd = spaceCollection.resolveWorkingDirectory()
                 space.createTab(workingDirectory: wd)
@@ -69,42 +89,57 @@ struct SidebarContainerView: View {
 
     @ViewBuilder
     private var terminalZStack: some View {
-        ZStack {
-            ForEach(spaceCollection.spaces) { space in
-                ForEach(space.tabs) { tab in
-                    let isVisible = space.id == spaceCollection.activeSpaceID
-                        && tab.id == space.activeTabID
-                    SplitTreeView(
-                        node: tab.paneViewModel.splitTree.root,
-                        viewModel: tab.paneViewModel
-                    )
-                    .opacity(isVisible ? 1 : 0)
-                    .allowsHitTesting(isVisible)
+        if let spaceCollection = displayedSpaceCollection {
+            ZStack {
+                ForEach(spaceCollection.spaces) { space in
+                    ForEach(space.tabs) { tab in
+                        let isVisible = space.id == spaceCollection.activeSpaceID
+                            && tab.id == space.activeTabID
+                        SplitTreeView(
+                            node: tab.paneViewModel.splitTree.root,
+                            viewModel: tab.paneViewModel
+                        )
+                        .opacity(isVisible ? 1 : 0)
+                        .allowsHitTesting(isVisible)
+                    }
                 }
             }
-        }
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { handleContainerSizeChange(geo.size) }
-                    .onChange(of: geo.size) { _, newSize in
-                        lastContainerSize = newSize
-                        if !sidebarState.isAnimating {
-                            handleContainerSizeChange(newSize)
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { handleContainerSizeChange(geo.size) }
+                        .onChange(of: geo.size) { _, newSize in
+                            lastContainerSize = newSize
+                            if !sidebarState.isAnimating {
+                                handleContainerSizeChange(newSize)
+                            }
                         }
-                    }
+                }
+            )
+            .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
+                if wasAnimating && !isAnimating {
+                    handleContainerSizeChange(lastContainerSize)
+                }
             }
-        )
-        .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
-            if wasAnimating && !isAnimating {
-                handleContainerSizeChange(lastContainerSize)
+            .onChange(of: spaceCollection.activeSpace?.activeTabID) { _, _ in
+                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+            }
+            .onChange(of: spaceCollection.activeSpaceID) { _, _ in
+                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
             }
         }
-        .onChange(of: spaceCollection.activeSpace?.activeTabID) { _, _ in
-            spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
-        }
-        .onChange(of: spaceCollection.activeSpaceID) { _, _ in
-            spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+    }
+
+    // MARK: - Focus
+
+    private func returnFocusToTerminal() {
+        guard let window = nsWindow,
+              let spaceCollection = displayedSpaceCollection,
+              let space = spaceCollection.activeSpace,
+              let tab = space.activeTab else { return }
+        let focusedPaneID = tab.paneViewModel.splitTree.focusedPaneID
+        if let surfaceView = tab.paneViewModel.surfaceView(for: focusedPaneID) {
+            window.makeFirstResponder(surfaceView)
         }
     }
 
@@ -112,8 +147,21 @@ struct SidebarContainerView: View {
 
     private func handleContainerSizeChange(_ size: CGSize) {
         lastContainerSize = size
-        guard let space = spaceCollection.activeSpace,
+        guard let spaceCollection = displayedSpaceCollection,
+              let space = spaceCollection.activeSpace,
               let tab = space.activeTab else { return }
         tab.paneViewModel.containerSize = size
+    }
+}
+
+// MARK: - Window Accessor
+
+private struct WindowAccessor: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        window = nsView.window
     }
 }

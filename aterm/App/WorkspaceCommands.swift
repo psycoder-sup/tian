@@ -1,21 +1,25 @@
 import SwiftUI
 
 struct WorkspaceCommands: Commands {
-    let workspaceManager: WorkspaceManager
+    let windowCoordinator: WindowCoordinator
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Divider()
 
             Button("New Workspace") {
-                let count = workspaceManager.workspaces.count
-                workspaceManager.createWorkspace(name: "Workspace \(count + 1)")
+                if let controller = windowCoordinator.controllerForKeyWindow() {
+                    controller.workspaceCollection.createWorkspace()
+                }
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
 
             Button("Close Workspace") {
-                guard let activeID = workspaceManager.activeWorkspaceID else { return }
-                workspaceManager.deleteWorkspace(id: activeID)
+                if let controller = windowCoordinator.controllerForKeyWindow() {
+                    controller.workspaceCollection.removeWorkspace(
+                        id: controller.workspaceCollection.activeWorkspaceID
+                    )
+                }
             }
             .keyboardShortcut(.delete, modifiers: [.command, .shift])
         }

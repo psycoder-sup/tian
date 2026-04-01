@@ -1,5 +1,10 @@
 import SwiftUI
 
+enum SidebarFocusTarget {
+    case terminal
+    case sidebar
+}
+
 enum SidebarMode {
     case expanded
     case collapsed
@@ -16,6 +21,7 @@ enum SidebarMode {
 final class SidebarState {
     var mode: SidebarMode = .expanded
     var isAnimating = false
+    var focusTarget: SidebarFocusTarget = .terminal
 
     var isExpanded: Bool { mode == .expanded }
 

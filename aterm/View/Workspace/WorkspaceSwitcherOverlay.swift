@@ -5,7 +5,7 @@ import SwiftUI
 /// and drag-and-drop reordering of workspace rows.
 struct WorkspaceSwitcherOverlay: View {
     @Binding var isPresented: Bool
-    @Environment(WorkspaceManager.self) private var workspaceManager
+    let workspaceCollection: WorkspaceCollection
 
     @State private var query = ""
     @State private var selectedIndex = 0
@@ -38,7 +38,7 @@ struct WorkspaceSwitcherOverlay: View {
                                 WorkspaceSwitcherRow(
                                     workspace: workspace,
                                     isSelected: index == selectedIndex,
-                                    isActive: workspace.id == workspaceManager.activeWorkspaceID
+                                    isActive: workspace.id == workspaceCollection.activeWorkspaceID
                                 )
                                 .id(workspace.id)
                                 .contentShape(Rectangle())
@@ -79,7 +79,7 @@ struct WorkspaceSwitcherOverlay: View {
     // MARK: - Filtered Results
 
     private var filteredWorkspaces: [Workspace] {
-        let workspaces = workspaceManager.workspaces
+        let workspaces = workspaceCollection.workspaces
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             return workspaces
         }
@@ -110,7 +110,7 @@ struct WorkspaceSwitcherOverlay: View {
     }
 
     private func switchToWorkspace(_ id: UUID) {
-        workspaceManager.switchToWorkspace(id: id)
+        workspaceCollection.activateWorkspace(id: id)
         dismiss()
     }
 
@@ -120,12 +120,12 @@ struct WorkspaceSwitcherOverlay: View {
 
     private func handleDrop(items: [WorkspaceDragItem], location: CGPoint) -> Bool {
         guard let item = items.first,
-              let sourceIndex = workspaceManager.workspaces.firstIndex(where: { $0.id == item.workspaceID }) else {
+              let sourceIndex = workspaceCollection.workspaces.firstIndex(where: { $0.id == item.workspaceID }) else {
             return false
         }
         // Drop at end by default
-        let destinationIndex = workspaceManager.workspaces.count - 1
-        workspaceManager.reorderWorkspace(from: sourceIndex, to: destinationIndex)
+        let destinationIndex = workspaceCollection.workspaces.count - 1
+        workspaceCollection.reorderWorkspace(from: sourceIndex, to: destinationIndex)
         return true
     }
 }

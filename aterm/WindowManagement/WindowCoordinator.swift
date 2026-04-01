@@ -2,47 +2,34 @@ import AppKit
 
 @MainActor
 final class WindowCoordinator {
-    private var controllers: [UUID: WorkspaceWindowController] = [:]
+    private var controllers: [WorkspaceWindowController] = []
     weak var workspaceManager: WorkspaceManager?
 
-    /// Tracks workspace IDs being closed programmatically to prevent re-entrant delete.
-    var closingWorkspaceIDs: Set<UUID> = []
+    func openWindow() {
+        guard let manager = workspaceManager else { return }
 
-    func openWindow(for workspaceID: UUID) {
-        guard controllers[workspaceID] == nil else {
-            bringToFront(for: workspaceID)
-            return
-        }
-        guard let manager = workspaceManager,
-              let workspace = manager.workspaces.first(where: { $0.id == workspaceID }) else { return }
-
+        let collection = WorkspaceCollection()
         let controller = WorkspaceWindowController(
-            workspace: workspace,
+            workspaceCollection: collection,
             workspaceManager: manager,
             windowCoordinator: self
         )
-        controllers[workspaceID] = controller
+        controllers.append(controller)
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
     }
 
-    func closeWindow(for workspaceID: UUID) {
-        guard let controller = controllers[workspaceID] else { return }
-        closingWorkspaceIDs.insert(workspaceID)
-        controller.window?.close()
+    func removeController(_ controller: WorkspaceWindowController) {
+        controllers.removeAll(where: { $0 === controller })
     }
 
-    func bringToFront(for workspaceID: UUID) {
-        guard let controller = controllers[workspaceID] else {
-            openWindow(for: workspaceID)
-            return
-        }
-        controller.window?.makeKeyAndOrderFront(nil)
+    func controllerForKeyWindow() -> WorkspaceWindowController? {
+        let keyWindow = NSApplication.shared.keyWindow
+        return controllers.first(where: { $0.window === keyWindow })
     }
 
-    func removeController(for workspaceID: UUID) {
-        closingWorkspaceIDs.remove(workspaceID)
-        controllers.removeValue(forKey: workspaceID)
+    var allWorkspaceCollections: [WorkspaceCollection] {
+        controllers.map(\.workspaceCollection)
     }
 
     var windowCount: Int { controllers.count }

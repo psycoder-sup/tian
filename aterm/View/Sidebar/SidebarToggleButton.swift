@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct SidebarToggleButton: View {
-    let workspaceID: UUID
+    let workspaceCollection: WorkspaceCollection
 
     var body: some View {
         Button {
             NotificationCenter.default.post(
                 name: .toggleSidebar,
-                object: workspaceID
+                object: workspaceCollection
             )
         } label: {
             Image(systemName: "sidebar.left")
