@@ -34,6 +34,7 @@
 		7D35164BEA0B8A9A41831D19 /* SpaceDragItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6698394DE535B9FBB88FE2 /* SpaceDragItem.swift */; };
 		7D4FA2A3ED2DA5E6E7D936AA /* SpaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785E7B61836E96CBD22AD496 /* SpaceCollection.swift */; };
 		826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE60D02A012008C5B7C077A /* TerminalContentView.swift */; };
+		82EBBC9FAF63F258238882C3 /* WorkspaceSidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5716A482C4F441379F8F7B4F /* WorkspaceSidebarUITests.swift */; };
 		83494DD88752D8AA8C48C305 /* WorkspaceWindowContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923EAE0B91895B3AB2AA237C /* WorkspaceWindowContent.swift */; };
 		85110F0B31FC6E958B8AD25A /* WorkingDirectoryResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C0A1AB2246BF762531CAD0 /* WorkingDirectoryResolver.swift */; };
 		879AA3819E8D60755252840F /* SidebarWorkspaceHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BACDFFE2171973237C91C5C /* SidebarWorkspaceHeaderView.swift */; };
@@ -74,6 +75,13 @@
 			remoteGlobalIDString = F2968DFD0F600E984F216EF3;
 			remoteInfo = aterm;
 		};
+		A836BD6FF6FC165EFB6DDC95 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C1B7C6D25ADE60160F6760E6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F2968DFD0F600E984F216EF3;
+			remoteInfo = aterm;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -95,6 +103,7 @@
 		4E4C46929E235686998D2E8C /* SidebarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarPanelView.swift; sourceTree = "<group>"; };
 		4F98E3B09C59DAF38D7D68B5 /* GhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyApp.swift; sourceTree = "<group>"; };
 		4FE60D02A012008C5B7C077A /* TerminalContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalContentView.swift; sourceTree = "<group>"; };
+		5716A482C4F441379F8F7B4F /* WorkspaceSidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSidebarUITests.swift; sourceTree = "<group>"; };
 		572175B5CC97E13C714B239E /* SplitTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeView.swift; sourceTree = "<group>"; };
 		5CAFEF32D98B06A1F39E322D /* WorkspaceIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceIndicatorView.swift; sourceTree = "<group>"; };
 		5F29973BF00B9522849B08FE /* PaneViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneViewModel.swift; sourceTree = "<group>"; };
@@ -122,6 +131,7 @@
 		A98B0F8DDAFDE2C656302EEF /* atermTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = atermTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA02D8A369C7DF61DB72F063 /* SplitContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitContainerView.swift; sourceTree = "<group>"; };
 		BB6698394DE535B9FBB88FE2 /* SpaceDragItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDragItem.swift; sourceTree = "<group>"; };
+		C0B2831A043F933D39565FD3 /* atermUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = atermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5DF37CE54228595CC692730 /* SidebarContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarContainerView.swift; sourceTree = "<group>"; };
 		CB98C5FAE75C8562E5011DD1 /* TabBarItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarItemView.swift; sourceTree = "<group>"; };
 		CBBE055580A36D1C42C44F98 /* SidebarExpandedContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarExpandedContentView.swift; sourceTree = "<group>"; };
@@ -165,6 +175,7 @@
 			children = (
 				CDF7F8753E641B0600CC34B9 /* aterm.app */,
 				A98B0F8DDAFDE2C656302EEF /* atermTests.xctest */,
+				C0B2831A043F933D39565FD3 /* atermUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -194,6 +205,7 @@
 			children = (
 				1888D8E7AEE868A8CEEDA490 /* aterm */,
 				B88274F90462BF7AD962469F /* atermTests */,
+				F6079C17A6CF0F503336526A /* atermUITests */,
 				29B1853D43339785DE006E47 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -335,6 +347,14 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
+		F6079C17A6CF0F503336526A /* atermUITests */ = {
+			isa = PBXGroup;
+			children = (
+				5716A482C4F441379F8F7B4F /* WorkspaceSidebarUITests.swift */,
+			);
+			path = atermUITests;
+			sourceTree = "<group>";
+		};
 		FC75859E24B35E634AF7FF5F /* View */ = {
 			isa = PBXGroup;
 			children = (
@@ -355,6 +375,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		C5C0EA5567054B20F8F5191F /* atermUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 00EA4FDD23AE655C71C49CF3 /* Build configuration list for PBXNativeTarget "atermUITests" */;
+			buildPhases = (
+				714AD679A4F268ADE6F9D233 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D92D5FC1608F8B39E33E2F8F /* PBXTargetDependency */,
+			);
+			name = atermUITests;
+			packageProductDependencies = (
+			);
+			productName = atermUITests;
+			productReference = C0B2831A043F933D39565FD3 /* atermUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		EF8FDCE83810EBF2E579BC6B /* atermTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2D67CE6831D11184E236DFDD /* Build configuration list for PBXNativeTarget "atermTests" */;
@@ -398,6 +436,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					C5C0EA5567054B20F8F5191F = {
+						TestTargetID = F2968DFD0F600E984F216EF3;
+					};
+				};
 			};
 			buildConfigurationList = 80FB72C6B9C1583AE8925302 /* Build configuration list for PBXProject "aterm" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -415,11 +458,20 @@
 			targets = (
 				F2968DFD0F600E984F216EF3 /* aterm */,
 				EF8FDCE83810EBF2E579BC6B /* atermTests */,
+				C5C0EA5567054B20F8F5191F /* atermUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		714AD679A4F268ADE6F9D233 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				82EBBC9FAF63F258238882C3 /* WorkspaceSidebarUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C4C04ADE89F6214646B99E49 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -499,6 +551,11 @@
 			target = F2968DFD0F600E984F216EF3 /* aterm */;
 			targetProxy = 9602EF48B0826616E537EE4B /* PBXContainerItemProxy */;
 		};
+		D92D5FC1608F8B39E33E2F8F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F2968DFD0F600E984F216EF3 /* aterm */;
+			targetProxy = A836BD6FF6FC165EFB6DDC95 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -539,6 +596,23 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.aterm.tests;
 				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm";
+			};
+			name = Release;
+		};
+		2D108A1DAB1B75EADA74F5EE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.aterm.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = aterm;
 			};
 			name = Release;
 		};
@@ -641,6 +715,23 @@
 			};
 			name = Debug;
 		};
+		D301B55155D3088778CF97AB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.aterm.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = aterm;
+			};
+			name = Debug;
+		};
 		D33616643D54D0AD3915FE76 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -736,6 +827,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		00EA4FDD23AE655C71C49CF3 /* Build configuration list for PBXNativeTarget "atermUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D301B55155D3088778CF97AB /* Debug */,
+				2D108A1DAB1B75EADA74F5EE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		2D67CE6831D11184E236DFDD /* Build configuration list for PBXNativeTarget "atermTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
