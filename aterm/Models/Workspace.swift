@@ -1,10 +1,6 @@
 import Foundation
 import Observation
 
-/// Schema version for the workspace data model. Bumped when the
-/// serialization format changes. Used by M5 persistence.
-let workspaceSchemaVersion = 1
-
 /// Serializable snapshot of a workspace's persisted fields.
 /// Used for encoding (M4) and will be extended for full persistence in M5.
 struct WorkspaceSnapshot: Sendable, Codable {
