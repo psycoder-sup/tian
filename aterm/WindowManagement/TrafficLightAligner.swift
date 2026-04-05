@@ -1,112 +1,66 @@
 import AppKit
 
-/// Observes the titlebar container and re-centers traffic light buttons
-/// to match a target height (e.g. 44pt tab bar) on every layout change.
+/// Pins traffic light buttons at the vertical center of a target height (e.g. 44pt tab bar)
+/// using Auto Layout constraints so the system cannot reset their positions during layout.
 @MainActor
 final class TrafficLightAligner {
+    private static let buttonTypes: [NSWindow.ButtonType] = [
+        .closeButton, .miniaturizeButton, .zoomButton,
+    ]
+
     private let targetHeight: CGFloat
     private weak var window: NSWindow?
-    private var observations: [NSObjectProtocol] = []
-    private var isRealigning = false
-    /// X offsets of miniaturize/zoom buttons relative to the close button (captured at init).
-    private var buttonXOffsets: [NSWindow.ButtonType: CGFloat] = [:]
+    private var constraints: [NSLayoutConstraint] = []
 
     init(window: NSWindow, targetHeight: CGFloat) {
         self.window = window
         self.targetHeight = targetHeight
 
-        guard let closeButton = window.standardWindowButton(.closeButton),
-              let container = closeButton.superview else { return }
-
-        // Capture the initial relative X offsets between buttons before any realignment
-        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        for type in buttonTypes {
-            guard let button = window.standardWindowButton(type) else { continue }
-            buttonXOffsets[type] = button.frame.origin.x - closeButton.frame.origin.x
-        }
-
-        // Observe container frame changes to re-center after system layout
-        container.postsFrameChangedNotifications = true
-        observations.append(NotificationCenter.default.addObserver(
-            forName: NSView.frameDidChangeNotification,
-            object: container,
-            queue: .main
-        ) { [weak self] _ in
-            self?.realign()
-        })
-
-        // Observe each button's frame so we catch system-driven resets
-        // (e.g. when SwiftUI re-layouts the content view after adding a workspace)
-        for type in buttonTypes {
-            guard let button = window.standardWindowButton(type) else { continue }
-            button.postsFrameChangedNotifications = true
-            observations.append(NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: button,
-                queue: .main
-            ) { [weak self] _ in
-                self?.realign()
-            })
-        }
-
-        // Initial alignment after first layout
         DispatchQueue.main.async { [weak self] in
-            self?.realign()
+            self?.installConstraints()
         }
     }
 
     func tearDown() {
-        for obs in observations {
-            NotificationCenter.default.removeObserver(obs)
-        }
-        observations.removeAll()
+        NSLayoutConstraint.deactivate(constraints)
+        constraints.removeAll()
     }
 
-    func realign() {
-        guard !isRealigning else { return }
-        isRealigning = true
-        defer { isRealigning = false }
-
+    private func installConstraints() {
         guard let window, let contentView = window.contentView else { return }
         guard let closeButton = window.standardWindowButton(.closeButton),
               let container = closeButton.superview else { return }
 
-        // Prevent the titlebar container from clipping repositioned buttons
+        // The titlebar container clips repositioned buttons by default
         container.wantsLayer = true
         container.layer?.masksToBounds = false
 
         let buttonHeight = closeButton.frame.height
-        // Equal margin from top and left edges of the window
         let margin = (targetHeight - buttonHeight) / 2
+        let closeX = closeButton.frame.origin.x
 
-        // Convert desired close-button origin from content-view coords to container coords.
-        // NSHostingView is flipped (y=0 at top): x=margin is from the left edge,
-        // y=margin is from the top edge (button top, not center).
-        let desiredOrigin = contentView.convert(
-            NSPoint(x: margin, y: margin),
-            to: container
-        )
-
-        // Position all three buttons using absolute coordinates
-        let closeDesiredX = desiredOrigin.x
-        let desiredCenterY = contentView.convert(
-            NSPoint(x: 0, y: targetHeight / 2),
-            to: container
-        ).y
-
-        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        for type in buttonTypes {
+        for type in Self.buttonTypes {
             guard let button = window.standardWindowButton(type) else { continue }
 
-            let desiredY = desiredCenterY - button.frame.height / 2
-            if abs(button.frame.origin.y - desiredY) > 0.5 {
-                button.frame.origin.y = desiredY
-            }
+            let frame = button.frame
+            button.translatesAutoresizingMaskIntoConstraints = false
 
-            let desiredX = closeDesiredX + (buttonXOffsets[type] ?? 0)
-            if abs(button.frame.origin.x - desiredX) > 0.5 {
-                button.frame.origin.x = desiredX
-            }
+            let leading = button.leadingAnchor.constraint(
+                equalTo: contentView.leadingAnchor,
+                constant: margin + (frame.origin.x - closeX)
+            )
+
+            let centerY = button.centerYAnchor.constraint(
+                equalTo: contentView.topAnchor,
+                constant: targetHeight / 2
+            )
+
+            let width = button.widthAnchor.constraint(equalToConstant: frame.width)
+            let height = button.heightAnchor.constraint(equalToConstant: frame.height)
+
+            constraints.append(contentsOf: [leading, centerY, width, height])
         }
+
+        NSLayoutConstraint.activate(constraints)
     }
 }
