@@ -44,7 +44,10 @@ final class GhosttyApp: @unchecked Sendable {
             unsetenv("NO_COLOR")
         }
 
+        let clock = ContinuousClock()
+        let initStart = clock.now
         let result = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv)
+        let initMs = Double((clock.now - initStart).components.attoseconds) / 1e15
         guard result == GHOSTTY_SUCCESS else {
             Log.ghostty.error("ghostty_init failed: \(result)")
             return
@@ -137,9 +140,14 @@ final class GhosttyApp: @unchecked Sendable {
         }
 
         // Create the app
+        let appNewStart = clock.now
         if let created = ghostty_app_new(&runtimeConfig, primaryConfig) {
+            let appNewMs = Double((clock.now - appNewStart).components.attoseconds) / 1e15
             self.app = created
             self.config = primaryConfig
+            MainActor.assumeIsolated {
+                AppMetrics.shared.recordGhosttyInit(initMs: initMs, appNewMs: appNewMs)
+            }
         } else {
             Log.ghostty.warning("ghostty_app_new failed with primary config, trying fallback")
             ghostty_config_free(primaryConfig)
@@ -148,8 +156,12 @@ final class GhosttyApp: @unchecked Sendable {
             guard let fallbackConfig = ghostty_config_new() else { return }
             ghostty_config_finalize(fallbackConfig)
             if let created = ghostty_app_new(&runtimeConfig, fallbackConfig) {
+                let appNewMs = Double((clock.now - appNewStart).components.attoseconds) / 1e15
                 self.app = created
                 self.config = fallbackConfig
+                MainActor.assumeIsolated {
+                    AppMetrics.shared.recordGhosttyInit(initMs: initMs, appNewMs: appNewMs)
+                }
             } else {
                 Log.ghostty.error("ghostty_app_new failed with fallback config")
                 ghostty_config_free(fallbackConfig)

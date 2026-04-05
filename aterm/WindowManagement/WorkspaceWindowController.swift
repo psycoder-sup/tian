@@ -89,7 +89,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
 
             if let responder = event.window?.firstResponder, responder is NSText {
                 switch action {
-                case .toggleSidebar, .focusSidebar:
+                case .toggleSidebar, .focusSidebar, .toggleDebugOverlay:
                     break
                 default:
                     return event
@@ -111,6 +111,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             case .focusSidebar:
                 NotificationCenter.default.post(
                     name: .focusSidebar,
+                    object: self.workspaceCollection
+                )
+                return nil
+            case .toggleDebugOverlay:
+                NotificationCenter.default.post(
+                    name: .toggleDebugOverlay,
                     object: self.workspaceCollection
                 )
                 return nil

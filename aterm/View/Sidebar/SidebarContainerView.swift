@@ -5,6 +5,7 @@ import SwiftUI
 extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
     static let focusSidebar = Notification.Name("focusSidebar")
+    static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
 }
 
 struct SidebarContainerView: View {

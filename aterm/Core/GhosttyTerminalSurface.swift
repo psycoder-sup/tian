@@ -44,10 +44,13 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
         config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
         // Create surface inside withCString so the working_directory pointer stays alive
+        let clock = ContinuousClock()
+        let surfaceStart = clock.now
         let created: ghostty_surface_t? = workingDirectory.withCString { cWd in
             config.working_directory = cWd
             return ghostty_surface_new(ghosttyApp, &config)
         }
+        let surfaceMs = Double((clock.now - surfaceStart).components.attoseconds) / 1e15
 
         guard let created else {
             Log.ghostty.error("ghostty_surface_new returned nil")
@@ -62,6 +65,7 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
         }
 
         self.surface = created
+        AppMetrics.shared.recordSurfaceCreation(durationMs: surfaceMs)
 
         // Post-creation setup (order matters, matching cmux pattern)
         let displayID = view.window?.screen?.displayID ?? NSScreen.main?.displayID ?? 0

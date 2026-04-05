@@ -89,6 +89,10 @@ struct KeyBindingRegistry {
             KeyBinding(characters: "w", keyCode: nil, modifiers: [.command, .shift]),
         ]
 
+        // Debug
+        registry.bindings[.toggleDebugOverlay] = [KeyBinding(
+            characters: "p", keyCode: nil, modifiers: [.command, .shift])]
+
         return registry
     }
 }

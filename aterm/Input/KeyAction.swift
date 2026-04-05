@@ -22,4 +22,7 @@ enum KeyAction: Hashable {
     // Sidebar
     case toggleSidebar
     case focusSidebar
+
+    // Debug
+    case toggleDebugOverlay
 }

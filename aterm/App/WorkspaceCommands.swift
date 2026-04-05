@@ -38,6 +38,18 @@ struct WorkspaceCommands: Commands {
                 }
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Toggle Debug Overlay") {
+                if let controller = windowCoordinator.controllerForKeyWindow() {
+                    NotificationCenter.default.post(
+                        name: .toggleDebugOverlay,
+                        object: controller.workspaceCollection
+                    )
+                }
+            }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
         }
     }
 }

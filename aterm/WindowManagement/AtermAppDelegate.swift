@@ -13,6 +13,7 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
 
         if !isUITesting, let result = SessionRestorer.loadState() {
             let state = result.state
+            AppMetrics.shared.recordRestore(metrics: result.metrics)
             Log.persistence.info("Restoring session with \(state.workspaces.count) workspace(s)")
             // Currently single-window: all workspaces go into one WorkspaceCollection.
             // Multi-window support (one collection per window) is a future enhancement.
