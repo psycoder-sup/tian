@@ -80,6 +80,38 @@ struct ProcessDetectorTests {
         #expect(info.spaceName == "dev")
         #expect(info.tabName == "Tab 1")
     }
+
+    // MARK: - Scoped Checks (nil surfaces → no confirmation)
+
+    @Test func needsConfirmationReturnsFalseForNilSurface() {
+        let surface = GhosttyTerminalSurface()
+        // surface.surface is nil without ghostty_app
+        #expect(!ProcessDetector.needsConfirmation(surface: surface))
+    }
+
+    @Test func runningProcessCountInSingleTabReturnsZeroForNilSurfaces() {
+        let tab = TabModel(name: "Tab 1")
+        #expect(ProcessDetector.runningProcessCount(in: tab) == 0)
+    }
+
+    @Test func runningProcessCountInMultipleTabsReturnsZero() {
+        let tab1 = TabModel(name: "Tab 1")
+        let tab2 = TabModel(name: "Tab 2")
+        #expect(ProcessDetector.runningProcessCount(in: [tab1, tab2]) == 0)
+    }
+
+    @Test func runningProcessCountInEmptyTabArrayReturnsZero() {
+        let tabs: [TabModel] = []
+        #expect(ProcessDetector.runningProcessCount(in: tabs) == 0)
+    }
+
+    @Test func runningProcessCountInTabWithSplitsReturnsZero() {
+        let tab = TabModel(name: "Tab 1")
+        tab.paneViewModel.splitPane(direction: .horizontal)
+        // Two panes, both with nil surfaces
+        #expect(tab.paneViewModel.surfaces.count == 2)
+        #expect(ProcessDetector.runningProcessCount(in: tab) == 0)
+    }
 }
 
 // MARK: - Snapshot Window Geometry Tests

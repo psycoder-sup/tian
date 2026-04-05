@@ -47,4 +47,22 @@ enum ProcessDetector {
     ) -> Bool {
         !detectRunningProcesses(in: collections).isEmpty
     }
+
+    // MARK: - Scoped Checks
+
+    /// Check a single surface for a running foreground process.
+    static func needsConfirmation(surface: GhosttyTerminalSurface) -> Bool {
+        guard let s = surface.surface else { return false }
+        return ghostty_surface_needs_confirm_quit(s)
+    }
+
+    /// Count running processes across a single tab's panes.
+    static func runningProcessCount(in tab: TabModel) -> Int {
+        tab.paneViewModel.surfaces.values.filter { needsConfirmation(surface: $0) }.count
+    }
+
+    /// Count running processes across multiple tabs.
+    static func runningProcessCount(in tabs: [TabModel]) -> Int {
+        tabs.reduce(0) { $0 + runningProcessCount(in: $1) }
+    }
 }

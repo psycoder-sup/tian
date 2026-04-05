@@ -81,7 +81,18 @@ struct TerminalContentView: NSViewRepresentable {
         }
 
         func terminalSurfaceViewRequestClose(_ view: TerminalSurfaceView) {
-            viewModel.closePane(paneID: paneID)
+            if let surface = viewModel.surface(for: paneID),
+               ProcessDetector.needsConfirmation(surface: surface),
+               let window = view.window {
+                CloseConfirmationDialog.showSheet(
+                    on: window,
+                    target: .pane,
+                    processCount: 1,
+                    onCloseAnyway: { [self] in viewModel.closePane(paneID: paneID) }
+                )
+            } else {
+                viewModel.closePane(paneID: paneID)
+            }
         }
 
         func terminalSurfaceViewRequestFocusDirection(_ view: TerminalSurfaceView, direction: NavigationDirection) {

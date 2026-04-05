@@ -20,9 +20,31 @@ struct TabBarView: View {
                                     space.activateTab(id: tab.id)
                                 }
                             },
-                            onClose: { space.removeTab(id: tab.id) },
-                            onCloseOthers: { space.closeOtherTabs(keepingID: tab.id) },
-                            onCloseToRight: { space.closeTabsToRight(ofID: tab.id) }
+                            onClose: {
+                                CloseConfirmationDialog.confirmIfNeeded(
+                                    processCount: ProcessDetector.runningProcessCount(in: tab),
+                                    target: .tab,
+                                    action: { space.removeTab(id: tab.id) }
+                                )
+                            },
+                            onCloseOthers: {
+                                let affected = space.tabs.filter { $0.id != tab.id }
+                                CloseConfirmationDialog.confirmIfNeeded(
+                                    processCount: ProcessDetector.runningProcessCount(in: affected),
+                                    target: .tabs(count: affected.count),
+                                    action: { space.closeOtherTabs(keepingID: tab.id) }
+                                )
+                            },
+                            onCloseToRight: {
+                                guard let idx = space.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+                                let rightTabs = Array(space.tabs[(idx + 1)...])
+                                guard !rightTabs.isEmpty else { return }
+                                CloseConfirmationDialog.confirmIfNeeded(
+                                    processCount: ProcessDetector.runningProcessCount(in: rightTabs),
+                                    target: .tabs(count: rightTabs.count),
+                                    action: { space.closeTabsToRight(ofID: tab.id) }
+                                )
+                            }
                         )
                         .frame(maxWidth: .infinity)
                     }
