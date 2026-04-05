@@ -103,8 +103,6 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             case .closeWorkspace:
                 self.workspaceCollection.removeWorkspace(id: self.workspaceCollection.activeWorkspaceID)
                 return nil
-            case .toggleWorkspaceSwitcher:
-                return nil
             case .toggleSidebar:
                 self.handleSidebarToggle()
                 return nil
