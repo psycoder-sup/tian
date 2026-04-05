@@ -61,6 +61,7 @@ targets:
               UTTypeTagSpecification = {};
             }
           )
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: aterm/aterm.entitlements
         ENABLE_APP_SANDBOX: false
         SWIFT_OBJC_BRIDGING_HEADER: aterm/aterm-Bridging-Header.h
