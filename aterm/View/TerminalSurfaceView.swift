@@ -175,14 +175,16 @@ final class TerminalSurfaceView: NSView {
 
             let text = event.charactersIgnoringModifiers ?? event.characters ?? ""
             let handled: Bool
-            if text.isEmpty {
-                keyEvent.text = nil
-                handled = ghostty_surface_key(surface, keyEvent)
-            } else {
+            if let firstScalar = text.unicodeScalars.first,
+               firstScalar.value >= 0x20,
+               !(firstScalar.value >= 0xF700 && firstScalar.value <= 0xF8FF) {
                 handled = text.withCString { ptr in
                     keyEvent.text = ptr
                     return ghostty_surface_key(surface, keyEvent)
                 }
+            } else {
+                keyEvent.text = nil
+                handled = ghostty_surface_key(surface, keyEvent)
             }
             if handled { return }
         }
@@ -239,7 +241,10 @@ final class TerminalSurfaceView: NSView {
             }
         } else {
             let text = textForKeyEvent(event)
-            if let text, !text.isEmpty {
+            // Only send text if the first byte is a printable character (>= 0x20).
+            // Control characters are encoded by Ghostty itself via the keycode.
+            if let text, !text.isEmpty,
+               let firstByte = text.utf8.first, firstByte >= 0x20 {
                 text.withCString { ptr in
                     keyEvent.text = ptr
                     _ = ghostty_surface_key(surface, keyEvent)
@@ -611,12 +616,33 @@ private extension TerminalSurfaceView {
     }
 
     func unshiftedCodepoint(from event: NSEvent) -> UInt32 {
-        guard let chars = event.charactersIgnoringModifiers, let scalar = chars.unicodeScalars.first else { return 0 }
+        // Use characters(byApplyingModifiers: []) instead of charactersIgnoringModifiers
+        // because the latter changes behavior with ctrl pressed.
+        guard event.type == .keyDown || event.type == .keyUp,
+              let chars = event.characters(byApplyingModifiers: []),
+              let scalar = chars.unicodeScalars.first else { return 0 }
         return scalar.value
     }
 
     func textForKeyEvent(_ event: NSEvent) -> String? {
-        event.characters
+        guard let characters = event.characters else { return nil }
+
+        if characters.count == 1, let scalar = characters.unicodeScalars.first {
+            // Control characters (< 0x20): return the character without control
+            // modifier applied. Ghostty handles control character encoding internally.
+            if scalar.value < 0x20 {
+                return event.characters(byApplyingModifiers: event.modifierFlags.subtracting(.control))
+            }
+
+            // Function keys live in the Unicode PUA range — arrow keys, F1–F12,
+            // Home, End, Page Up/Down, etc.  Return nil so Ghostty uses the
+            // physical keycode to generate the correct escape sequence.
+            if scalar.value >= 0xF700 && scalar.value <= 0xF8FF {
+                return nil
+            }
+        }
+
+        return characters
     }
 
     func ghosttyKeyEvent(for event: NSEvent) -> ghostty_input_key_s {
