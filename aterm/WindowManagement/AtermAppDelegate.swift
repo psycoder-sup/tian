@@ -5,6 +5,7 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
     let workspaceManager = WorkspaceManager()
     let windowCoordinator = WindowCoordinator()
     private lazy var quitFlowCoordinator = QuitFlowCoordinator(windowCoordinator: windowCoordinator)
+    private var ipcServer: IPCServer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowCoordinator.workspaceManager = workspaceManager
@@ -28,6 +29,14 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
         } else {
             windowCoordinator.openWindow()
         }
+
+        // Start IPC server
+        let commandHandler = IPCCommandHandler(windowCoordinator: windowCoordinator)
+        let server = IPCServer { request in
+            await MainActor.run { commandHandler.handle(request) }
+        }
+        self.ipcServer = server
+        server.start()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -36,5 +45,9 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         quitFlowCoordinator.initiateQuit()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        ipcServer?.stop()
     }
 }

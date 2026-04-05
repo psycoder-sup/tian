@@ -6,6 +6,11 @@ options:
   xcodeVersion: "26.3"
   minimumXcodeGenVersion: "2.0"
 
+packages:
+  swift-argument-parser:
+    url: https://github.com/apple/swift-argument-parser
+    from: "1.5.0"
+
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -17,6 +22,7 @@ schemes:
     build:
       targets:
         aterm: all
+        aterm-cli: all
         atermTests: [test]
         atermUITests: [test]
     test:
@@ -32,6 +38,13 @@ targets:
       - path: aterm
         excludes:
           - "Vendor/**"
+    dependencies:
+      - target: aterm-cli
+    postCompileScripts:
+      - script: cp -f "$BUILT_PRODUCTS_DIR/aterm-cli" "$BUILT_PRODUCTS_DIR/aterm.app/Contents/MacOS/aterm-cli"
+        name: Bundle aterm-cli
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm-cli
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aterm.app
@@ -90,6 +103,19 @@ targets:
         BUNDLE_LOADER: $(TEST_HOST)
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
+
+  aterm-cli:
+    type: tool
+    platform: macOS
+    sources:
+      - path: aterm-cli
+    dependencies:
+      - package: swift-argument-parser
+        product: ArgumentParser
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.cli
+        PRODUCT_NAME: aterm-cli
 
   atermUITests:
     type: bundle.ui-testing
