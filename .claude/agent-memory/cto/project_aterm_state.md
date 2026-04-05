@@ -1,15 +1,15 @@
 ---
 name: aterm project state
-description: Current state of aterm project - M4 workspace features implemented, workspace sidebar redesign spec written.
+description: Current state of aterm project - M7 polish implemented, sidebar redesign complete, CLI tool spec written.
 type: project
 ---
 
-As of 2026-04-01, aterm has working code through M4 (workspaces). 39 Swift source files across App/, Core/, DragAndDrop/, Input/, Models/, Pane/, Tab/, Utilities/, View/, WindowManagement/ directories. The full ghostty app/surface API migration (WORK-276) is complete.
+As of 2026-04-05, aterm has working code through M7 (daily driver polish). 60 Swift source files across App/, Core/, DragAndDrop/, Input/, Models/, Pane/, Persistence/, Tab/, Utilities/, View/, WindowManagement/ directories. The workspace sidebar redesign is implemented (glassmorphism sidebar with disclosure groups, keyboard navigation).
 
-**Current architecture:** SwiftUI app with NSWindow per workspace. WorkspaceWindowController manages windows with NSEvent keyboard monitor for shortcuts. WorkspaceWindowContent is the main SwiftUI view per window. GhosttyTerminalSurface wraps ghostty_surface_t for terminal rendering. Observable models: WorkspaceManager -> Workspace -> SpaceCollection -> SpaceModel -> TabModel -> PaneViewModel -> SplitTree.
+**Current architecture:** SwiftUI app with NSWindow per workspace. WorkspaceWindowController manages windows with NSEvent keyboard monitor for shortcuts. WorkspaceWindowContent -> SidebarContainerView -> SidebarPanelView + terminal ZStack. GhosttyTerminalSurface wraps ghostty_surface_t for terminal rendering. Observable models: WorkspaceManager -> WorkspaceCollection -> Workspace -> SpaceCollection -> SpaceModel -> TabModel -> PaneViewModel -> SplitTree. ProcessDetector for running process checks. Session persistence via SessionSerializer/SessionRestorer.
 
-**Workspace sidebar redesign spec written:** docs/feature/workspace-sidebar/workspace-sidebar-spec.md. Replaces WorkspaceIndicatorView + SpaceBarView + WorkspaceSwitcherOverlay with a glassmorphism sidebar. 5 implementation phases. Key technical decisions: per-window SidebarState, terminal surface freeze during toggle animation, multi-binding KeyBindingRegistry, push layout with .ultraThinMaterial.
+**CLI tool spec written:** docs/feature/cli-tool/cli-tool-spec.md v1.0. Unix domain socket IPC, env var injection via ghostty_surface_config_s.env_vars, 6 implementation phases. Key env var injection point: GhosttyTerminalSurface.createSurface() builds ghostty_surface_config_s which has env_vars/env_var_count fields (ghostty.h lines 453-454).
 
-**Why:** The sidebar consolidates three navigation surfaces into one persistent tree view.
+**Why:** CLI enables programmatic control of workspace hierarchy, status reporting to sidebar, and macOS notifications from Claude Code hooks and AI agents.
 
-**How to apply:** Future work on navigation should reference the sidebar spec. The sidebar is a view-layer-only change with no data model modifications.
+**How to apply:** Implementation should follow the 6 phases in the spec. Phase 1 (IPC foundation) is independently testable. Env var injection (Phase 2) requires careful C memory management matching the existing working_directory pattern.
