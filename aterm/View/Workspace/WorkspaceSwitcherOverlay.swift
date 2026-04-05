@@ -47,7 +47,8 @@ struct WorkspaceSwitcherOverlay: View {
                                 }
                                 .draggable(WorkspaceDragItem(workspaceID: workspace.id))
                                 .accessibilityLabel("Workspace: \(workspace.name), \(workspace.spaces.count) spaces")
-                                .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
+                                .accessibilityAddTraits(index == selectedIndex ? [.isButton, .isSelected] : .isButton)
+                                .accessibilityHint("Double-tap to switch to this workspace")
                             }
                             .dropDestination(for: WorkspaceDragItem.self) { items, location in
                                 handleDrop(items: items, location: location)

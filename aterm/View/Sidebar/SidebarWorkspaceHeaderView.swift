@@ -8,8 +8,10 @@ struct SidebarWorkspaceHeaderView: View {
     let onToggleDisclosure: () -> Void
     let onAddSpace: () -> Void
     let onSetDirectory: (URL?) -> Void
+    let onClose: () -> Void
 
     @State private var isHovering = false
+    @State private var isRenaming = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -19,10 +21,13 @@ struct SidebarWorkspaceHeaderView: View {
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .animation(.easeInOut(duration: 0.15), value: isExpanded)
 
-            Text(workspace.name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isActive ? .primary : .secondary)
-                .lineLimit(1)
+            InlineRenameView(
+                text: workspace.name,
+                isRenaming: $isRenaming,
+                onCommit: { workspace.name = $0 }
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(isActive ? .primary : .secondary)
 
             Spacer()
 
@@ -49,15 +54,22 @@ struct SidebarWorkspaceHeaderView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onToggleDisclosure() }
+        .draggable(WorkspaceDragItem(workspaceID: workspace.id))
         .contextMenu {
+            Button("Rename") { isRenaming = true }
+            Divider()
             DefaultDirectoryMenu(
                 name: workspace.name,
                 currentDirectory: workspace.defaultWorkingDirectory,
                 onSet: onSetDirectory
             )
+            Divider()
+            Button("Close Workspace", action: onClose)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("workspace-header-\(workspace.id)")
         .accessibilityLabel("\(workspace.name), \(workspace.spaceCollection.spaces.count) spaces, \(isExpanded ? "expanded" : "collapsed")")
+        .accessibilityHint("Double-tap to expand or collapse")
     }
 }

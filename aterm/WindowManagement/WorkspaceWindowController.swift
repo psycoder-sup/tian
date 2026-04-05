@@ -27,6 +27,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.backgroundColor = .terminalBackground
+        window.collectionBehavior = [.fullScreenPrimary]
         window.center()
 
         let contentView = WorkspaceWindowContent(workspaceCollection: workspaceCollection)

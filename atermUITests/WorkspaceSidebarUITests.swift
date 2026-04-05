@@ -17,23 +17,23 @@ final class WorkspaceSidebarUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Workspace headers are StaticText elements with identifier "workspace-header-<UUID>"
-    /// and value containing the workspace name.
+    /// Workspace headers are button elements (with .isButton trait) with identifier
+    /// "workspace-header-<UUID>" and label containing the workspace name.
     private func workspaceHeader(containing name: String) -> XCUIElement {
-        app.staticTexts.matching(
-            NSPredicate(format: "value CONTAINS %@", name)
+        app.buttons.matching(
+            NSPredicate(format: "label CONTAINS %@", name)
         ).firstMatch
     }
 
-    /// Space rows are StaticText elements with label matching space name.
+    /// Space rows are button elements (with .isButton trait) with label matching space name.
     private func spaceRow(named name: String, selected: Bool? = nil) -> XCUIElement {
         if let selected {
             let value = selected ? "selected" : "not selected"
-            return app.staticTexts.matching(
+            return app.buttons.matching(
                 NSPredicate(format: "label == %@ AND value == %@", name, value)
             ).firstMatch
         }
-        return app.staticTexts.matching(
+        return app.buttons.matching(
             NSPredicate(format: "label == %@", name)
         ).firstMatch
     }
@@ -198,9 +198,9 @@ final class WorkspaceSidebarUITests: XCTestCase {
         let ws2 = workspaceHeader(containing: "Workspace 2")
         XCTAssertTrue(ws2.waitForExistence(timeout: 3))
 
-        // Count space rows with label "default" before expanding
+        // Count space rows with identifier prefix before expanding
         // (only the first workspace's space row should have value "not selected")
-        let spaceRowsBefore = app.staticTexts.matching(
+        let spaceRowsBefore = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'space-row-'")
         ).count
 
@@ -209,7 +209,7 @@ final class WorkspaceSidebarUITests: XCTestCase {
         sleep(1)
 
         // After expansion, more space rows should appear
-        let spaceRowsAfter = app.staticTexts.matching(
+        let spaceRowsAfter = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'space-row-'")
         ).count
         XCTAssertGreaterThan(spaceRowsAfter, spaceRowsBefore,

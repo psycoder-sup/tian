@@ -17,5 +17,6 @@ struct SidebarToggleButton: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("sidebar-toggle")
         .accessibilityLabel("Toggle sidebar")
+        .accessibilityHint("Opens or closes the workspace sidebar")
     }
 }

@@ -6,7 +6,10 @@ import AppKit
 final class TrafficLightAligner {
     private let targetHeight: CGFloat
     private weak var window: NSWindow?
-    private var frameObservation: NSObjectProtocol?
+    private var observations: [NSObjectProtocol] = []
+    private var isRealigning = false
+    /// X offsets of miniaturize/zoom buttons relative to the close button (captured at init).
+    private var buttonXOffsets: [NSWindow.ButtonType: CGFloat] = [:]
 
     init(window: NSWindow, targetHeight: CGFloat) {
         self.window = window
@@ -15,14 +18,35 @@ final class TrafficLightAligner {
         guard let closeButton = window.standardWindowButton(.closeButton),
               let container = closeButton.superview else { return }
 
+        // Capture the initial relative X offsets between buttons before any realignment
+        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        for type in buttonTypes {
+            guard let button = window.standardWindowButton(type) else { continue }
+            buttonXOffsets[type] = button.frame.origin.x - closeButton.frame.origin.x
+        }
+
         // Observe container frame changes to re-center after system layout
         container.postsFrameChangedNotifications = true
-        frameObservation = NotificationCenter.default.addObserver(
+        observations.append(NotificationCenter.default.addObserver(
             forName: NSView.frameDidChangeNotification,
             object: container,
             queue: .main
         ) { [weak self] _ in
             self?.realign()
+        })
+
+        // Observe each button's frame so we catch system-driven resets
+        // (e.g. when SwiftUI re-layouts the content view after adding a workspace)
+        for type in buttonTypes {
+            guard let button = window.standardWindowButton(type) else { continue }
+            button.postsFrameChangedNotifications = true
+            observations.append(NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: button,
+                queue: .main
+            ) { [weak self] _ in
+                self?.realign()
+            })
         }
 
         // Initial alignment after first layout
@@ -32,13 +56,17 @@ final class TrafficLightAligner {
     }
 
     func tearDown() {
-        if let obs = frameObservation {
+        for obs in observations {
             NotificationCenter.default.removeObserver(obs)
-            frameObservation = nil
         }
+        observations.removeAll()
     }
 
     func realign() {
+        guard !isRealigning else { return }
+        isRealigning = true
+        defer { isRealigning = false }
+
         guard let window, let contentView = window.contentView else { return }
         guard let closeButton = window.standardWindowButton(.closeButton),
               let container = closeButton.superview else { return }
@@ -59,8 +87,8 @@ final class TrafficLightAligner {
             to: container
         )
 
-        // Shift all three buttons so close button lands at the desired origin
-        let xShift = desiredOrigin.x - closeButton.frame.origin.x
+        // Position all three buttons using absolute coordinates
+        let closeDesiredX = desiredOrigin.x
         let desiredCenterY = contentView.convert(
             NSPoint(x: 0, y: targetHeight / 2),
             to: container
@@ -75,7 +103,7 @@ final class TrafficLightAligner {
                 button.frame.origin.y = desiredY
             }
 
-            let desiredX = button.frame.origin.x + xShift
+            let desiredX = closeDesiredX + (buttonXOffsets[type] ?? 0)
             if abs(button.frame.origin.x - desiredX) > 0.5 {
                 button.frame.origin.x = desiredX
             }

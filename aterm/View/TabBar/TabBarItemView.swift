@@ -35,8 +35,10 @@ struct TabBarItemView: View {
                 Button("Close Tabs to the Right", action: onCloseToRight)
             }
             .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
             .accessibilityLabel(tab.name)
             .accessibilityValue(isActive ? "selected" : "not selected")
+            .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
     }
 
     @ViewBuilder

@@ -34,6 +34,7 @@ struct SplitContainerView<First: View, Second: View>: View {
                 SplitDividerView(direction: direction, visibleSize: dividerVisibleSize, invisibleSize: dividerInvisibleSize)
                     .position(splitterPoint)
                     .gesture(dragGesture(geo.size))
+                    .accessibilityLabel("Split divider")
             }
         }
     }

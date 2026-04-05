@@ -24,34 +24,44 @@ struct SidebarExpandedContentView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(flatItems.enumerated()), id: \.element.id) { index, item in
-                    switch item {
-                    case .workspaceHeader(let workspace):
-                        SidebarWorkspaceHeaderView(
-                            workspace: workspace,
-                            isExpanded: disclosedWorkspaces.contains(workspace.id),
-                            isActive: workspace.id == workspaceCollection.activeWorkspaceID,
-                            isKeyboardSelected: selectedIndex == index,
-                            onToggleDisclosure: { toggleDisclosure(workspace.id) },
-                            onAddSpace: { addSpace(to: workspace) },
-                            onSetDirectory: { url in
-                                workspace.setDefaultWorkingDirectory(url)
-                            }
-                        )
+                ForEach(workspaceCollection.workspaces) { workspace in
+                    SidebarWorkspaceHeaderView(
+                        workspace: workspace,
+                        isExpanded: disclosedWorkspaces.contains(workspace.id),
+                        isActive: workspace.id == workspaceCollection.activeWorkspaceID,
+                        isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
+                        onToggleDisclosure: { toggleDisclosure(workspace.id) },
+                        onAddSpace: { addSpace(to: workspace) },
+                        onSetDirectory: { url in
+                            workspace.setDefaultWorkingDirectory(url)
+                        },
+                        onClose: { workspaceCollection.removeWorkspace(id: workspace.id) }
+                    )
 
-                    case .spaceRow(let workspace, let space):
-                        SidebarSpaceRowView(
-                            space: space,
-                            isActive: workspace.id == workspaceCollection.activeWorkspaceID
-                                && space.id == workspace.spaceCollection.activeSpaceID,
-                            isKeyboardSelected: selectedIndex == index,
-                            onSelect: { selectSpace(workspace: workspace, spaceID: space.id) },
-                            onSetDirectory: { url in
-                                space.defaultWorkingDirectory = url
+                    if disclosedWorkspaces.contains(workspace.id) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(workspace.spaceCollection.spaces) { space in
+                                SidebarSpaceRowView(
+                                    space: space,
+                                    isActive: workspace.id == workspaceCollection.activeWorkspaceID
+                                        && space.id == workspace.spaceCollection.activeSpaceID,
+                                    isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, space)),
+                                    onSelect: { selectSpace(workspace: workspace, spaceID: space.id) },
+                                    onSetDirectory: { url in
+                                        space.defaultWorkingDirectory = url
+                                    },
+                                    onClose: { workspace.spaceCollection.removeSpace(id: space.id) }
+                                )
                             }
-                        )
+                        }
+                        .dropDestination(for: SpaceDragItem.self) { items, _ in
+                            handleSpaceDrop(items: items, spaceCollection: workspace.spaceCollection)
+                        }
                     }
                 }
+            }
+            .dropDestination(for: WorkspaceDragItem.self) { items, _ in
+                handleWorkspaceDrop(items: items)
             }
         }
         .overlay {
@@ -77,6 +87,38 @@ struct SidebarExpandedContentView: View {
                 selectedIndex = nil
             }
         }
+    }
+
+    // MARK: - Index Lookup
+
+    private func flatIndex(for target: SidebarItem) -> Int? {
+        flatItems.firstIndex(where: { $0.id == target.id })
+    }
+
+    // MARK: - Drag and Drop
+
+    private func handleWorkspaceDrop(items: [WorkspaceDragItem]) -> Bool {
+        guard let item = items.first,
+              let sourceIndex = workspaceCollection.workspaces.firstIndex(where: { $0.id == item.workspaceID }) else {
+            return false
+        }
+        let destinationIndex = workspaceCollection.workspaces.count - 1
+        if sourceIndex != destinationIndex {
+            workspaceCollection.reorderWorkspace(from: sourceIndex, to: destinationIndex)
+        }
+        return true
+    }
+
+    private func handleSpaceDrop(items: [SpaceDragItem], spaceCollection: SpaceCollection) -> Bool {
+        guard let item = items.first,
+              let sourceIndex = spaceCollection.spaces.firstIndex(where: { $0.id == item.spaceID }) else {
+            return false
+        }
+        let destinationIndex = spaceCollection.spaces.count - 1
+        if sourceIndex != destinationIndex {
+            spaceCollection.reorderSpace(from: sourceIndex, to: destinationIndex)
+        }
+        return true
     }
 
     // MARK: - Disclosure

@@ -38,6 +38,8 @@ struct PaneExitOverlay: View {
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(titleText)
         }
     }
 

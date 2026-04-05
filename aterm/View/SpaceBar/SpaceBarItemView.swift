@@ -49,7 +49,9 @@ struct SpaceBarItemView: View {
             Button("Close Space", action: onClose)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(space.name)
         .accessibilityValue(isActive ? "selected" : "not selected")
+        .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
     }
 }

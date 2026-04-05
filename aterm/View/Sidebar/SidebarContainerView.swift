@@ -1,5 +1,6 @@
-import SwiftUI
+import Accessibility
 import AppKit
+import SwiftUI
 
 extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
@@ -12,6 +13,7 @@ struct SidebarContainerView: View {
     @State private var sidebarState = SidebarState()
     @State private var lastContainerSize: CGSize = .zero
     @State private var nsWindow: NSWindow?
+    @State private var announcementsEnabled = false
 
     private var displayedSpaceCollection: SpaceCollection? {
         workspaceCollection.activeSpaceCollection
@@ -67,6 +69,23 @@ struct SidebarContainerView: View {
             if let spaceCollection = displayedSpaceCollection {
                 spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
             }
+            if announcementsEnabled, let name = workspaceCollection.activeWorkspace?.name {
+                AccessibilityNotification.Announcement("Workspace: \(name)").post()
+            }
+        }
+        .onChange(of: displayedSpaceCollection?.activeSpaceID) { _, _ in
+            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.name {
+                AccessibilityNotification.Announcement("Space: \(name)").post()
+            }
+        }
+        .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
+            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.name {
+                AccessibilityNotification.Announcement("Tab: \(name)").post()
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(500))
+            announcementsEnabled = true
         }
     }
 
