@@ -17,19 +17,37 @@ struct SidebarSpaceRowView: View {
         return count == 1 ? "1 tab" : "\(count) tabs"
     }
 
+    private var statusColor: Color {
+        if isActive {
+            Color(red: 0.35, green: 0.6, blue: 1.0).opacity(0.7)
+        } else {
+            Color(red: 0.45, green: 0.55, blue: 0.7).opacity(0.7)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(isActive ? Color.green : Color(white: 0.5, opacity: 0.4))
                 .frame(width: 6, height: 6)
 
-            InlineRenameView(
-                text: space.name,
-                isRenaming: $isRenaming,
-                onCommit: { space.name = $0 }
-            )
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(isActive ? Color(white: 0.9) : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                InlineRenameView(
+                    text: space.name,
+                    isRenaming: $isRenaming,
+                    onCommit: { space.name = $0 }
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isActive ? Color(white: 0.9) : .secondary)
+
+                if let status = PaneStatusManager.shared.latestStatus(in: space) {
+                    Text(String(status.label.prefix(50)))
+                        .font(.system(size: 10))
+                        .foregroundStyle(statusColor)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
 
             Spacer()
 

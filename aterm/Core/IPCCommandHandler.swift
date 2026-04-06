@@ -4,9 +4,11 @@ import Foundation
 @MainActor
 final class IPCCommandHandler {
     private let windowCoordinator: WindowCoordinator
+    private let statusManager: PaneStatusManager
 
-    init(windowCoordinator: WindowCoordinator) {
+    init(windowCoordinator: WindowCoordinator, statusManager: PaneStatusManager = .shared) {
         self.windowCoordinator = windowCoordinator
+        self.statusManager = statusManager
     }
 
     func handle(_ request: IPCRequest) -> IPCResponse {
@@ -47,8 +49,8 @@ final class IPCCommandHandler {
         case "pane.focus": return handlePaneFocus(request)
 
         // Status (Phase 4)
-        case "status.set":   return .failure(code: 1, message: "Not implemented yet. Available in a future update.")
-        case "status.clear": return .failure(code: 1, message: "Not implemented yet. Available in a future update.")
+        case "status.set":   return handleStatusSet(request)
+        case "status.clear": return handleStatusClear(request)
 
         // Notify (Phase 5)
         case "notify": return .failure(code: 1, message: "Not implemented yet. Available in a future update.")
@@ -396,6 +398,35 @@ final class IPCCommandHandler {
         }
 
         paneViewModel.focusPane(paneID: targetId)
+        return .success()
+    }
+
+    // MARK: - Status Commands
+
+    private func handleStatusSet(_ request: IPCRequest) -> IPCResponse {
+        guard let label = stringParam("label", from: request.params) else {
+            return .failure(code: 1, message: "Missing required parameter: label")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+        }
+
+        // Validate the pane still exists in the hierarchy
+        guard resolvePane(id: paneId, tabId: nil) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        statusManager.setStatus(paneID: paneId, label: label)
+        return .success()
+    }
+
+    private func handleStatusClear(_ request: IPCRequest) -> IPCResponse {
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+        }
+
+        statusManager.clearStatus(paneID: paneId)
         return .success()
     }
 

@@ -24,6 +24,7 @@
 		3113BE517AA7499EEBF7985E /* IPCServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDD28495BF6F33B6E06FFA4 /* IPCServerTests.swift */; };
 		31C4BE5C9E8370166CE34C11 /* IPCCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B1BCCD7EFC85F8714E804D /* IPCCommandHandler.swift */; };
 		371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B8AE699DC05165B8DB77FB /* AtermAppDelegate.swift */; };
+		3ECA15E19DED31ABB327D57B /* PaneStatusManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */; };
 		4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */; };
 		487C5765FAD4759E87DCC2CC /* PaneViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F29973BF00B9522849B08FE /* PaneViewModel.swift */; };
 		4DD54724EBF3C600C35F2527 /* SessionRestorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E0078285EDD225AC6B38A6 /* SessionRestorerTests.swift */; };
@@ -143,6 +144,7 @@
 		2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		35A285B6C84541B52BA42D3A /* SplitLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitLayoutTests.swift; sourceTree = "<group>"; };
 		37C5FD9C19472E7239859674 /* WorkspaceWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWindowController.swift; sourceTree = "<group>"; };
+		3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneStatusManager.swift; sourceTree = "<group>"; };
 		43007456FBDC12BEBA56E37A /* PaneExitOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneExitOverlay.swift; sourceTree = "<group>"; };
 		43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeTests.swift; sourceTree = "<group>"; };
 		452B783CB449086E5D923E97 /* TabModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabModel.swift; sourceTree = "<group>"; };
@@ -430,6 +432,7 @@
 			isa = PBXGroup;
 			children = (
 				7190557580F160FB181AE9AF /* PaneHierarchyContext.swift */,
+				3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */,
 				2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */,
 				8324193361192697B4D3D953 /* WorkspaceCollection.swift */,
 				6A12E56E28418852B337D523 /* WorkspaceManager.swift */,
@@ -723,6 +726,7 @@
 				25D4AD5EC034620AB9BBA762 /* PaneHierarchyContext.swift in Sources */,
 				6F969E602A9B32033332210A /* PaneNode.swift in Sources */,
 				8C427B77432F348EF209078F /* PaneState.swift in Sources */,
+				3ECA15E19DED31ABB327D57B /* PaneStatusManager.swift in Sources */,
 				08F605D548DE961777918C36 /* PaneView.swift in Sources */,
 				487C5765FAD4759E87DCC2CC /* PaneViewModel.swift in Sources */,
 				F45BA6DF015029828F40180D /* ProcessDetector.swift in Sources */,

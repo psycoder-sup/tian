@@ -212,6 +212,7 @@ final class PaneViewModel {
         surfaceViews[paneID]?.removeFromSuperview()
         surfaceViews.removeValue(forKey: paneID)
         paneStates.removeValue(forKey: paneID)
+        PaneStatusManager.shared.clearStatus(paneID: paneID)
 
         if result == .lastPane {
             if let onEmpty {
