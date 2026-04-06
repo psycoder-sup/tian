@@ -581,6 +581,7 @@
 			buildPhases = (
 				DB47D104030C9574D75AD295 /* Sources */,
 				550B8EA94A21B227BAD25D04 /* Bundle aterm-cli */,
+				EBA79DC170A5B43D7B9E7DAB /* Bundle Ghostty Resources */,
 				78F62DBDDD415A1F2080CACF /* Resources */,
 			);
 			buildRules = (
@@ -666,6 +667,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "cp -f \"$BUILT_PRODUCTS_DIR/aterm-cli\" \"$BUILT_PRODUCTS_DIR/aterm.app/Contents/MacOS/aterm-cli\"";
+		};
+		EBA79DC170A5B43D7B9E7DAB /* Bundle Ghostty Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Ghostty Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "GHOSTTY_RESOURCES=\"$SRCROOT/.ghostty-src/zig-out/share/ghostty\"\nDEST=\"$BUILT_PRODUCTS_DIR/aterm.app/Contents/Resources/ghostty\"\nmkdir -p \"$DEST\"\nrsync -a --delete \"$GHOSTTY_RESOURCES/\" \"$DEST/\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -925,6 +944,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -1055,6 +1075,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";

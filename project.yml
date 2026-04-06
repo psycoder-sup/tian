@@ -16,6 +16,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     MACOSX_DEPLOYMENT_TARGET: "26.0"
+    ARCHS: arm64
 
 schemes:
   aterm:
@@ -47,6 +48,12 @@ targets:
           - $(BUILT_PRODUCTS_DIR)/aterm-cli
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm-cli
+      - script: |
+          GHOSTTY_RESOURCES="$SRCROOT/.ghostty-src/zig-out/share/ghostty"
+          DEST="$BUILT_PRODUCTS_DIR/aterm.app/Contents/Resources/ghostty"
+          mkdir -p "$DEST"
+          rsync -a --delete "$GHOSTTY_RESOURCES/" "$DEST/"
+        name: Bundle Ghostty Resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aterm.app
