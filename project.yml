@@ -43,6 +43,8 @@ targets:
     postCompileScripts:
       - script: cp -f "$BUILT_PRODUCTS_DIR/aterm-cli" "$BUILT_PRODUCTS_DIR/aterm.app/Contents/MacOS/aterm-cli"
         name: Bundle aterm-cli
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/aterm-cli
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm-cli
     settings:

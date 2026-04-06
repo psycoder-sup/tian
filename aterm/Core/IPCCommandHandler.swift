@@ -5,13 +5,19 @@ import Foundation
 final class IPCCommandHandler {
     private let windowCoordinator: WindowCoordinator
     private let statusManager: PaneStatusManager
+    private let notificationManager: NotificationManager
 
-    init(windowCoordinator: WindowCoordinator, statusManager: PaneStatusManager = .shared) {
+    init(
+        windowCoordinator: WindowCoordinator,
+        statusManager: PaneStatusManager = .shared,
+        notificationManager: NotificationManager = NotificationManager()
+    ) {
         self.windowCoordinator = windowCoordinator
         self.statusManager = statusManager
+        self.notificationManager = notificationManager
     }
 
-    func handle(_ request: IPCRequest) -> IPCResponse {
+    func handle(_ request: IPCRequest) async -> IPCResponse {
         // Version check
         guard request.version == ipcProtocolVersion else {
             return .failure(
@@ -53,7 +59,7 @@ final class IPCCommandHandler {
         case "status.clear": return handleStatusClear(request)
 
         // Notify (Phase 5)
-        case "notify": return .failure(code: 1, message: "Not implemented yet. Available in a future update.")
+        case "notify": return await handleNotify(request)
 
         default:
             return .failure(code: 1, message: "Unknown command: \(request.command)")
@@ -428,6 +434,38 @@ final class IPCCommandHandler {
 
         statusManager.clearStatus(paneID: paneId)
         return .success()
+    }
+
+    // MARK: - Notify Command
+
+    private func handleNotify(_ request: IPCRequest) async -> IPCResponse {
+        guard let message = stringParam("message", from: request.params) else {
+            return .failure(code: 1, message: "Missing required parameter: message")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+        }
+
+        let title = stringParam("title", from: request.params)
+        let subtitle = stringParam("subtitle", from: request.params)
+
+        do {
+            try await notificationManager.sendNotification(
+                message: message,
+                title: title,
+                subtitle: subtitle,
+                paneID: paneId
+            )
+            return .success()
+        } catch NotificationError.permissionDenied {
+            return .failure(
+                code: 4,
+                message: "Notification permission denied. Enable notifications for aterm in System Settings > Notifications."
+            )
+        } catch {
+            return .failure(code: 1, message: "Failed to send notification: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Hierarchy Resolution

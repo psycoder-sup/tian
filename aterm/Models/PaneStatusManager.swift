@@ -14,7 +14,7 @@ final class PaneStatusManager {
 
     private(set) var statuses: [UUID: PaneStatus] = [:]
 
-    private init() {}
+    init() {}
 
     func setStatus(paneID: UUID, label: String) {
         statuses[paneID] = PaneStatus(label: label, updatedAt: Date())

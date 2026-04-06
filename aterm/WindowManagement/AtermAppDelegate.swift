@@ -1,7 +1,8 @@
 import AppKit
+import UserNotifications
 
 @MainActor
-class AtermAppDelegate: NSObject, NSApplicationDelegate {
+class AtermAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let workspaceManager = WorkspaceManager()
     let windowCoordinator = WindowCoordinator()
     private lazy var quitFlowCoordinator = QuitFlowCoordinator(windowCoordinator: windowCoordinator)
@@ -9,6 +10,7 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowCoordinator.workspaceManager = workspaceManager
+        UNUserNotificationCenter.current().delegate = self
 
         let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
 
@@ -33,7 +35,7 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
         // Start IPC server
         let commandHandler = IPCCommandHandler(windowCoordinator: windowCoordinator)
         let server = IPCServer { request in
-            await MainActor.run { commandHandler.handle(request) }
+            await commandHandler.handle(request)
         }
         self.ipcServer = server
         server.start()
@@ -49,5 +51,26 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         ipcServer?.stop()
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let userInfo = response.notification.request.content.userInfo
+        guard let paneIdStr = userInfo["paneId"] as? String,
+              let paneId = UUID(uuidString: paneIdStr) else { return }
+        await MainActor.run {
+            windowCoordinator.focusPane(id: paneId)
+        }
     }
 }

@@ -66,4 +66,28 @@ final class WindowCoordinator {
     }
 
     var windowCount: Int { controllers.count }
+
+    /// Finds a pane by UUID across all windows, activates its workspace/space/tab,
+    /// focuses the pane, and brings the window to front.
+    func focusPane(id paneID: UUID) {
+        for controller in controllers {
+            let collection = controller.workspaceCollection
+            for workspace in collection.workspaces {
+                for space in workspace.spaceCollection.spaces {
+                    for tab in space.tabs {
+                        guard tab.paneViewModel.splitTree.root.containsLeaf(paneID: paneID) else {
+                            continue
+                        }
+                        collection.activateWorkspace(id: workspace.id)
+                        workspace.spaceCollection.activateSpace(id: space.id)
+                        space.activateTab(id: tab.id)
+                        tab.paneViewModel.focusPane(paneID: paneID)
+                        NSApp.activate()
+                        controller.window?.makeKeyAndOrderFront(nil)
+                        return
+                    }
+                }
+            }
+        }
+    }
 }

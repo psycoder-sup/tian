@@ -71,10 +71,8 @@ struct IPCServerTests {
         defer { unlink(socketPath) }
 
         let server = IPCServer { request in
-            await MainActor.run {
-                let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
-                return handler.handle(request)
-            }
+            let handler = await IPCCommandHandler(windowCoordinator: WindowCoordinator())
+            return await handler.handle(request)
         }
 
         // Override socket path for testing - start server manually
@@ -109,10 +107,8 @@ struct IPCServerTests {
 
         // Accept one connection in background, handle it inline
         let handler: @Sendable (IPCRequest) async -> IPCResponse = { request in
-            await MainActor.run {
-                let h = IPCCommandHandler(windowCoordinator: WindowCoordinator())
-                return h.handle(request)
-            }
+            let h = await IPCCommandHandler(windowCoordinator: WindowCoordinator())
+            return await h.handle(request)
         }
 
         let serverTask = Task.detached {
