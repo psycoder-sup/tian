@@ -174,7 +174,13 @@ final class PaneViewModel {
 
     // MARK: - Operations
 
-    func splitPane(direction: SplitDirection) {
+    @discardableResult
+    func splitPane(direction: SplitDirection, targetPaneID: UUID? = nil) -> UUID? {
+        // If a specific target pane is requested, temporarily focus it for the split
+        if let targetPaneID, targetPaneID != splitTree.focusedPaneID {
+            splitTree.focusedPaneID = targetPaneID
+        }
+
         let newPaneID = UUID()
         let newSurface = GhosttyTerminalSurface()
         let newSurfaceView = TerminalSurfaceView()
@@ -189,11 +195,12 @@ final class PaneViewModel {
             direction: direction,
             newPaneID: newPaneID,
             newWorkingDirectory: workingDirectory
-        ) else { return }
+        ) else { return nil }
 
         surfaces[newPaneID] = newSurface
         surfaceViews[newPaneID] = newSurfaceView
         paneStates[newPaneID] = .running
+        return newPaneID
     }
 
     func closePane(paneID: UUID) {

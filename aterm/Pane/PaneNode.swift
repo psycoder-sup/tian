@@ -53,6 +53,23 @@ extension PaneNode {
         }
     }
 
+    /// All leaf pane IDs with their working directories in depth-first order.
+    func allLeafInfo() -> [(UUID, String)] {
+        var result: [(UUID, String)] = []
+        collectLeafInfo(into: &result)
+        return result
+    }
+
+    private func collectLeafInfo(into result: inout [(UUID, String)]) {
+        switch self {
+        case .leaf(let id, let wd):
+            result.append((id, wd))
+        case .split(_, _, _, let first, let second):
+            first.collectLeafInfo(into: &result)
+            second.collectLeafInfo(into: &result)
+        }
+    }
+
     /// The number of leaf panes in this subtree.
     var leafCount: Int {
         switch self {

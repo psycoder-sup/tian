@@ -51,6 +51,11 @@ extension SplitTree {
     var leafCount: Int {
         root.leafCount
     }
+
+    /// All leaf pane IDs with their working directories in depth-first order.
+    func allLeafInfo() -> [(UUID, String)] {
+        root.allLeafInfo()
+    }
 }
 
 // MARK: - Mutation

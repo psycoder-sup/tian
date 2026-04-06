@@ -6,7 +6,15 @@ struct AtermCLI: ParsableCommand {
         commandName: "aterm",
         abstract: "Control the aterm terminal emulator from within its shell sessions.",
         version: "0.1.0",
-        subcommands: [Ping.self]
+        subcommands: [
+            Ping.self,
+            WorkspaceGroup.self,
+            SpaceGroup.self,
+            TabGroup.self,
+            PaneGroup.self,
+            StatusGroup.self,
+            NotifyCommand.self,
+        ]
     )
 }
 

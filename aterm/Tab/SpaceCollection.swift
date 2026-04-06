@@ -53,7 +53,8 @@ final class SpaceCollection {
 
     // MARK: - Space Operations
 
-    func createSpace(workingDirectory: String = "~") {
+    @discardableResult
+    func createSpace(workingDirectory: String = "~") -> SpaceModel {
         spaceCounter += 1
         let tab = TabModel(name: "Tab 1", workingDirectory: workingDirectory)
         let space = SpaceModel(name: "Space \(spaceCounter)", initialTab: tab)
@@ -64,6 +65,7 @@ final class SpaceCollection {
         wireSpaceClose(space)
         spaces.append(space)
         activeSpaceID = space.id
+        return space
     }
 
     func removeSpace(id: UUID) {

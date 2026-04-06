@@ -56,7 +56,8 @@ final class SpaceModel: Identifiable {
 
     // MARK: - Tab Operations
 
-    func createTab(workingDirectory: String = "~") {
+    @discardableResult
+    func createTab(workingDirectory: String = "~") -> TabModel {
         let tabIndex = tabs.count + 1
         let tab = TabModel(name: "Tab \(tabIndex)", workingDirectory: workingDirectory)
         wireTabClose(tab)
@@ -64,6 +65,7 @@ final class SpaceModel: Identifiable {
         wireHierarchyContext(tab)
         tabs.append(tab)
         activeTabID = tab.id
+        return tab
     }
 
     func removeTab(id: UUID) {
