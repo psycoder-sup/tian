@@ -868,11 +868,125 @@ If the feature needs to be disabled, removing the environment variable injection
 
 ---
 
-## 16. Model Layer Changes Summary
+## 16. Test Strategy
+
+### Mapping to PRD Success Criteria
+
+| PRD Success Metric | Target | Verification Method | Phase |
+|--------------------|--------|---------------------|-------|
+| Hook integration | Claude Code hooks can report status and send notifications without manual intervention | Integration test: invoke `status.set`, `status.clear`, and `notify` commands via IPC from a CLI process spawned inside aterm; verify response `ok: true` and observable side effects | Phase 4 (status), Phase 5 (notify) |
+| CLI reliability | 100% of CLI commands succeed when app is running and arguments are valid | Integration test: execute all 18 commands with valid arguments against a running IPCServer; assert all return `ok: true` with expected result shapes | Phase 3 |
+| Round-trip latency | CRUD commands complete in under 100ms | Performance test: measure wall-clock time from CLI process launch to exit for each command category over 50 iterations; assert p95 < 100ms | Phase 1 |
+| Status visibility | Status updates appear in sidebar within 100ms of CLI command | Integration test: call `statusManager.setStatus(paneID:label:)`, measure time until `@Observable` change is picked up by a SwiftUI view subscriber; assert < 100ms | Phase 4 |
+| Notification delivery | Notifications appear within 1 second of CLI command, even when backgrounded | Integration test: send `notify` command, verify `UNUserNotificationCenter.current().add()` is called within 1 second | Phase 5 |
+| Environment correctness | All `ATERM_*` variables present and correct in every spawned shell, including splits | Unit test: verify `EnvironmentBuilder.buildPaneEnvironment()` output contains all 7 variables with correct values. Integration test: create a surface, read back env vars from the ghostty config, verify correctness. Split a pane, verify new pane has different `ATERM_PANE_ID` but same tab/space/workspace IDs | Phase 2 |
+| Blocking outside aterm | CLI always exits with clear error when run outside aterm | Unit test: invoke CLI binary without `ATERM_SOCKET` in environment; assert exit code 2 and stderr contains "Not running inside aterm" | Phase 1 |
+
+### Mapping to Functional Requirements
+
+| FR ID | Test Description | Type | Preconditions |
+|-------|-----------------|------|---------------|
+| FR-01 | Verify all 7 environment variables (`ATERM_SOCKET`, `ATERM_PANE_ID`, `ATERM_TAB_ID`, `ATERM_SPACE_ID`, `ATERM_WORKSPACE_ID`, `ATERM_CLI_PATH`, `PATH`) are present in a spawned shell session | Integration | App running, surface created |
+| FR-02 | Verify socket is created at `$TMPDIR/aterm-<uid>.sock` on launch and removed on termination | Integration | App launch and termination cycle |
+| FR-03 | Verify CLI prints error and exits code 2 when `ATERM_SOCKET` is unset or socket file is missing | Unit | CLI binary available, no `ATERM_SOCKET` in env |
+| FR-04 | Verify CLI sends request and receives response within 5-second timeout | Integration | IPCServer running |
+| FR-05 | Verify `workspace.create` with valid name returns UUID; verify empty name returns error code 1 | Unit (handler), Integration (end-to-end) | IPCServer running, model initialized |
+| FR-06 | Verify `workspace.list` returns all workspaces with correct fields in both table and JSON format | Unit (formatter), Integration (handler) | At least one workspace exists |
+| FR-07 | Verify `workspace.close` with running processes returns error code 3 without `--force`; succeeds with `--force` | Integration | Workspace with running process in a pane |
+| FR-08 | Verify `workspace.focus` activates the target workspace; verify error on invalid UUID | Integration | Multiple workspaces exist |
+| FR-09 | Verify `space.create` with and without explicit `--workspace` flag; verify UUID returned | Integration | Workspace exists |
+| FR-10 | Verify `space.list` returns spaces for specified or default workspace | Integration | Space exists in workspace |
+| FR-11 | Verify `space.close` with process safety check; verify cascading close of tabs and panes | Integration | Space with tabs containing running processes |
+| FR-12 | Verify `space.focus` activates space and its parent workspace | Integration | Multiple spaces exist |
+| FR-13 | Verify `tab.create` with optional `--space` and `--directory` flags returns UUID | Integration | Space exists |
+| FR-14 | Verify `tab.list` returns tabs with title, pane count, and active indicator | Integration | Tabs exist in space |
+| FR-15 | Verify `tab.close` with process safety check | Integration | Tab with running process |
+| FR-16 | Verify `tab.focus` by UUID and by 1-based index (including index 9 = last tab) | Integration | Multiple tabs exist |
+| FR-17 | Verify `pane.split` creates new pane, returns UUID, new pane inherits working directory | Integration | Pane exists in tab |
+| FR-18 | Verify `pane.list` returns pane UUID, working directory, state, and focused indicator | Integration | Tab with multiple panes |
+| FR-19 | Verify `pane.close` closes pane and triggers cascading close when last pane in tab | Integration | Pane exists |
+| FR-20 | Verify `pane.focus` by UUID and by direction (`up`, `down`, `left`, `right`) | Integration | Tab with split panes |
+| FR-21 | Verify `status.set` stores label for the correct pane ID | Unit (PaneStatusManager), Integration (IPC) | Pane exists |
+| FR-22 | Verify `status.clear` removes status for the pane | Unit (PaneStatusManager), Integration (IPC) | Status previously set |
+| FR-23 | Verify multiple panes can have independent simultaneous statuses | Unit | Multiple pane IDs |
+| FR-24 | Verify status is not persisted across app restarts; verify status cleared on pane close | Unit (PaneStatusManager) | Status set, then pane closed |
+| FR-25 | Verify `status.set` replaces existing status (no queueing) | Unit | Status already set for pane |
+| FR-26 | Verify `notify` sends a `UNNotificationRequest` with correct title, subtitle, body, and sound | Unit (NotificationManager) | Notification authorization granted |
+| FR-27 | Verify lazy authorization request on first `notify` call; verify error code 4 when denied | Unit (NotificationManager) | Authorization not yet requested / denied |
+| FR-28 | Verify notification click resolves pane ID from `userInfo`, activates workspace/space/tab, and focuses pane | Integration | Notification delivered with valid pane ID |
+| FR-29 | Verify all write operations exit code 0 with confirmation; creates include UUID in output | Unit (OutputFormatter) | Valid command execution |
+| FR-30 | Verify all error categories produce correct exit codes (1, 2, 3, 4) and stderr messages | Unit (CLIError), Integration | Various error conditions |
+| FR-31 | Verify every CLI invocation appends a JSONL entry to `~/Library/Logs/aterm/cli.log` with all required fields | Unit (CommandLogger) | Log directory writable |
+| FR-32 | Verify `--version` prints version string; `--help` prints usage for all subcommands | Unit | CLI binary available |
+| FR-33 | Verify CLI binary is at `Contents/MacOS/aterm-cli` and `aterm` symlink exists; verify `PATH` includes the `MacOS` directory | Integration | App bundle built |
+
+### Unit Tests
+
+Pure logic, transformations, validation, and state transitions that can be tested without IPC or a running app:
+
+- **IPCMessage Codable round-tripping:** Encode an `IPCRequest` to JSON, decode it back, and assert all fields match. Same for `IPCResponse`, including error cases. Test `IPCValue` for all cases (string, int, bool, array, object, null).
+- **EnvironmentBuilder:** Verify `buildPaneEnvironment(socketPath:paneID:tabID:spaceID:workspaceID:cliPath:)` returns a dictionary with all 7 keys and correctly formatted values. Verify `PATH` is prepended, not replaced.
+- **CommandRouter argument parsing:** For each subcommand, verify that valid arguments produce the correct `IPCRequest` (command identifier and params). Verify that missing required arguments cause parse failures.
+- **OutputFormatter:** Verify table formatting aligns columns, truncates long values, and marks the active row with `*`. Verify JSON formatting produces valid JSON matching the expected schema.
+- **CommandLogger:** Verify JSONL format with all fields. Verify log rotation: write entries until file exceeds 10 MB, then verify the current file is renamed to `.1` and a new file is started.
+- **PaneStatusManager:** Verify `setStatus` creates/updates entries. Verify `clearStatus` removes entries. Verify `clearAll` removes a batch. Verify `latestStatus(for:in:)` returns the entry with the most recent `updatedAt`. Verify setting status on a pane that already has status replaces (does not duplicate).
+- **CLIError exit codes:** Verify each error type maps to the correct exit code (1-4).
+- **PaneHierarchyContext:** Verify the struct correctly holds and passes through all five fields.
+
+### Integration Tests
+
+Cross-module interactions requiring a running IPCServer or model layer:
+
+- **Socket lifecycle:** Start `IPCServer`, verify socket file exists with `0o600` permissions. Stop server, verify socket file is removed. Start again after simulated crash (stale socket file present), verify stale socket is detected and replaced.
+- **Full IPC round-trip:** Start `IPCServer` with `IPCCommandHandler` wired to the model layer. Send a `workspace.create` request via a socket connection. Verify the response contains a valid UUID. Send `workspace.list` and verify the created workspace appears.
+- **All 18 commands end-to-end:** Execute each command through the IPC socket against a model layer with pre-populated test data. Verify correct responses and model state changes.
+- **Hierarchy resolution:** Verify `resolveWorkspace`, `resolveSpace`, `resolveTab`, and `resolvePane` return correct entities for valid UUIDs and return error code 1 for invalid UUIDs.
+- **Stale environment detection:** Create a pane, record its env. Move the pane's tab to a different workspace (simulated). Send a command with the original env. Verify error code 1 with "Stale environment detected" message.
+- **Process safety checks:** Create a workspace with a running process in a pane. Send `workspace.close` without `force`. Verify error code 3. Send again with `force: true`. Verify success.
+- **Concurrent CLI invocations:** Send 10 `workspace.list` requests simultaneously from separate socket connections. Verify all receive correct, complete responses with no interleaving or corruption.
+- **Environment variable injection:** Create a `GhosttyTerminalSurface` with `environmentVariables` populated. Verify the `ghostty_surface_config_s` has correct `env_vars` and `env_var_count`. Verify a split pane receives a new `ATERM_PANE_ID` while inheriting other hierarchy IDs.
+
+### End-to-End Tests
+
+Critical user flows mapped to PRD user stories (Section 4):
+
+- **Workspace lifecycle (US-1, US-2):** From within an aterm shell, run `aterm workspace create "test" --directory /tmp`, capture UUID. Run `aterm workspace list --format json`, verify the workspace appears. Run `aterm workspace focus <id>`, verify the workspace is activated. Run `aterm workspace close <id>`, verify removal.
+- **Space and tab management (US-3, US-4):** Create a space, create tabs within it, split a pane, list panes, focus by direction, close pane, verify cascading close.
+- **Status reporting flow (US-5, US-6):** Run `aterm status set --label "Building..."`, verify label appears in sidebar space row. Run `aterm status set --label "Testing..."`, verify label updates. Run `aterm status clear`, verify label disappears.
+- **Notification flow (US-7):** Run `aterm notify "Build complete" --title "CI"`, verify macOS notification appears. Click notification, verify aterm activates and focuses the source pane.
+- **Outside-aterm blocking (US-8):** Open a non-aterm terminal, run the CLI binary. Verify exit code 2 and error message.
+- **Pane enumeration for automation (US-10):** Split panes, run `aterm pane list --format json`, verify all panes listed with correct state and focus indicator.
+
+### Edge Case and Error Path Tests
+
+- **Empty and boundary inputs:** Empty workspace name (error code 1). Status label at 0 characters (valid, clears display). Status label at 1000 characters (accepted, truncated at display time to 50 chars).
+- **Invalid UUIDs:** Malformed UUID string in `workspace.focus` (error code 1). Non-existent but well-formed UUID (error code 1).
+- **Socket errors:** CLI invoked with `ATERM_SOCKET` pointing to a non-existent path (error code 2). Socket file exists but app is not listening (error code 2, connection refused). App unresponsive for > 5 seconds (error code 2, timeout).
+- **Protocol version mismatch:** Send a request with `version: 99`. Verify error response with code 1 and message about version mismatch.
+- **Notification permission denied:** Deny notification permissions in System Settings. Run `aterm notify "test"`. Verify exit code 4 and stderr message about enabling permissions.
+- **Concurrent status updates:** Two panes set status simultaneously. Verify both statuses are stored independently. Verify `latestStatus` returns the most recent one for sidebar display.
+- **Pane close during status:** Set status on a pane, then close the pane. Verify `PaneStatusManager` removes the status entry (no stale entries).
+- **Log rotation boundary:** Write log entries totaling exactly 10 MB. Write one more entry. Verify rotation occurred: `cli.log.1` exists with the old data, `cli.log` contains only the new entry.
+- **Multiple sockets (rejected case):** Start the app, verify socket exists. Start a hypothetical second instance. Verify it detects the existing socket via `connect()` and skips socket creation.
+
+### Performance and Load Tests
+
+| Benchmark | Target | Method |
+|-----------|--------|--------|
+| CLI cold-start latency | < 50ms from process launch to first socket write | Measure with `mach_absolute_time` in the CLI before and after arg parsing; run 100 iterations, assert p95 < 50ms |
+| IPC round-trip (app side) | < 10ms from request received to response written | Instrument `IPCServer.handleConnection` with timestamps; measure across all 18 commands |
+| End-to-end CRUD latency | < 100ms from CLI invocation to exit (NFR-01) | Launch CLI as a subprocess, measure wall-clock time; test all command categories over 50 iterations, assert p95 < 100ms |
+| Status update to UI | < 100ms from `setStatus` call to SwiftUI body re-evaluation | Set status on `PaneStatusManager`, use a test view subscriber to detect the change; measure latency |
+| Concurrent request throughput | 10 simultaneous requests complete without error or corruption (NFR-02) | Spawn 10 CLI processes in parallel, each sending a `workspace.list`. Verify all receive valid responses. No interleaved or partial JSON |
+| CLI binary size | < 5 MB (NFR-03) | Check `aterm-cli` binary size after release build; assert < 5 MB |
+
+---
+
+## 17. Model Layer Changes Summary
 
 This section consolidates all changes to existing model layer files required by the CLI feature.
 
-### 16.1 Return Types for Create/Split Methods
+### 17.1 Return Types for Create/Split Methods
 
 | File | Method | Current Return | New Return |
 |------|--------|---------------|------------|
@@ -882,27 +996,27 @@ This section consolidates all changes to existing model layer files required by 
 
 The `@discardableResult` annotation preserves backward compatibility -- existing callers that ignore the return value compile without changes.
 
-### 16.2 PaneViewModel.splitPane Target Pane Support
+### 17.2 PaneViewModel.splitPane Target Pane Support
 
 `splitPane` gains an optional `targetPaneID` parameter (default: `nil`, meaning use `focusedPaneID`). When a target is specified, the method temporarily sets `focusedPaneID` to the target, performs the split, and the focus naturally moves to the new pane (existing `insertSplit` behavior at `SplitTree.swift` line 64).
 
-### 16.3 PaneHierarchyContext Propagation
+### 17.3 PaneHierarchyContext Propagation
 
 New stored property on `PaneViewModel`: `var hierarchyContext: PaneHierarchyContext?`
 
 Set by the owning chain during construction. The propagation mirrors the existing `directoryFallback` pattern (set by `SpaceModel.wireDirectoryFallback` at `SpaceModel.swift` line 159).
 
-### 16.4 PaneStatusManager Cleanup Hook
+### 17.4 PaneStatusManager Cleanup Hook
 
 In `PaneViewModel.closePane(paneID:)` (line 194 of `PaneViewModel.swift`), add a call to `PaneStatusManager.shared.clearStatus(paneID: paneID)` after the surface cleanup block (after line 199).
 
-### 16.5 GhosttyTerminalSurface.createSurface Signature
+### 17.5 GhosttyTerminalSurface.createSurface Signature
 
 New parameter: `environmentVariables: [String: String] = [:]`. Inside the method, after building the config and before calling `ghostty_surface_new`, the dictionary is converted to a C array of `ghostty_env_var_s` and assigned to `config.env_vars` and `config.env_var_count`. The array and its C strings must be kept alive (stack-allocated or in a temporary buffer) until `ghostty_surface_new` returns.
 
 ---
 
-## 17. New Files Summary
+## 18. New Files Summary
 
 | File Path | Layer | Description |
 |-----------|-------|-------------|
@@ -923,7 +1037,7 @@ New parameter: `environmentVariables: [String: String] = [:]`. Inside the method
 
 ---
 
-## 18. Technical Risks and Mitigations
+## 19. Technical Risks and Mitigations
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
@@ -936,7 +1050,7 @@ New parameter: `environmentVariables: [String: String] = [:]`. Inside the method
 
 ---
 
-## 19. Open Technical Questions
+## 20. Open Technical Questions
 
 | # | Question | Context | Impact if Unresolved |
 |---|----------|---------|---------------------|
