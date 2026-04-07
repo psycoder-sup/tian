@@ -23,6 +23,7 @@
 		25D4AD5EC034620AB9BBA762 /* PaneHierarchyContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7190557580F160FB181AE9AF /* PaneHierarchyContext.swift */; };
 		2C1A8ADB9E34400955A79999 /* IPCServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251A08AEC204F4CDDF90D833 /* IPCServer.swift */; };
 		3113BE517AA7499EEBF7985E /* IPCServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDD28495BF6F33B6E06FFA4 /* IPCServerTests.swift */; };
+		312F1A1A9B57844586622C26 /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18DADDD9ABD467A7293FB944 /* WorktreeService.swift */; };
 		31C4BE5C9E8370166CE34C11 /* IPCCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B1BCCD7EFC85F8714E804D /* IPCCommandHandler.swift */; };
 		371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B8AE699DC05165B8DB77FB /* AtermAppDelegate.swift */; };
 		3ECA15E19DED31ABB327D57B /* PaneStatusManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */; };
@@ -48,6 +49,7 @@
 		6F117927663C99EA286A5AE0 /* SplitLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808CE94D10E6FBFDBF1A5CA1 /* SplitLayout.swift */; };
 		6F969E602A9B32033332210A /* PaneNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A97EF99F4161552B5D89CA1 /* PaneNode.swift */; };
 		7041FDD37A7E955107826C45 /* WorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */; };
+		70CED66D7E2A0489AE4DDBBB /* WorktreeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BC8DF50431AE3B94014E7C /* WorktreeServiceTests.swift */; };
 		71ED172BEC3D704582E9EFA5 /* DefaultDirectoryMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB76FE0AB08911D9F4F67748 /* DefaultDirectoryMenu.swift */; };
 		739C468E214CB7695446A996 /* SpaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0BC24C498E99A701D837F92 /* SpaceModel.swift */; };
 		77CFAAAEFC04FA6CF5313FF9 /* SessionRestorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C54CE84FA6D1BCC18DD96AD0 /* SessionRestorer.swift */; };
@@ -150,6 +152,7 @@
 		1578993ADEAB641DB2CC0449 /* WorktreeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeError.swift; sourceTree = "<group>"; };
 		16E08D92624E4FE357EC5F3C /* ProcessDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessDetectorTests.swift; sourceTree = "<group>"; };
 		187D85C4E1610BE5622BD901 /* CloseConfirmationDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloseConfirmationDialog.swift; sourceTree = "<group>"; };
+		18DADDD9ABD467A7293FB944 /* WorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeService.swift; sourceTree = "<group>"; };
 		1B237FEE621E61F5BF0159CB /* RestoreMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreMetrics.swift; sourceTree = "<group>"; };
 		2184F31014D529CDB64D4166 /* aterm-cli */ = {isa = PBXFileReference; includeInIndex = 0; path = "aterm-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
 		246FA3D2D1A4503A3F208ADD /* SplitTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTree.swift; sourceTree = "<group>"; };
@@ -226,6 +229,7 @@
 		CDF7F8753E641B0600CC34B9 /* aterm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = aterm.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D26BB42E537372CD30FED500 /* QuitFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuitFlowCoordinator.swift; sourceTree = "<group>"; };
 		D5F904991148280D4B79C115 /* ANSIStripperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripperTests.swift; sourceTree = "<group>"; };
+		D8BC8DF50431AE3B94014E7C /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeServiceTests.swift; sourceTree = "<group>"; };
 		D8E69FB5BC302626AE758442 /* IPCMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPCMessageTests.swift; sourceTree = "<group>"; };
 		D8EBD33B2140ADC629998047 /* KeyBindingRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBindingRegistry.swift; sourceTree = "<group>"; };
 		D9271C21D13FE00F8A8B08D4 /* SplitNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitNavigationTests.swift; sourceTree = "<group>"; };
@@ -320,6 +324,7 @@
 				5DB36513935062E116C27879 /* WorktreeConfig.swift */,
 				13C660831771BE1223339F0E /* WorktreeConfigParser.swift */,
 				1578993ADEAB641DB2CC0449 /* WorktreeError.swift */,
+				18DADDD9ABD467A7293FB944 /* WorktreeService.swift */,
 			);
 			path = Worktree;
 			sourceTree = "<group>";
@@ -440,6 +445,7 @@
 				6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */,
 				DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */,
 				5852A70BFFBFDBCFCD49602D /* WorktreeConfigParserTests.swift */,
+				D8BC8DF50431AE3B94014E7C /* WorktreeServiceTests.swift */,
 			);
 			path = atermTests;
 			sourceTree = "<group>";
@@ -772,6 +778,7 @@
 				C10A762122E3E3DAE7288927 /* WorkingDirectoryResolverTests.swift in Sources */,
 				7041FDD37A7E955107826C45 /* WorkspaceTests.swift in Sources */,
 				21C7E9ABDD33C5F6A834CD51 /* WorktreeConfigParserTests.swift in Sources */,
+				70CED66D7E2A0489AE4DDBBB /* WorktreeServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -850,6 +857,7 @@
 				B501D0DEA8A42DCC08D6F2CE /* WorktreeConfig.swift in Sources */,
 				83E3D05E57EF68D4AB7E5AFF /* WorktreeConfigParser.swift in Sources */,
 				94D4CB1B9D12E3B0F9C25E89 /* WorktreeError.swift in Sources */,
+				312F1A1A9B57844586622C26 /* WorktreeService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
