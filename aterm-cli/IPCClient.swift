@@ -3,7 +3,7 @@ import Foundation
 struct IPCClient {
     let socketPath: String
 
-    func send(_ request: IPCRequest) throws -> IPCResponse {
+    func send(_ request: IPCRequest, timeout: Int? = nil) throws -> IPCResponse {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
             throw CLIError.connection("Failed to create socket: \(String(cString: strerror(errno)))")
@@ -39,8 +39,9 @@ struct IPCClient {
             throw CLIError.connection("Failed to connect to socket: \(String(cString: strerror(errNo)))")
         }
 
-        let timeoutSeconds = ProcessInfo.processInfo.environment["ATERM_CLI_TIMEOUT"]
-            .flatMap(Int.init) ?? 5
+        let timeoutSeconds = timeout
+            ?? ProcessInfo.processInfo.environment["ATERM_CLI_TIMEOUT"].flatMap(Int.init)
+            ?? 5
         var timeout = timeval(tv_sec: timeoutSeconds, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 

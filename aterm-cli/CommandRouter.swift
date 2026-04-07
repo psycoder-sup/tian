@@ -4,7 +4,7 @@ import Foundation
 // MARK: - Helpers
 
 /// Sends an IPC request and returns the response, throwing on error.
-private func sendRequest(command: String, params: [String: IPCValue] = [:]) throws -> IPCResponse {
+private func sendRequest(command: String, params: [String: IPCValue] = [:], timeout: Int? = nil) throws -> IPCResponse {
     let env = try AtermEnvironment.fromEnvironment()
     let client = IPCClient(socketPath: env.socketPath)
     let request = IPCRequest(
@@ -13,13 +13,13 @@ private func sendRequest(command: String, params: [String: IPCValue] = [:]) thro
         params: params,
         env: env.ipcEnv
     )
-    return try client.send(request)
+    return try client.send(request, timeout: timeout)
 }
 
-/// Processes a response that should contain an "id" in the result (create commands).
-private func handleCreateResponse(_ response: IPCResponse) throws {
+/// Processes a response that should contain an ID in the result (create commands).
+private func handleCreateResponse(_ response: IPCResponse, resultKey: String = "id") throws {
     if response.ok {
-        if let id = response.result?["id"]?.stringValue {
+        if let id = response.result?[resultKey]?.stringValue {
             CommandContext.lastCreateId = id
             print(id)
         }
@@ -571,6 +571,79 @@ struct NotifyCommand: ParsableCommand {
         if let title { params["title"] = .string(title) }
         if let subtitle { params["subtitle"] = .string(subtitle) }
         let response = try sendRequest(command: "notify", params: params)
+        try handleVoidResponse(response)
+    }
+}
+
+// MARK: - Worktree
+
+struct WorktreeGroup: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "worktree",
+        abstract: "Manage worktree-backed spaces.",
+        subcommands: [
+            WorktreeCreate.self,
+            WorktreeRemove.self,
+        ]
+    )
+}
+
+struct WorktreeCreate: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "create",
+        abstract: "Create a new worktree-backed space."
+    )
+
+    @Argument(help: "Branch name for the worktree.")
+    var branchName: String
+
+    @Flag(name: .long, help: "Check out an existing branch instead of creating a new one.")
+    var existing: Bool = false
+
+    @Option(name: .long, help: "Override repo root path.")
+    var path: String?
+
+    @Option(name: .long, help: "Target workspace UUID.")
+    var workspace: String?
+
+    func run() throws {
+        var params: [String: IPCValue] = ["branchName": .string(branchName)]
+        if existing { params["existing"] = .bool(true) }
+        if let path { params["path"] = .string(path) }
+        if let workspace { params["workspaceId"] = .string(workspace) }
+        let response = try sendRequest(command: "worktree.create", params: params, timeout: 600)
+        if response.ok {
+            let spaceId = response.result?["space_id"]?.stringValue ?? ""
+            let existed = response.result?["existed"]?.boolValue ?? false
+            CommandContext.lastCreateId = spaceId
+            print(spaceId)
+            if existed {
+                FileHandle.standardError.write(Data("Note: Focused existing worktree space.\n".utf8))
+            }
+        } else if let error = response.error {
+            throw CLIError.fromIPCError(error)
+        } else {
+            throw CLIError.general("Unexpected response from aterm")
+        }
+    }
+}
+
+struct WorktreeRemove: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "remove",
+        abstract: "Remove a worktree-backed space and its git worktree."
+    )
+
+    @Argument(help: "Space ID (UUID) of the worktree space to remove.")
+    var spaceId: String
+
+    @Flag(name: .long, help: "Force removal even with uncommitted changes.")
+    var force: Bool = false
+
+    func run() throws {
+        var params: [String: IPCValue] = ["spaceId": .string(spaceId)]
+        if force { params["force"] = .bool(true) }
+        let response = try sendRequest(command: "worktree.remove", params: params, timeout: 30)
         try handleVoidResponse(response)
     }
 }

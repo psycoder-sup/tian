@@ -15,6 +15,7 @@ struct AtermCLI: ParsableCommand {
             PaneGroup.self,
             StatusGroup.self,
             NotifyCommand.self,
+            WorktreeGroup.self,
         ]
     )
 }

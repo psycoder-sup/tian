@@ -6,6 +6,7 @@ final class IPCCommandHandler {
     private let windowCoordinator: WindowCoordinator
     private let statusManager: PaneStatusManager
     private let notificationManager: NotificationManager
+    private let worktreeOrchestrator: WorktreeOrchestrator
 
     init(
         windowCoordinator: WindowCoordinator,
@@ -15,6 +16,7 @@ final class IPCCommandHandler {
         self.windowCoordinator = windowCoordinator
         self.statusManager = statusManager
         self.notificationManager = notificationManager
+        self.worktreeOrchestrator = WorktreeOrchestrator(windowCoordinator: windowCoordinator)
     }
 
     func handle(_ request: IPCRequest) async -> IPCResponse {
@@ -60,6 +62,10 @@ final class IPCCommandHandler {
 
         // Notify (Phase 5)
         case "notify": return await handleNotify(request)
+
+        // Worktree
+        case "worktree.create": return await handleWorktreeCreate(request)
+        case "worktree.remove": return await handleWorktreeRemove(request)
 
         default:
             return .failure(code: 1, message: "Unknown command: \(request.command)")
@@ -471,6 +477,60 @@ final class IPCCommandHandler {
             )
         } catch {
             return .failure(code: 1, message: "Failed to send notification: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Worktree Commands
+
+    private func handleWorktreeCreate(_ request: IPCRequest) async -> IPCResponse {
+        guard let branchName = stringParam("branchName", from: request.params) else {
+            return .failure(code: 1, message: "Missing required parameter: branchName")
+        }
+
+        let existing = optionalBool("existing", from: request.params)
+        let path = stringParam("path", from: request.params)
+        let workspaceID = stringParam("workspaceId", from: request.params).flatMap(UUID.init)
+
+        do {
+            let result = try await worktreeOrchestrator.createWorktreeSpace(
+                branchName: branchName,
+                existingBranch: existing,
+                repoPath: path,
+                workspaceID: workspaceID
+            )
+            return .success([
+                "space_id": .string(result.spaceID.uuidString),
+                "existed": .bool(result.existed),
+            ])
+        } catch let error as WorktreeError {
+            return .failure(code: 1, message: error.description)
+        } catch {
+            return .failure(code: 1, message: error.localizedDescription)
+        }
+    }
+
+    private func handleWorktreeRemove(_ request: IPCRequest) async -> IPCResponse {
+        guard let spaceIdStr = stringParam("spaceId", from: request.params) else {
+            return .failure(code: 1, message: "Missing required parameter: spaceId")
+        }
+        guard let spaceID = UUID(uuidString: spaceIdStr) else {
+            return .failure(code: 1, message: "Invalid UUID: \(spaceIdStr)")
+        }
+
+        let force = optionalBool("force", from: request.params)
+
+        do {
+            try await worktreeOrchestrator.removeWorktreeSpace(
+                spaceID: spaceID,
+                force: force
+            )
+            return .success()
+        } catch WorktreeError.uncommittedChanges(let path) {
+            return .failure(code: 3, message: "Worktree at '\(path)' has uncommitted changes. Use --force to remove anyway.")
+        } catch let error as WorktreeError {
+            return .failure(code: 1, message: error.description)
+        } catch {
+            return .failure(code: 1, message: error.localizedDescription)
         }
     }
 
