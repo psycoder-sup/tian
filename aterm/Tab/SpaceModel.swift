@@ -58,8 +58,7 @@ final class SpaceModel: Identifiable {
 
     @discardableResult
     func createTab(workingDirectory: String = "~") -> TabModel {
-        let tabIndex = tabs.count + 1
-        let tab = TabModel(name: "Tab \(tabIndex)", workingDirectory: workingDirectory)
+        let tab = TabModel(workingDirectory: workingDirectory)
         wireTabClose(tab)
         wireDirectoryFallback(tab)
         wireHierarchyContext(tab)

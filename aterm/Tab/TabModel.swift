@@ -5,16 +5,16 @@ import Observation
 @MainActor @Observable
 final class TabModel: Identifiable {
     let id: UUID
-    var name: String
+    var customName: String?
     let paneViewModel: PaneViewModel
     let createdAt: Date
 
     /// Called when the tab's last pane is closed. The owning SpaceModel should remove this tab.
     var onEmpty: (() -> Void)?
 
-    init(name: String, workingDirectory: String = "~") {
+    init(customName: String? = nil, workingDirectory: String = "~") {
         self.id = UUID()
-        self.name = name
+        self.customName = customName
         self.createdAt = Date()
         self.paneViewModel = PaneViewModel(workingDirectory: workingDirectory)
 
@@ -25,9 +25,9 @@ final class TabModel: Identifiable {
     }
 
     /// Restore a tab with a specific ID and pre-built PaneViewModel.
-    init(id: UUID, name: String, paneViewModel: PaneViewModel) {
+    init(id: UUID, customName: String? = nil, paneViewModel: PaneViewModel) {
         self.id = id
-        self.name = name
+        self.customName = customName
         self.createdAt = Date()
         self.paneViewModel = paneViewModel
 
@@ -36,9 +36,14 @@ final class TabModel: Identifiable {
         }
     }
 
-    /// The title from the focused pane's terminal (for display in the tab bar).
+    /// The title from the focused pane's terminal (set by the shell via OSC escape sequences).
     var title: String {
         paneViewModel.title
+    }
+
+    /// Display name: user-assigned custom name, or the terminal title if none set.
+    var displayName: String {
+        customName ?? title
     }
 
     func cleanup() {

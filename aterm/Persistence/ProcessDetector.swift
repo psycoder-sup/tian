@@ -29,7 +29,7 @@ enum ProcessDetector {
                             results.append(RunningProcessInfo(
                                 workspaceName: workspace.name,
                                 spaceName: space.name,
-                                tabName: tab.name,
+                                tabName: tab.displayName,
                                 paneID: paneID
                             ))
                         }

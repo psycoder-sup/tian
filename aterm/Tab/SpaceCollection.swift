@@ -23,7 +23,7 @@ final class SpaceCollection {
     private var spaceCounter: Int = 1
 
     init(workingDirectory: String = "~") {
-        let initialTab = TabModel(name: "Tab 1", workingDirectory: workingDirectory)
+        let initialTab = TabModel(workingDirectory: workingDirectory)
         let initialSpace = SpaceModel(name: "default", initialTab: initialTab)
         self.spaces = [initialSpace]
         self.activeSpaceID = initialSpace.id
@@ -56,7 +56,7 @@ final class SpaceCollection {
     @discardableResult
     func createSpace(workingDirectory: String = "~") -> SpaceModel {
         spaceCounter += 1
-        let tab = TabModel(name: "Tab 1", workingDirectory: workingDirectory)
+        let tab = TabModel(workingDirectory: workingDirectory)
         let space = SpaceModel(name: "Space \(spaceCounter)", initialTab: tab)
         space.workspaceDefaultDirectory = workspaceDefaultDirectory
         if let workspaceID {

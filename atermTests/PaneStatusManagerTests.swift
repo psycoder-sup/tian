@@ -54,7 +54,7 @@ struct PaneStatusManagerTests {
     @Test func closePaneClearsStatus() {
         let shared = PaneStatusManager.shared
 
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
         // Clean up any prior state
@@ -112,7 +112,7 @@ struct PaneStatusManagerTests {
 
     @Test func latestStatusReturnsMostRecentInSpace() {
         let manager = PaneStatusManager()
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab1)
         let tab2 = space.createTab()
 
@@ -128,7 +128,7 @@ struct PaneStatusManagerTests {
 
     @Test func latestStatusReturnsNilWhenEmpty() {
         let manager = PaneStatusManager()
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
 
         #expect(manager.latestStatus(in: space) == nil)
@@ -136,7 +136,7 @@ struct PaneStatusManagerTests {
 
     @Test func latestStatusIgnoresPanesOutsideSpace() {
         let manager = PaneStatusManager()
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
 
         manager.setStatus(paneID: UUID(), label: "Outside")

@@ -36,7 +36,7 @@ struct TabBarItemView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(tab.name)
+            .accessibilityLabel(tab.displayName)
             .accessibilityValue(isActive ? "selected" : "not selected")
             .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
     }
@@ -45,9 +45,9 @@ struct TabBarItemView: View {
     private var tabContent: some View {
         let inner = HStack(spacing: 6) {
             InlineRenameView(
-                text: tab.name,
+                text: tab.displayName,
                 isRenaming: $isRenaming,
-                onCommit: { tab.name = $0 }
+                onCommit: { tab.customName = $0 }
             )
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(isActive ? .primary : .secondary)
@@ -59,7 +59,7 @@ struct TabBarItemView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close tab \(tab.name)")
+                .accessibilityLabel("Close tab \(tab.displayName)")
             }
         }
         .frame(maxWidth: .infinity)

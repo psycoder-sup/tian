@@ -182,7 +182,7 @@ enum SessionRestorer {
             let spaces = ws.spaces.map { sp -> SpaceModel in
                 let tabs = sp.tabs.map { tab -> TabModel in
                     let pvm = PaneViewModel.fromState(tab.root, focusedPaneID: tab.activePaneId)
-                    return TabModel(id: tab.id, name: tab.name ?? "Tab", paneViewModel: pvm)
+                    return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm)
                 }
                 return SpaceModel(
                     id: sp.id,

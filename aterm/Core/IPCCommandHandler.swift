@@ -240,6 +240,7 @@ final class IPCCommandHandler {
         let items: [IPCValue] = space.tabs.map { tab in
             .object([
                 "id": .string(tab.id.uuidString),
+                "name": tab.customName.map { .string($0) } ?? .null,
                 "title": .string(tab.title),
                 "paneCount": .int(tab.paneViewModel.splitTree.leafCount),
                 "active": .bool(tab.id == space.activeTabID),

@@ -5,13 +5,20 @@ import Foundation
 @MainActor
 struct TabModelTests {
     @Test func initCreatesOnePaneViewModel() {
-        let tab = TabModel(name: "Tab 1")
-        #expect(tab.name == "Tab 1")
+        let tab = TabModel()
+        #expect(tab.customName == nil)
+        #expect(tab.displayName == "aterm") // defaults to terminal title
         #expect(tab.paneViewModel.splitTree.leafCount == 1)
     }
 
+    @Test func customNameOverridesDisplayName() {
+        let tab = TabModel(customName: "My Tab")
+        #expect(tab.customName == "My Tab")
+        #expect(tab.displayName == "My Tab")
+    }
+
     @Test func onEmptyFiredWhenLastPaneClosed() async {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         var fired = false
         tab.onEmpty = { fired = true }
 
@@ -21,15 +28,16 @@ struct TabModelTests {
     }
 
     @Test func titleDelegatesFromPaneViewModel() {
-        let tab = TabModel(name: "Tab 1")
-        #expect(tab.title == "aterm") // default PaneViewModel title
+        let tab = TabModel()
+        #expect(tab.title == "aterm")
+        #expect(tab.displayName == "aterm") // no customName, falls through to title
     }
 }
 
 @MainActor
 struct SpaceModelTests {
     @Test func initWithOneTab() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
         #expect(space.tabs.count == 1)
         #expect(space.activeTabID == tab.id)
@@ -37,7 +45,7 @@ struct SpaceModelTests {
     }
 
     @Test func createTabAppendsAndActivates() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
         space.createTab()
         #expect(space.tabs.count == 2)
@@ -45,7 +53,7 @@ struct SpaceModelTests {
     }
 
     @Test func removeTabActivatesNearest() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -60,7 +68,7 @@ struct SpaceModelTests {
     }
 
     @Test func removeFirstTabActivatesRight() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.activateTab(id: tab1.id) // activate tab 1
@@ -72,7 +80,7 @@ struct SpaceModelTests {
     }
 
     @Test func removeLastTabTriggersOnEmpty() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
         var fired = false
         space.onEmpty = { fired = true }
@@ -83,7 +91,7 @@ struct SpaceModelTests {
     }
 
     @Test func nextTabWraps() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -94,7 +102,7 @@ struct SpaceModelTests {
     }
 
     @Test func previousTabWraps() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.activateTab(id: tab1.id) // activate tab 1 (first)
@@ -104,7 +112,7 @@ struct SpaceModelTests {
     }
 
     @Test func goToTabByIndex() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -119,7 +127,7 @@ struct SpaceModelTests {
     }
 
     @Test func goToTabOutOfRangeDoesNothing() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         let originalActive = space.activeTabID
         space.goToTab(index: 5)
@@ -127,7 +135,7 @@ struct SpaceModelTests {
     }
 
     @Test func reorderTab() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -142,7 +150,7 @@ struct SpaceModelTests {
     }
 
     @Test func closeOtherTabs() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -154,7 +162,7 @@ struct SpaceModelTests {
     }
 
     @Test func closeTabsToRight() {
-        let tab1 = TabModel(name: "Tab 1")
+        let tab1 = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab1)
         space.createTab()
         space.createTab()
@@ -165,7 +173,7 @@ struct SpaceModelTests {
     }
 
     @Test func cascadingCloseFromPaneToTab() async {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
         var spaceEmpty = false
         space.onEmpty = { spaceEmpty = true }
@@ -352,7 +360,7 @@ struct StressTests {
     }
 
     @Test func closeOtherTabsWithManyTabs() {
-        let space = SpaceModel(name: "test", initialTab: TabModel(name: "Tab 1"))
+        let space = SpaceModel(name: "test", initialTab: TabModel())
         for _ in 1..<30 {
             space.createTab()
         }
@@ -476,7 +484,7 @@ struct StressTests {
     // MARK: - Reorder Stress
 
     @Test func reorderTabsRepeatedly() {
-        let space = SpaceModel(name: "test", initialTab: TabModel(name: "Tab 1"))
+        let space = SpaceModel(name: "test", initialTab: TabModel())
         for _ in 1..<20 {
             space.createTab()
         }

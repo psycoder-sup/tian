@@ -97,7 +97,7 @@ struct DefaultWorkingDirectoryTests {
     // MARK: - SpaceModel Directory Fallback Wiring
 
     @Test func spaceModelWiresDirectoryFallbackToInitialTab() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
         space.defaultWorkingDirectory = URL(filePath: "/tmp/space")
         space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
@@ -107,7 +107,7 @@ struct DefaultWorkingDirectoryTests {
     }
 
     @Test func spaceModelWiresDirectoryFallbackToNewTabs() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
         space.defaultWorkingDirectory = URL(filePath: "/tmp/space")
         space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
@@ -119,7 +119,7 @@ struct DefaultWorkingDirectoryTests {
     }
 
     @Test func spaceModelFallbackReturnsNilWhenNoDefaultsSet() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
         // No defaults set
         let fallback = tab.paneViewModel.directoryFallback?()
@@ -127,7 +127,7 @@ struct DefaultWorkingDirectoryTests {
     }
 
     @Test func spaceModelFallbackUsesWorkspaceDefaultWhenNoSpaceDefault() {
-        let tab = TabModel(name: "Tab 1")
+        let tab = TabModel()
         let space = SpaceModel(name: "test", initialTab: tab)
         space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
         let fallback = tab.paneViewModel.directoryFallback?()

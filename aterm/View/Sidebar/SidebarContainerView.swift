@@ -80,7 +80,7 @@ struct SidebarContainerView: View {
             }
         }
         .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
-            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.name {
+            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.displayName {
                 AccessibilityNotification.Announcement("Tab: \(name)").post()
             }
         }

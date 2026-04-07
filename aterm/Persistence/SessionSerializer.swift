@@ -42,7 +42,7 @@ enum SessionSerializer {
                         tabs: space.tabs.map { tab in
                             TabState(
                                 id: tab.id,
-                                name: tab.name,
+                                name: tab.customName,
                                 activePaneId: tab.paneViewModel.splitTree.focusedPaneID,
                                 root: tab.paneViewModel.splitTree.root.toState()
                             )
