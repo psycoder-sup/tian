@@ -94,7 +94,7 @@ struct WorktreeConfigParserTests {
     @Test func parseEmptyConfigUsesDefaults() throws {
         let config = try WorktreeConfigParser.parse(tomlString: "")
 
-        #expect(config.worktreeDir == ".worktrees")
+        #expect(config.worktreeDir == "~/.worktrees")
         #expect(config.setupTimeout == 300)
         #expect(config.shellReadyDelay == 0.5)
         #expect(config.copyRules.isEmpty)
@@ -128,7 +128,7 @@ struct WorktreeConfigParserTests {
 
         let config = try WorktreeConfigParser.parse(tomlString: toml)
 
-        #expect(config.worktreeDir == ".worktrees")
+        #expect(config.worktreeDir == "~/.worktrees")
         #expect(config.setupTimeout == 300)
         #expect(config.shellReadyDelay == 0.5)
     }

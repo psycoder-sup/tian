@@ -2,8 +2,10 @@ import Foundation
 
 /// Top-level configuration parsed from `.aterm/config.toml`.
 struct WorktreeConfig: Sendable, Equatable {
-    /// Directory relative to repo root where worktrees are created.
-    var worktreeDir: String = ".worktrees"
+    /// Worktree base directory. Tilde-expanded or absolute paths (e.g. `~/.worktrees`)
+    /// place worktrees at `<dir>/<repo-name>/<branch>`. Relative paths are resolved
+    /// from the repo root (e.g. `.worktrees` → `<repo>/.worktrees/<branch>`).
+    var worktreeDir: String = "~/.worktrees"
     /// Timeout in seconds per setup command.
     var setupTimeout: TimeInterval = 300
     /// Fallback delay in seconds for shell readiness when OSC 7 is not received.

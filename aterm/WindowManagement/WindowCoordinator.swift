@@ -116,3 +116,11 @@ final class WindowCoordinator {
         controller.window?.makeKeyAndOrderFront(nil)
     }
 }
+
+// MARK: - WorkspaceProviding
+
+extension WindowCoordinator: WorkspaceProviding {
+    func activeWorkspaceForKeyWindow() -> Workspace? {
+        controllerForKeyWindow()?.workspaceCollection.activeWorkspace
+    }
+}

@@ -57,6 +57,45 @@ struct WorktreeServiceTests {
         URL(filePath: path).resolvingSymlinksInPath().path
     }
 
+    // MARK: - resolveWorktreeBase
+
+    @Test func resolveWorktreeBaseWithRelativePath() throws {
+        let base = WorktreeService.resolveWorktreeBase(
+            repoRoot: "/Users/me/projects/myrepo",
+            worktreeDir: ".worktrees"
+        )
+        #expect(base == "/Users/me/projects/myrepo/.worktrees")
+    }
+
+    @Test func resolveWorktreeBaseWithAbsoluteTildePath() throws {
+        let base = WorktreeService.resolveWorktreeBase(
+            repoRoot: "/Users/me/projects/myrepo",
+            worktreeDir: "~/.worktrees"
+        )
+        let home = NSHomeDirectory()
+        #expect(base == "\(home)/.worktrees/myrepo")
+    }
+
+    @Test func resolveWorktreeBaseWithAbsolutePath() throws {
+        let base = WorktreeService.resolveWorktreeBase(
+            repoRoot: "/Users/me/projects/myrepo",
+            worktreeDir: "/tmp/worktrees"
+        )
+        #expect(base == "/tmp/worktrees/myrepo")
+    }
+
+    @Test func isWorktreeInsideRepoForRelative() throws {
+        #expect(WorktreeService.isWorktreeInsideRepo(
+            repoRoot: "/Users/me/repo", worktreeDir: ".worktrees"
+        ))
+    }
+
+    @Test func isWorktreeInsideRepoForAbsolute() throws {
+        #expect(!WorktreeService.isWorktreeInsideRepo(
+            repoRoot: "/Users/me/repo", worktreeDir: "~/.worktrees"
+        ))
+    }
+
     // MARK: - resolveRepoRoot
 
     @Test func resolveRepoRootFromGitRepo() async throws {

@@ -5,6 +5,30 @@ import Darwin
 /// All methods are static and run off the main actor.
 enum WorktreeService {
 
+    // MARK: - Path Resolution
+
+    /// Resolves the worktree container directory for a given repo.
+    ///
+    /// - If `worktreeDir` is absolute (starts with `~/` or `/`), returns
+    ///   `<expanded-worktreeDir>/<repo-name>`.
+    /// - If relative, returns `<repoRoot>/<worktreeDir>`.
+    static func resolveWorktreeBase(repoRoot: String, worktreeDir: String) -> String {
+        let expanded = NSString(string: worktreeDir).expandingTildeInPath
+        if expanded.hasPrefix("/") {
+            let repoName = URL(filePath: repoRoot).lastPathComponent
+            return (expanded as NSString).appendingPathComponent(repoName)
+        } else {
+            return (repoRoot as NSString).appendingPathComponent(worktreeDir)
+        }
+    }
+
+    /// Returns `true` when the resolved worktree base is inside the repo root.
+    static func isWorktreeInsideRepo(repoRoot: String, worktreeDir: String) -> Bool {
+        let base = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
+        let repoURL = URL(filePath: repoRoot).standardizedFileURL.path
+        return base.hasPrefix(repoURL)
+    }
+
     // MARK: - Git Operations
 
     /// Resolves the git repository root from a directory path.
@@ -42,7 +66,7 @@ enum WorktreeService {
     /// Creates a new git worktree.
     /// - Parameters:
     ///   - repoRoot: Absolute path to the repo root.
-    ///   - worktreeDir: Directory relative to repo root for worktrees (e.g. `.worktrees`).
+    ///   - worktreeDir: Worktree base directory (absolute or relative to repo root).
     ///   - branchName: Branch name (may contain `/` for nested branches).
     ///   - existingBranch: If true, checks out an existing branch instead of creating a new one.
     /// - Returns: Absolute path to the created worktree directory.
@@ -52,9 +76,8 @@ enum WorktreeService {
         branchName: String,
         existingBranch: Bool
     ) async throws -> String {
-        let worktreePath = ((repoRoot as NSString)
-            .appendingPathComponent(worktreeDir) as NSString)
-            .appendingPathComponent(branchName)
+        let base = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
+        let worktreePath = (base as NSString).appendingPathComponent(branchName)
 
         var args: [String]
         if existingBranch {
@@ -115,7 +138,7 @@ enum WorktreeService {
     /// removing each empty directory until reaching the worktree container dir.
     /// - Parameters:
     ///   - worktreePath: Absolute path to the (already removed) worktree.
-    ///   - worktreeDir: Relative worktree container dir name (e.g. `.worktrees`).
+    ///   - worktreeDir: Worktree base directory (absolute or relative to repo root).
     ///   - repoRoot: Absolute path to the repo root.
     static func pruneEmptyParents(
         worktreePath: String,
@@ -123,8 +146,7 @@ enum WorktreeService {
         repoRoot: String
     ) throws {
         let fm = FileManager.default
-        let stopAt = URL(filePath: repoRoot)
-            .appendingPathComponent(worktreeDir)
+        let stopAt = URL(filePath: resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir))
             .standardizedFileURL
             .path
         var current = URL(filePath: worktreePath).standardizedFileURL
@@ -198,7 +220,9 @@ enum WorktreeService {
 
     /// Ensures the worktree directory is listed in `.gitignore`.
     /// Appends the entry if missing; creates `.gitignore` if it doesn't exist.
+    /// No-op when the worktree base is outside the repo (absolute `worktreeDir`).
     static func ensureGitignore(repoRoot: String, worktreeDir: String) throws {
+        guard isWorktreeInsideRepo(repoRoot: repoRoot, worktreeDir: worktreeDir) else { return }
         let gitignorePath = (repoRoot as NSString).appendingPathComponent(".gitignore")
         let entry = worktreeDir
 
@@ -227,9 +251,8 @@ enum WorktreeService {
         worktreeDir: String,
         branchName: String
     ) -> Bool {
-        let path = ((repoRoot as NSString)
-            .appendingPathComponent(worktreeDir) as NSString)
-            .appendingPathComponent(branchName)
+        let base = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
+        let path = (base as NSString).appendingPathComponent(branchName)
         var isDir: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
             && isDir.boolValue

@@ -10,7 +10,7 @@ final class WorktreeOrchestrator {
 
     // MARK: - Properties
 
-    private let windowCoordinator: WindowCoordinator
+    private let workspaceProvider: any WorkspaceProviding
 
     /// True during creation flow; drives sidebar progress indicator.
     var isCreating: Bool = false
@@ -20,8 +20,8 @@ final class WorktreeOrchestrator {
 
     // MARK: - Init
 
-    init(windowCoordinator: WindowCoordinator) {
-        self.windowCoordinator = windowCoordinator
+    init(workspaceProvider: any WorkspaceProviding) {
+        self.workspaceProvider = workspaceProvider
     }
 
     // MARK: - Creation Flow
@@ -64,8 +64,10 @@ final class WorktreeOrchestrator {
         let config = parseConfig(repoRoot: repoRoot)
 
         // Step 3: Duplicate detection (FR-027)
-        let expectedPath = URL(filePath: repoRoot)
-            .appendingPathComponent(config.worktreeDir)
+        let worktreeBase = WorktreeService.resolveWorktreeBase(
+            repoRoot: repoRoot, worktreeDir: config.worktreeDir
+        )
+        let expectedPath = URL(filePath: worktreeBase)
             .appendingPathComponent(branchName)
             .standardizedFileURL
 
@@ -334,14 +336,14 @@ final class WorktreeOrchestrator {
     /// Resolves the target workspace by ID or from the key window.
     private func resolveWorkspace(workspaceID: UUID?) -> Workspace? {
         if let workspaceID {
-            for collection in windowCoordinator.allWorkspaceCollections {
+            for collection in workspaceProvider.allWorkspaceCollections {
                 if let workspace = collection.workspaces.first(where: { $0.id == workspaceID }) {
                     return workspace
                 }
             }
             return nil
         }
-        return windowCoordinator.controllerForKeyWindow()?.workspaceCollection.activeWorkspace
+        return workspaceProvider.activeWorkspaceForKeyWindow()
     }
 
     /// Parses the worktree config from the repo, falling back to defaults.
@@ -362,7 +364,7 @@ final class WorktreeOrchestrator {
     private func findInHierarchy<T>(
         _ body: (WorkspaceCollection, Workspace) -> T?
     ) -> T? {
-        for collection in windowCoordinator.allWorkspaceCollections {
+        for collection in workspaceProvider.allWorkspaceCollections {
             for workspace in collection.workspaces {
                 if let result = body(collection, workspace) { return result }
             }
@@ -371,9 +373,10 @@ final class WorktreeOrchestrator {
     }
 
     private func findExistingSpace(worktreePath: URL) -> SpaceModel? {
-        findInHierarchy { _, workspace in
+        let needle = worktreePath.standardizedFileURL.path
+        return findInHierarchy { _, workspace in
             workspace.spaceCollection.spaces.first {
-                $0.worktreePath?.standardizedFileURL == worktreePath
+                $0.worktreePath?.standardizedFileURL.path == needle
             }
         }
     }

@@ -16,7 +16,7 @@ final class IPCCommandHandler {
         self.windowCoordinator = windowCoordinator
         self.statusManager = statusManager
         self.notificationManager = notificationManager
-        self.worktreeOrchestrator = WorktreeOrchestrator(windowCoordinator: windowCoordinator)
+        self.worktreeOrchestrator = WorktreeOrchestrator(workspaceProvider: windowCoordinator)
     }
 
     func handle(_ request: IPCRequest) async -> IPCResponse {

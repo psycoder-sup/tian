@@ -20,12 +20,14 @@
 		23288F245641D955D596DB28 /* Workspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */; };
 		23E6FCC7F63483A5101ED825 /* QuitConfirmationDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE28AE4D312C107F8B27B01B /* QuitConfirmationDialog.swift */; };
 		2477754EB0333D33BD3C8195 /* SessionStateMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C87EEFD338CAFFD633A2CDC4 /* SessionStateMigrator.swift */; };
+		247A0AFDBD6AFA4EE065A91D /* WorkspaceProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8451D0A3BE0D4EE77BEB1CD /* WorkspaceProviding.swift */; };
 		25D4AD5EC034620AB9BBA762 /* PaneHierarchyContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7190557580F160FB181AE9AF /* PaneHierarchyContext.swift */; };
 		2C1A8ADB9E34400955A79999 /* IPCServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251A08AEC204F4CDDF90D833 /* IPCServer.swift */; };
 		3113BE517AA7499EEBF7985E /* IPCServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDD28495BF6F33B6E06FFA4 /* IPCServerTests.swift */; };
 		312F1A1A9B57844586622C26 /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18DADDD9ABD467A7293FB944 /* WorktreeService.swift */; };
 		31C4BE5C9E8370166CE34C11 /* IPCCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B1BCCD7EFC85F8714E804D /* IPCCommandHandler.swift */; };
 		371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B8AE699DC05165B8DB77FB /* AtermAppDelegate.swift */; };
+		3B4B8BD094E04E3ADA2C59C5 /* WorktreeOrchestratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FF177FD3BCFB36B0AE0926 /* WorktreeOrchestratorTests.swift */; };
 		3ECA15E19DED31ABB327D57B /* PaneStatusManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */; };
 		4240794AF2989F039A139188 /* SplitTreeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F2F435B72E9E4B6A50960E /* SplitTreeTests.swift */; };
 		46F1B2D48459A28B3E571172 /* RainbowGlowBorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7218EFE96022CC17D9795F /* RainbowGlowBorder.swift */; };
@@ -148,6 +150,7 @@
 		06F842FD2AFA519684EA43B3 /* TrafficLightAligner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficLightAligner.swift; sourceTree = "<group>"; };
 		075EB996C5AB53764C420F20 /* SidebarSpaceRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSpaceRowView.swift; sourceTree = "<group>"; };
 		081F93A8AB2E0CA8E02A22D9 /* WorkspaceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCommands.swift; sourceTree = "<group>"; };
+		08FF177FD3BCFB36B0AE0926 /* WorktreeOrchestratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeOrchestratorTests.swift; sourceTree = "<group>"; };
 		0A5A4670E146E84A6D24B446 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		0C93E2FA99F3437C85998B38 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0CF8721CBBC576869E5CFCDC /* ProcessDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessDetector.swift; sourceTree = "<group>"; };
@@ -250,6 +253,7 @@
 		EE91C8E754ABF3CB896D6229 /* CommandLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandLogger.swift; sourceTree = "<group>"; };
 		EFD2E75DC0DB3C6EF8E3AC3F /* ANSIStripper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripper.swift; sourceTree = "<group>"; };
 		F4324C842EE989AC636EB790 /* SidebarToggleButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarToggleButton.swift; sourceTree = "<group>"; };
+		F8451D0A3BE0D4EE77BEB1CD /* WorkspaceProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceProviding.swift; sourceTree = "<group>"; };
 		F9A3DAB253A8029A9DD62BE4 /* NotificationManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManagerTests.swift; sourceTree = "<group>"; };
 		FAE6955AB1346CBFD1831EFC /* IPCCommandHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPCCommandHandlerTests.swift; sourceTree = "<group>"; };
 		FB76FE0AB08911D9F4F67748 /* DefaultDirectoryMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultDirectoryMenu.swift; sourceTree = "<group>"; };
@@ -328,6 +332,7 @@
 			isa = PBXGroup;
 			children = (
 				7B9A67C1C46FCFEACF2CEDAE /* ShellReadinessWaiter.swift */,
+				F8451D0A3BE0D4EE77BEB1CD /* WorkspaceProviding.swift */,
 				5DB36513935062E116C27879 /* WorktreeConfig.swift */,
 				13C660831771BE1223339F0E /* WorktreeConfigParser.swift */,
 				9558D702757069A0592CE842 /* WorktreeCreateResult.swift */,
@@ -454,6 +459,7 @@
 				6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */,
 				DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */,
 				5852A70BFFBFDBCFCD49602D /* WorktreeConfigParserTests.swift */,
+				08FF177FD3BCFB36B0AE0926 /* WorktreeOrchestratorTests.swift */,
 				D8BC8DF50431AE3B94014E7C /* WorktreeServiceTests.swift */,
 			);
 			path = atermTests;
@@ -787,6 +793,7 @@
 				C10A762122E3E3DAE7288927 /* WorkingDirectoryResolverTests.swift in Sources */,
 				7041FDD37A7E955107826C45 /* WorkspaceTests.swift in Sources */,
 				21C7E9ABDD33C5F6A834CD51 /* WorktreeConfigParserTests.swift in Sources */,
+				3B4B8BD094E04E3ADA2C59C5 /* WorktreeOrchestratorTests.swift in Sources */,
 				70CED66D7E2A0489AE4DDBBB /* WorktreeServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -862,6 +869,7 @@
 				FCB274128E010E940FDFBFDA /* WorkspaceCommands.swift in Sources */,
 				6D4ECA819835544A8F61F751 /* WorkspaceDragItem.swift in Sources */,
 				5D9BABA189C7FD43E6DD91C0 /* WorkspaceManager.swift in Sources */,
+				247A0AFDBD6AFA4EE065A91D /* WorkspaceProviding.swift in Sources */,
 				83494DD88752D8AA8C48C305 /* WorkspaceWindowContent.swift in Sources */,
 				03200C8562367548336670F1 /* WorkspaceWindowController.swift in Sources */,
 				B501D0DEA8A42DCC08D6F2CE /* WorktreeConfig.swift in Sources */,
