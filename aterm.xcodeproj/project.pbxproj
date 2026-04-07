@@ -684,7 +684,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "GHOSTTY_RESOURCES=\"$SRCROOT/.ghostty-src/zig-out/share/ghostty\"\nDEST=\"$BUILT_PRODUCTS_DIR/aterm.app/Contents/Resources/ghostty\"\nmkdir -p \"$DEST\"\nrsync -a --delete \"$GHOSTTY_RESOURCES/\" \"$DEST/\"\n";
+			shellScript = "SHARE=\"$SRCROOT/.ghostty-src/zig-out/share\"\nRESOURCES=\"$BUILT_PRODUCTS_DIR/aterm.app/Contents/Resources\"\nrsync -a --delete \"$SHARE/ghostty/\" \"$RESOURCES/ghostty/\"\nrsync -a --delete \"$SHARE/terminfo/\" \"$RESOURCES/terminfo/\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
