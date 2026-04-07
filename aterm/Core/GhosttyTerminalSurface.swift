@@ -138,6 +138,19 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
         ghostty_surface_request_close(surface)
     }
 
+    // MARK: - Text Injection
+
+    /// Types the given text into the terminal, appending a newline to simulate pressing Enter.
+    /// - Precondition: `text` must not contain newline characters. Use multiple calls for multiple commands.
+    func sendText(_ text: String) {
+        assert(!text.contains("\n"), "sendText does not support embedded newlines; call once per command")
+        guard let surface else { return }
+        let command = text + "\n"
+        command.withCString { cString in
+            ghostty_surface_text(surface, cString, UInt(command.utf8.count))
+        }
+    }
+
     // MARK: - Cleanup
 
     func freeSurface() {

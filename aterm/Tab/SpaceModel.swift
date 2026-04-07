@@ -11,6 +11,9 @@ final class SpaceModel: Identifiable {
     let createdAt: Date
     var defaultWorkingDirectory: URL?
 
+    /// Filesystem path of the associated git worktree. When non-nil, identifies this Space as worktree-backed.
+    var worktreePath: URL?
+
     /// The owning workspace's default directory, set by SpaceCollection/Workspace.
     var workspaceDefaultDirectory: URL?
 

@@ -434,7 +434,7 @@ struct SessionSerializerWriteTests {
 
     private func sampleState() -> SessionState {
         SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: UUID(),
             workspaces: []
@@ -446,7 +446,7 @@ struct SessionSerializerWriteTests {
         let data = try SessionSerializer.encode(state)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
 
-        #expect(dict["version"] as? Int == 1)
+        #expect(dict["version"] as? Int == SessionSerializer.currentVersion)
         #expect(dict["savedAt"] != nil)
         #expect(dict["activeWorkspaceId"] != nil)
         #expect(dict["workspaces"] as? [Any] != nil)
@@ -546,5 +546,312 @@ struct WindowFrameTests {
         #expect(dict["y"] as? Double == 20)
         #expect(dict["width"] as? Double == 800)
         #expect(dict["height"] as? Double == 600)
+    }
+}
+
+// MARK: - SpaceState worktreePath Tests
+
+struct SpaceStateWorktreePathTests {
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    @Test func encodesAndDecodesWithWorktreePath() throws {
+        let paneID = UUID()
+        let space = SpaceState(
+            id: UUID(),
+            name: "feature-branch",
+            activeTabId: paneID,
+            defaultWorkingDirectory: "/tmp/repo/.worktrees/feature",
+            worktreePath: "/tmp/repo/.worktrees/feature",
+            tabs: [
+                TabState(
+                    id: paneID,
+                    name: nil,
+                    activePaneId: paneID,
+                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp/repo/.worktrees/feature"))
+                )
+            ]
+        )
+
+        let data = try Self.makeEncoder().encode(space)
+        let decoded = try Self.makeDecoder().decode(SpaceState.self, from: data)
+
+        #expect(decoded == space)
+        #expect(decoded.worktreePath == "/tmp/repo/.worktrees/feature")
+    }
+
+    @Test func encodesAndDecodesWithNilWorktreePath() throws {
+        let paneID = UUID()
+        let space = SpaceState(
+            id: UUID(),
+            name: "default",
+            activeTabId: paneID,
+            defaultWorkingDirectory: "/tmp",
+            tabs: [
+                TabState(
+                    id: paneID,
+                    name: nil,
+                    activePaneId: paneID,
+                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
+                )
+            ]
+        )
+
+        let data = try Self.makeEncoder().encode(space)
+        let decoded = try Self.makeDecoder().decode(SpaceState.self, from: data)
+
+        #expect(decoded == space)
+        #expect(decoded.worktreePath == nil)
+    }
+
+    @Test func decodesV1JSONWithMissingWorktreePath() throws {
+        // Simulate a v1 JSON that has no worktreePath field at all
+        let paneID = UUID()
+        let json: [String: Any] = [
+            "id": paneID.uuidString,
+            "name": "default",
+            "activeTabId": paneID.uuidString,
+            "defaultWorkingDirectory": "/tmp",
+            "tabs": [
+                [
+                    "id": paneID.uuidString,
+                    "name": "Tab 1",
+                    "activePaneId": paneID.uuidString,
+                    "root": [
+                        "type": "pane",
+                        "paneID": paneID.uuidString,
+                        "workingDirectory": "/tmp"
+                    ] as [String: Any]
+                ] as [String: Any]
+            ]
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(SpaceState.self, from: data)
+
+        #expect(decoded.worktreePath == nil)
+        #expect(decoded.name == "default")
+        #expect(decoded.tabs.count == 1)
+    }
+}
+
+// MARK: - Snapshot worktreePath Tests
+
+@MainActor
+struct SessionSnapshotWorktreePathTests {
+    @Test func snapshotIncludesWorktreePath() {
+        let collection = WorkspaceCollection()
+        let space = collection.workspaces[0].spaceCollection.activeSpace!
+        let worktreeURL = URL(filePath: "/tmp/repo/.worktrees/feature-x")
+        space.worktreePath = worktreeURL
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        #expect(snapshot.workspaces[0].spaces[0].worktreePath == "/tmp/repo/.worktrees/feature-x")
+    }
+
+    @Test func snapshotNilWorktreePathForRegularSpace() {
+        let collection = WorkspaceCollection()
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        #expect(snapshot.workspaces[0].spaces[0].worktreePath == nil)
+    }
+}
+
+// MARK: - Migration v1→v2 Tests
+
+struct SessionMigrationV1ToV2Tests {
+    @Test func migratesV1ToV2Successfully() throws {
+        let json: [String: Any] = [
+            "version": 1,
+            "savedAt": "2026-01-01T00:00:00Z",
+            "activeWorkspaceId": UUID().uuidString,
+            "workspaces": [
+                [
+                    "id": UUID().uuidString,
+                    "name": "default",
+                    "activeSpaceId": UUID().uuidString,
+                    "defaultWorkingDirectory": "/tmp",
+                    "spaces": [] as [[String: Any]],
+                    "windowFrame": NSNull(),
+                    "isFullscreen": NSNull()
+                ] as [String: Any]
+            ]
+        ]
+
+        let result = try SessionStateMigrator.migrateIfNeeded(json: json)
+        #expect(result["version"] as? Int == 2)
+    }
+
+    @Test func v1DataMigratesToV2Data() throws {
+        let json: [String: Any] = [
+            "version": 1,
+            "savedAt": "2026-01-01T00:00:00Z",
+            "activeWorkspaceId": UUID().uuidString,
+            "workspaces": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        let result = try SessionStateMigrator.migrateIfNeeded(data: data)
+        #expect(result != nil)
+
+        let migrated = try JSONSerialization.jsonObject(with: result!) as! [String: Any]
+        #expect(migrated["version"] as? Int == 2)
+    }
+}
+
+// MARK: - SessionRestorer worktreePath Tests
+
+@MainActor
+struct SessionRestorerWorktreePathTests {
+    @Test func setsWorktreePathFromSpaceState() throws {
+        let paneID = UUID()
+        let tabID = UUID()
+        let spaceID = UUID()
+        let wsID = UUID()
+        let worktreeDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aterm-wt-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: worktreeDir) }
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                WorkspaceState(
+                    id: wsID,
+                    name: "default",
+                    activeSpaceId: spaceID,
+                    defaultWorkingDirectory: "/tmp",
+                    spaces: [
+                        SpaceState(
+                            id: spaceID,
+                            name: "feature",
+                            activeTabId: tabID,
+                            defaultWorkingDirectory: "/tmp",
+                            worktreePath: worktreeDir.path,
+                            tabs: [
+                                TabState(
+                                    id: tabID,
+                                    name: nil,
+                                    activePaneId: paneID,
+                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
+                                )
+                            ]
+                        )
+                    ],
+                    windowFrame: nil,
+                    isFullscreen: nil
+                )
+            ]
+        )
+
+        let collection = SessionRestorer.buildWorkspaceCollection(from: state)
+        let space = collection.workspaces[0].spaceCollection.spaces[0]
+
+        #expect(space.worktreePath == worktreeDir)
+    }
+
+    @Test func clearsStaleWorktreePathDuringValidation() throws {
+        let paneID = UUID()
+        let tabID = UUID()
+        let spaceID = UUID()
+        let wsID = UUID()
+        let nonExistentPath = "/tmp/aterm-wt-nonexistent-\(UUID().uuidString)"
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                WorkspaceState(
+                    id: wsID,
+                    name: "default",
+                    activeSpaceId: spaceID,
+                    defaultWorkingDirectory: "/tmp",
+                    spaces: [
+                        SpaceState(
+                            id: spaceID,
+                            name: "stale-feature",
+                            activeTabId: tabID,
+                            defaultWorkingDirectory: "/tmp",
+                            worktreePath: nonExistentPath,
+                            tabs: [
+                                TabState(
+                                    id: tabID,
+                                    name: nil,
+                                    activePaneId: paneID,
+                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
+                                )
+                            ]
+                        )
+                    ],
+                    windowFrame: nil,
+                    isFullscreen: nil
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].spaces[0].worktreePath == nil)
+    }
+
+    @Test func preservesValidWorktreePathDuringValidation() throws {
+        let paneID = UUID()
+        let tabID = UUID()
+        let spaceID = UUID()
+        let wsID = UUID()
+        let worktreeDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aterm-wt-valid-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: worktreeDir) }
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                WorkspaceState(
+                    id: wsID,
+                    name: "default",
+                    activeSpaceId: spaceID,
+                    defaultWorkingDirectory: "/tmp",
+                    spaces: [
+                        SpaceState(
+                            id: spaceID,
+                            name: "valid-feature",
+                            activeTabId: tabID,
+                            defaultWorkingDirectory: "/tmp",
+                            worktreePath: worktreeDir.path,
+                            tabs: [
+                                TabState(
+                                    id: tabID,
+                                    name: nil,
+                                    activePaneId: paneID,
+                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
+                                )
+                            ]
+                        )
+                    ],
+                    windowFrame: nil,
+                    isFullscreen: nil
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].spaces[0].worktreePath == worktreeDir.path)
     }
 }

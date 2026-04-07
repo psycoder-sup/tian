@@ -39,7 +39,24 @@ struct SpaceState: Codable, Sendable, Equatable {
     let name: String
     let activeTabId: UUID
     let defaultWorkingDirectory: String?
+    let worktreePath: String?
     let tabs: [TabState]
+
+    init(
+        id: UUID,
+        name: String,
+        activeTabId: UUID,
+        defaultWorkingDirectory: String?,
+        worktreePath: String? = nil,
+        tabs: [TabState]
+    ) {
+        self.id = id
+        self.name = name
+        self.activeTabId = activeTabId
+        self.defaultWorkingDirectory = defaultWorkingDirectory
+        self.worktreePath = worktreePath
+        self.tabs = tabs
+    }
 }
 
 // MARK: - Tab State

@@ -13,8 +13,11 @@ enum SessionStateMigrator {
 
     /// Ordered registry of migrations. Key is the source version.
     /// For example, `migrations[1]` migrates v1 → v2.
-    /// Empty for the initial v1 schema.
-    static let migrations: [Int: Migration] = [:]
+    static let migrations: [Int: Migration] = [
+        // v1 → v2: Added optional worktreePath to SpaceState.
+        // The field is optional so existing v1 data decodes correctly without transformation.
+        1: { json in json },
+    ]
 
     // MARK: - Errors
 

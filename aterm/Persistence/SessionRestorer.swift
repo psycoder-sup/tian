@@ -127,11 +127,20 @@ enum SessionRestorer {
                     ? space.activeTabId
                     : validatedTabs[0].id
 
+                let validatedWorktreePath: String?
+                if let wt = space.worktreePath, resolveDirectory(wt) == nil {
+                    Log.persistence.warning("Worktree path no longer exists, clearing: \(wt)")
+                    validatedWorktreePath = nil
+                } else {
+                    validatedWorktreePath = space.worktreePath
+                }
+
                 return SpaceState(
                     id: space.id,
                     name: space.name,
                     activeTabId: fixedActiveTabId,
                     defaultWorkingDirectory: resolveDirectory(space.defaultWorkingDirectory),
+                    worktreePath: validatedWorktreePath,
                     tabs: validatedTabs
                 )
             }
@@ -184,13 +193,15 @@ enum SessionRestorer {
                     let pvm = PaneViewModel.fromState(tab.root, focusedPaneID: tab.activePaneId)
                     return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm)
                 }
-                return SpaceModel(
+                let space = SpaceModel(
                     id: sp.id,
                     name: sp.name,
                     tabs: tabs,
                     activeTabID: sp.activeTabId,
                     defaultWorkingDirectory: sp.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) }
                 )
+                space.worktreePath = sp.worktreePath.flatMap { URL(fileURLWithPath: $0) }
+                return space
             }
 
             let wdURL = ws.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) }

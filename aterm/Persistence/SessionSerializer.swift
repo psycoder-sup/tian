@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     static var stateDirectory: URL {
         FileManager.default
@@ -39,6 +39,7 @@ enum SessionSerializer {
                         name: space.name,
                         activeTabId: space.activeTabID,
                         defaultWorkingDirectory: space.defaultWorkingDirectory?.path,
+                        worktreePath: space.worktreePath?.path,
                         tabs: space.tabs.map { tab in
                             TabState(
                                 id: tab.id,
