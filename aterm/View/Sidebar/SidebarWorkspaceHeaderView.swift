@@ -5,8 +5,10 @@ struct SidebarWorkspaceHeaderView: View {
     let isExpanded: Bool
     let isActive: Bool
     let isKeyboardSelected: Bool
+    let isCreatingWorktree: Bool
     let onToggleDisclosure: () -> Void
     let onAddSpace: () -> Void
+    let onNewWorktreeSpace: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
 
@@ -30,6 +32,12 @@ struct SidebarWorkspaceHeaderView: View {
             .foregroundStyle(.secondary)
 
             Spacer()
+
+            if isCreatingWorktree {
+                ProgressView()
+                    .controlSize(.mini)
+                    .scaleEffect(0.7)
+            }
 
             Button(action: onAddSpace) {
                 Text("+")
@@ -62,6 +70,8 @@ struct SidebarWorkspaceHeaderView: View {
                 currentDirectory: workspace.defaultWorkingDirectory,
                 onSet: onSetDirectory
             )
+            Divider()
+            Button("New Worktree Space...", action: onNewWorktreeSpace)
             Divider()
             Button("Close Workspace", action: onClose)
         }

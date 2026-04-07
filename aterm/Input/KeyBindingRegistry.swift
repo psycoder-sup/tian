@@ -71,6 +71,8 @@ struct KeyBindingRegistry {
         // Space navigation
         registry.bindings[.newSpace] = [KeyBinding(
             characters: "t", keyCode: nil, modifiers: [.command, .shift])]
+        registry.bindings[.newWorktreeSpace] = [KeyBinding(
+            characters: "b", keyCode: nil, modifiers: [.command, .shift])]
 
         // Workspace navigation
         // Cmd+Shift+Right (keyCode 124) / Cmd+Shift+Left (keyCode 123)

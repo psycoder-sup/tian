@@ -31,6 +31,12 @@ struct SidebarSpaceRowView: View {
                 .fill(isActive ? Color.green : Color(white: 0.5, opacity: 0.4))
                 .frame(width: 6, height: 6)
 
+            if space.worktreePath != nil {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 InlineRenameView(
                     text: space.name,

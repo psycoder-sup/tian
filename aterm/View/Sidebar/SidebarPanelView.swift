@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarPanelView: View {
     let workspaceCollection: WorkspaceCollection
+    let worktreeOrchestrator: WorktreeOrchestrator
     let sidebarState: SidebarState
 
     var body: some View {
@@ -9,6 +10,7 @@ struct SidebarPanelView: View {
             Spacer().frame(height: 40)
             SidebarExpandedContentView(
                 workspaceCollection: workspaceCollection,
+                worktreeOrchestrator: worktreeOrchestrator,
                 sidebarState: sidebarState
             )
             Spacer()

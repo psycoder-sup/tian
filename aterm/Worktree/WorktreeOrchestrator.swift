@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import os
 
@@ -5,7 +6,7 @@ import os
 ///
 /// Drives the end-to-end flow: git worktree creation, config parsing,
 /// Space/pane setup, shell readiness, setup commands, and layout application.
-@MainActor
+@MainActor @Observable
 final class WorktreeOrchestrator {
 
     // MARK: - Properties
@@ -17,6 +18,9 @@ final class WorktreeOrchestrator {
 
     /// Set to true when the user cancels setup commands.
     var setupCancelled: Bool = false
+
+    /// Temporary event monitor for Ctrl+C during setup commands.
+    private var ctrlCMonitor: Any?
 
     // MARK: - Init
 
@@ -268,6 +272,9 @@ final class WorktreeOrchestrator {
         paneID: UUID,
         config: WorktreeConfig
     ) async {
+        installCtrlCMonitor()
+        defer { removeCtrlCMonitor() }
+
         for command in commands {
             if setupCancelled {
                 Log.worktree.info("Setup cancelled by user")
@@ -278,6 +285,29 @@ final class WorktreeOrchestrator {
             await ShellReadinessWaiter.waitForReady(
                 surfaceID: surface.id, timeout: config.setupTimeout
             )
+        }
+    }
+
+    // MARK: - Ctrl+C Monitor
+
+    private func installCtrlCMonitor() {
+        let targetWindow = NSApp.keyWindow
+        ctrlCMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.window === targetWindow else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if flags == .control,
+               event.charactersIgnoringModifiers?.lowercased() == "c" {
+                self?.cancelSetup()
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeCtrlCMonitor() {
+        if let monitor = ctrlCMonitor {
+            NSEvent.removeMonitor(monitor)
+            ctrlCMonitor = nil
         }
     }
 

@@ -6,10 +6,16 @@ extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
     static let focusSidebar = Notification.Name("focusSidebar")
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
+    static let showWorktreeBranchInput = Notification.Name("showWorktreeBranchInput")
+}
+
+extension Notification {
+    static let worktreeWorkingDirectoryKey = "workingDirectory"
 }
 
 struct SidebarContainerView: View {
     let workspaceCollection: WorkspaceCollection
+    let worktreeOrchestrator: WorktreeOrchestrator
 
     @State private var sidebarState = SidebarState()
     @State private var lastContainerSize: CGSize = .zero
@@ -25,6 +31,7 @@ struct SidebarContainerView: View {
             if sidebarState.isExpanded {
                 SidebarPanelView(
                     workspaceCollection: workspaceCollection,
+                    worktreeOrchestrator: worktreeOrchestrator,
                     sidebarState: sidebarState
                 )
                 .frame(width: sidebarState.mode.width)

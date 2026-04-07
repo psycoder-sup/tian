@@ -3,6 +3,7 @@ import AppKit
 
 struct SidebarExpandedContentView: View {
     let workspaceCollection: WorkspaceCollection
+    let worktreeOrchestrator: WorktreeOrchestrator
     let sidebarState: SidebarState
 
     @State private var selectedIndex: Int?
@@ -30,8 +31,16 @@ struct SidebarExpandedContentView: View {
                         isExpanded: disclosedWorkspaces.contains(workspace.id),
                         isActive: workspace.id == workspaceCollection.activeWorkspaceID,
                         isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
+                        isCreatingWorktree: worktreeOrchestrator.isCreating,
                         onToggleDisclosure: { toggleDisclosure(workspace.id) },
                         onAddSpace: { addSpace(to: workspace) },
+                        onNewWorktreeSpace: {
+                            NotificationCenter.default.post(
+                                name: .showWorktreeBranchInput,
+                                object: workspaceCollection,
+                                userInfo: [Notification.worktreeWorkingDirectoryKey: workspace.spaceCollection.resolveWorkingDirectory()]
+                            )
+                        },
                         onSetDirectory: { url in
                             workspace.setDefaultWorkingDirectory(url)
                         },
@@ -50,7 +59,7 @@ struct SidebarExpandedContentView: View {
                                     onSetDirectory: { url in
                                         space.defaultWorkingDirectory = url
                                     },
-                                    onClose: { workspace.spaceCollection.removeSpace(id: space.id) }
+                                    onClose: { closeSpace(space, in: workspace) }
                                 )
                             }
                         }
@@ -141,6 +150,30 @@ struct SidebarExpandedContentView: View {
         let wd = workspace.spaceCollection.resolveWorkingDirectory()
         workspace.spaceCollection.createSpace(workingDirectory: wd)
         disclosedWorkspaces.insert(workspace.id)
+    }
+
+    // MARK: - Close Space
+
+    private func closeSpace(_ space: SpaceModel, in workspace: Workspace) {
+        guard let wtPath = space.worktreePath else {
+            workspace.spaceCollection.removeSpace(id: space.id)
+            return
+        }
+        guard let window = NSApp.keyWindow else { return }
+        WorktreeCloseDialog.show(on: window, worktreePath: wtPath.path) { response in
+            switch response {
+            case .removeWorktreeAndClose:
+                Task {
+                    try? await worktreeOrchestrator.removeWorktreeSpace(
+                        spaceID: space.id, force: false
+                    )
+                }
+            case .closeOnly:
+                workspace.spaceCollection.removeSpace(id: space.id)
+            case .cancel:
+                break
+            }
+        }
     }
 
     // MARK: - Space Selection

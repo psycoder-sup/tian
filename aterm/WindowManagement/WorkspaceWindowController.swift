@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     let workspaceCollection: WorkspaceCollection
+    let worktreeOrchestrator: WorktreeOrchestrator
     private weak var workspaceManager: WorkspaceManager?
     private weak var windowCoordinator: WindowCoordinator?
     private var eventMonitor: Any?
@@ -14,6 +15,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         windowCoordinator: WindowCoordinator
     ) {
         self.workspaceCollection = workspaceCollection
+        self.worktreeOrchestrator = WorktreeOrchestrator(workspaceProvider: windowCoordinator)
         self.workspaceManager = workspaceManager
         self.windowCoordinator = windowCoordinator
 
@@ -30,7 +32,10 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         window.collectionBehavior = [.fullScreenPrimary]
         window.center()
 
-        let contentView = WorkspaceWindowContent(workspaceCollection: workspaceCollection)
+        let contentView = WorkspaceWindowContent(
+            workspaceCollection: workspaceCollection,
+            worktreeOrchestrator: worktreeOrchestrator
+        )
         let hostingView = NSHostingView(rootView: contentView)
         window.contentView = hostingView
         window.initialFirstResponder = hostingView
@@ -124,6 +129,9 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                     object: self.workspaceCollection
                 )
                 return nil
+            case .newWorktreeSpace:
+                self.handleNewWorktreeSpace()
+                return nil
             default:
                 break
             }
@@ -158,6 +166,17 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         NotificationCenter.default.post(
             name: .toggleSidebar,
             object: self.workspaceCollection
+        )
+    }
+
+    // MARK: - Worktree
+
+    private func handleNewWorktreeSpace() {
+        let wd = workspaceCollection.activeSpaceCollection?.resolveWorkingDirectory() ?? ""
+        NotificationCenter.default.post(
+            name: .showWorktreeBranchInput,
+            object: workspaceCollection,
+            userInfo: [Notification.worktreeWorkingDirectoryKey: wd]
         )
     }
 

@@ -59,6 +59,7 @@
 		7B68EC1C9247EB3C4290811D /* RestoreMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B237FEE621E61F5BF0159CB /* RestoreMetrics.swift */; };
 		7D35164BEA0B8A9A41831D19 /* SpaceDragItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6698394DE535B9FBB88FE2 /* SpaceDragItem.swift */; };
 		7D4FA2A3ED2DA5E6E7D936AA /* SpaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 785E7B61836E96CBD22AD496 /* SpaceCollection.swift */; };
+		7E60B56795B7F03F00D0D96B /* WorktreeCloseDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72ADC119353E57606D0A61FF /* WorktreeCloseDialog.swift */; };
 		826A6E59FB8CC958F2A2893F /* TerminalContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE60D02A012008C5B7C077A /* TerminalContentView.swift */; };
 		82EBBC9FAF63F258238882C3 /* WorkspaceSidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5716A482C4F441379F8F7B4F /* WorkspaceSidebarUITests.swift */; };
 		83494DD88752D8AA8C48C305 /* WorkspaceWindowContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 923EAE0B91895B3AB2AA237C /* WorkspaceWindowContent.swift */; };
@@ -69,6 +70,7 @@
 		89A719D2D845CB585459F3EA /* CLIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45DC19B531A185F80602332 /* CLIError.swift */; };
 		8C427B77432F348EF209078F /* PaneState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B55C1556FA2FEBFADCC32D63 /* PaneState.swift */; };
 		8D8B091F86D274F1F4526892 /* CommandLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE91C8E754ABF3CB896D6229 /* CommandLogger.swift */; };
+		928FCF0E0D66D3417E7279A8 /* SetupCancelButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD2C3A4876CABC977A43094 /* SetupCancelButton.swift */; };
 		94D4CB1B9D12E3B0F9C25E89 /* WorktreeError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1578993ADEAB641DB2CC0449 /* WorktreeError.swift */; };
 		952DEFA5F0C6826E5E60DA65 /* TabBarItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB98C5FAE75C8562E5011DD1 /* TabBarItemView.swift */; };
 		9731E85D5FDC27DDB3C2EB53 /* SplitNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9271C21D13FE00F8A8B08D4 /* SplitNavigationTests.swift */; };
@@ -84,6 +86,7 @@
 		AABC59D43FBCBA7EEB978E4D /* DebugOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B0BE2D198C7A0D268D6064 /* DebugOverlayView.swift */; };
 		AD015DC13689C71E9B609CC8 /* SplitTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246FA3D2D1A4503A3F208ADD /* SplitTree.swift */; };
 		B19CCEC94508391BF11FE9BD /* IPCMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8E69FB5BC302626AE758442 /* IPCMessageTests.swift */; };
+		B4012A9DC937640EF4FBA6C7 /* BranchNameInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFEAD72044FC09750C8B2BE4 /* BranchNameInputView.swift */; };
 		B501D0DEA8A42DCC08D6F2CE /* WorktreeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB36513935062E116C27879 /* WorktreeConfig.swift */; };
 		B7A094E67D56DF927E2DB5ED /* AtermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 003B4EB9F499098DBD761D58 /* AtermApp.swift */; };
 		B838A6423B7E0C831506DDE9 /* CommandRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A783818BBF09E29D87E055 /* CommandRouter.swift */; };
@@ -154,6 +157,7 @@
 		0A5A4670E146E84A6D24B446 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		0C93E2FA99F3437C85998B38 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0CF8721CBBC576869E5CFCDC /* ProcessDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessDetector.swift; sourceTree = "<group>"; };
+		0FD2C3A4876CABC977A43094 /* SetupCancelButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupCancelButton.swift; sourceTree = "<group>"; };
 		13C660831771BE1223339F0E /* WorktreeConfigParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeConfigParser.swift; sourceTree = "<group>"; };
 		1578993ADEAB641DB2CC0449 /* WorktreeError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeError.swift; sourceTree = "<group>"; };
 		16E08D92624E4FE357EC5F3C /* ProcessDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessDetectorTests.swift; sourceTree = "<group>"; };
@@ -198,6 +202,7 @@
 		6D430CB08BB4BA79BBC72649 /* WorkingDirectoryResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkingDirectoryResolverTests.swift; sourceTree = "<group>"; };
 		6E8A3E72A60CBF3FF523FFD3 /* KeyAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyAction.swift; sourceTree = "<group>"; };
 		7190557580F160FB181AE9AF /* PaneHierarchyContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneHierarchyContext.swift; sourceTree = "<group>"; };
+		72ADC119353E57606D0A61FF /* WorktreeCloseDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeCloseDialog.swift; sourceTree = "<group>"; };
 		785E7B61836E96CBD22AD496 /* SpaceCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCollection.swift; sourceTree = "<group>"; };
 		788B721C84E816F8CC2FB137 /* TerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceView.swift; sourceTree = "<group>"; };
 		79B8AE699DC05165B8DB77FB /* AtermAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtermAppDelegate.swift; sourceTree = "<group>"; };
@@ -236,6 +241,7 @@
 		CBBE055580A36D1C42C44F98 /* SidebarExpandedContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarExpandedContentView.swift; sourceTree = "<group>"; };
 		CCF7E434C1DBF96E7093C19B /* DirectoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryPicker.swift; sourceTree = "<group>"; };
 		CDF7F8753E641B0600CC34B9 /* aterm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = aterm.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CFEAD72044FC09750C8B2BE4 /* BranchNameInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchNameInputView.swift; sourceTree = "<group>"; };
 		D26BB42E537372CD30FED500 /* QuitFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuitFlowCoordinator.swift; sourceTree = "<group>"; };
 		D5F904991148280D4B79C115 /* ANSIStripperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripperTests.swift; sourceTree = "<group>"; };
 		D8BC8DF50431AE3B94014E7C /* WorktreeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeServiceTests.swift; sourceTree = "<group>"; };
@@ -315,6 +321,16 @@
 				318F05B0EADEC32D86301ADC /* Worktree */,
 			);
 			path = aterm;
+			sourceTree = "<group>";
+		};
+		22EF1BFDBBD659E085E941B0 /* Worktree */ = {
+			isa = PBXGroup;
+			children = (
+				CFEAD72044FC09750C8B2BE4 /* BranchNameInputView.swift */,
+				0FD2C3A4876CABC977A43094 /* SetupCancelButton.swift */,
+				72ADC119353E57606D0A61FF /* WorktreeCloseDialog.swift */,
+			);
+			path = Worktree;
 			sourceTree = "<group>";
 		};
 		29B1853D43339785DE006E47 /* Products */ = {
@@ -566,6 +582,7 @@
 				8511CD7246BB18FBEAAC61B4 /* Sidebar */,
 				EBF7873735AA69ADA656C955 /* TabBar */,
 				CAC5E78508ED5963A2467CB3 /* Workspace */,
+				22EF1BFDBBD659E085E941B0 /* Worktree */,
 			);
 			path = View;
 			sourceTree = "<group>";
@@ -806,6 +823,7 @@
 				21129CAC4F9FB71352270132 /* AppMetrics.swift in Sources */,
 				B7A094E67D56DF927E2DB5ED /* AtermApp.swift in Sources */,
 				371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */,
+				B4012A9DC937640EF4FBA6C7 /* BranchNameInputView.swift in Sources */,
 				0928F80846AFD8980E6CC152 /* CloseConfirmationDialog.swift in Sources */,
 				00480B683220EF013CAFB22E /* Colors.swift in Sources */,
 				AABC59D43FBCBA7EEB978E4D /* DebugOverlayView.swift in Sources */,
@@ -839,6 +857,7 @@
 				62E5AE6742D345F75044B030 /* SessionSerializer.swift in Sources */,
 				BD85F1F89CDCD6DD37D25F10 /* SessionState.swift in Sources */,
 				2477754EB0333D33BD3C8195 /* SessionStateMigrator.swift in Sources */,
+				928FCF0E0D66D3417E7279A8 /* SetupCancelButton.swift in Sources */,
 				A94C5C3E0C671D5D3B8E4C9E /* ShellReadinessWaiter.swift in Sources */,
 				C4F219F693DC69ACC5713BD1 /* SidebarContainerView.swift in Sources */,
 				5DA0DB5FA623CD23A0B6B0EA /* SidebarExpandedContentView.swift in Sources */,
@@ -872,6 +891,7 @@
 				247A0AFDBD6AFA4EE065A91D /* WorkspaceProviding.swift in Sources */,
 				83494DD88752D8AA8C48C305 /* WorkspaceWindowContent.swift in Sources */,
 				03200C8562367548336670F1 /* WorkspaceWindowController.swift in Sources */,
+				7E60B56795B7F03F00D0D96B /* WorktreeCloseDialog.swift in Sources */,
 				B501D0DEA8A42DCC08D6F2CE /* WorktreeConfig.swift in Sources */,
 				83E3D05E57EF68D4AB7E5AFF /* WorktreeConfigParser.swift in Sources */,
 				BCCDBEB822622DC177E8C289 /* WorktreeCreateResult.swift in Sources */,
