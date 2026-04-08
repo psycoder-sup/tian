@@ -749,11 +749,15 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(SRCROOT)/.ghostty-src/zig-out/share/ghostty/",
+				"$(SRCROOT)/.ghostty-src/zig-out/share/terminfo/",
 			);
 			name = "Bundle Ghostty Resources";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/ghostty/",
+				"$(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/terminfo/",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

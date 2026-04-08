@@ -59,6 +59,12 @@ targets:
           rsync -a --delete "$SHARE/ghostty/" "$RESOURCES/ghostty/"
           rsync -a --delete "$SHARE/terminfo/" "$RESOURCES/terminfo/"
         name: Bundle Ghostty Resources
+        inputFiles:
+          - $(SRCROOT)/.ghostty-src/zig-out/share/ghostty/
+          - $(SRCROOT)/.ghostty-src/zig-out/share/terminfo/
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/ghostty/
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/terminfo/
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aterm.app
