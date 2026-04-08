@@ -89,6 +89,10 @@ enum WorktreeConfigParser {
             config.layout = parseLayoutNode(layoutTable)
         }
 
+        Log.worktree.info(
+            "Parsed .aterm/config.toml: \(config.copyRules.count) copy rules, \(config.setupCommands.count) setup commands, layout=\(config.layout != nil ? "yes" : "no")"
+        )
+
         return config
     }
 

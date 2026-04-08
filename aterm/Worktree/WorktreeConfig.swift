@@ -32,4 +32,14 @@ indirect enum LayoutNode: Sendable, Equatable {
     case pane(command: String?)
     /// A split container with two children.
     case split(direction: SplitDirection, ratio: Double, first: LayoutNode, second: LayoutNode)
+
+    /// Total number of leaf panes in the layout tree.
+    var paneCount: Int {
+        switch self {
+        case .pane:
+            return 1
+        case .split(_, _, let first, let second):
+            return first.paneCount + second.paneCount
+        }
+    }
 }

@@ -129,7 +129,7 @@ enum SessionRestorer {
 
                 let validatedWorktreePath: String?
                 if let wt = space.worktreePath, resolveDirectory(wt) == nil {
-                    Log.persistence.warning("Worktree path no longer exists, clearing: \(wt)")
+                    Log.worktree.warning("Worktree path \(wt) no longer exists on disk for Space '\(space.name)'. Removing association.")
                     validatedWorktreePath = nil
                 } else {
                     validatedWorktreePath = space.worktreePath

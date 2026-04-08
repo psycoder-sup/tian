@@ -63,6 +63,7 @@ final class WorktreeOrchestrator {
             throw WorktreeError.notAGitRepo(directory: "~")
         }
         let repoRoot = try await WorktreeService.resolveRepoRoot(from: directory)
+        Log.worktree.info("Resolved git repo root: \(repoRoot)")
 
         // Step 2: Parse config
         let config = parseConfig(repoRoot: repoRoot)
@@ -76,6 +77,7 @@ final class WorktreeOrchestrator {
             .standardizedFileURL
 
         if let existingSpace = findExistingSpace(worktreePath: expectedPath) {
+            Log.worktree.info("Worktree Space already exists for \(expectedPath.path), focusing existing Space \(existingSpace.id)")
             activateSpace(existingSpace)
             return WorktreeCreateResult(spaceID: existingSpace.id, existed: true)
         }
@@ -176,8 +178,6 @@ final class WorktreeOrchestrator {
         } catch {
             Log.worktree.warning("Failed to prune empty parents: \(error)")
         }
-
-        Log.worktree.info("Removed worktree Space at \(worktreePath)")
     }
 
     // MARK: - Cancellation
@@ -208,11 +208,14 @@ final class WorktreeOrchestrator {
         let mainWorktreePath = try await mainWorktreePathTask
 
         // Step 9: Copy env files
-        WorktreeService.copyFiles(
+        let copiedCount = WorktreeService.copyFiles(
             copyRules: config.copyRules,
             mainWorktreePath: mainWorktreePath,
             newWorktreePath: worktreePath
         )
+        if copiedCount > 0 {
+            Log.worktree.info("Copied \(copiedCount) files from main worktree to \(worktreePath)")
+        }
 
         // Step 10: Create Space with single pane (FR-011)
         guard let targetWorkspace else {
@@ -228,14 +231,21 @@ final class WorktreeOrchestrator {
         newSpace.name = branchName
         newSpace.defaultWorkingDirectory = worktreeURL
         newSpace.worktreePath = worktreeURL
+        Log.worktree.info("Created worktree Space '\(branchName)' (id: \(newSpace.id))")
 
         // Step 11: Wait for shell readiness (FR-028)
         let initialPaneID = newSpace.activeTab!.paneViewModel.splitTree.focusedPaneID
         let paneViewModel = newSpace.activeTab!.paneViewModel
         if let surfaceID = paneViewModel.surface(for: initialPaneID)?.id {
-            await ShellReadinessWaiter.waitForReady(
+            let readyReason = await ShellReadinessWaiter.waitForReady(
                 surfaceID: surfaceID, timeout: config.shellReadyDelay
             )
+            switch readyReason {
+            case .osc7:
+                Log.worktree.debug("Shell ready (OSC 7) for pane \(initialPaneID)")
+            case .timeout:
+                Log.worktree.debug("Shell ready (fallback delay \(config.shellReadyDelay)s) for pane \(initialPaneID)")
+            }
         }
 
         // Step 12: Run setup commands (FR-012)
@@ -255,10 +265,8 @@ final class WorktreeOrchestrator {
                 config: config,
                 initialPaneID: initialPaneID
             )
+            Log.worktree.info("Applied layout with \(layout.paneCount) panes")
         }
-
-        // Step 14: Log success
-        Log.worktree.info("Created worktree Space '\(branchName)' at \(worktreePath)")
 
         // Step 15: Return result
         return WorktreeCreateResult(spaceID: newSpace.id, existed: false)
@@ -275,16 +283,20 @@ final class WorktreeOrchestrator {
         installCtrlCMonitor()
         defer { removeCtrlCMonitor() }
 
-        for command in commands {
+        for (index, command) in commands.enumerated() {
             if setupCancelled {
-                Log.worktree.info("Setup cancelled by user")
+                Log.worktree.info("Setup cancelled by user after \(index)/\(commands.count) commands")
                 break
             }
+            Log.worktree.info("Running setup command \(index + 1)/\(commands.count): \(command)")
             guard let surface = paneViewModel.surface(for: paneID) else { break }
             surface.sendText(command)
-            await ShellReadinessWaiter.waitForReady(
+            let reason = await ShellReadinessWaiter.waitForReady(
                 surfaceID: surface.id, timeout: config.setupTimeout
             )
+            if reason == .timeout {
+                Log.worktree.warning("Setup command timed out after \(config.setupTimeout)s: \(command)")
+            }
         }
     }
 
@@ -380,12 +392,14 @@ final class WorktreeOrchestrator {
     private func parseConfig(repoRoot: String) -> WorktreeConfig {
         let repoURL = URL(filePath: repoRoot)
         guard let configURL = WorktreeService.resolveConfigFile(repoRoot: repoURL) else {
+            let configPath = repoURL.appendingPathComponent(".aterm").appendingPathComponent("config.toml").path
+            Log.worktree.info("No .aterm/config.toml found at \(configPath). Using defaults.")
             return WorktreeConfig()
         }
         do {
             return try WorktreeConfigParser.parse(fileURL: configURL)
         } catch {
-            Log.worktree.warning("Failed to parse config, using defaults: \(error)")
+            Log.worktree.warning("Failed to parse .aterm/config.toml: \(error). Proceeding without config.")
             return WorktreeConfig()
         }
     }

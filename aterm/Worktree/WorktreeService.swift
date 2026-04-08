@@ -1,5 +1,6 @@
-import Foundation
 import Darwin
+import Foundation
+import os
 
 /// Git and filesystem operations for worktree management.
 /// All methods are static and run off the main actor.
@@ -86,8 +87,11 @@ enum WorktreeService {
             args = ["worktree", "add", worktreePath, "-b", branchName]
         }
 
+        Log.worktree.info("Creating git worktree: git \(args.joined(separator: " "))")
+
         let result = try await runGit(args, workingDirectory: repoRoot)
         guard result.exitCode == 0 else {
+            Log.worktree.error("Failed to create worktree: \(result.stderr)")
             if result.stderr.contains("already exists") {
                 if result.stderr.contains("a branch named") {
                     throw WorktreeError.branchAlreadyExists(branchName: branchName)
@@ -96,6 +100,8 @@ enum WorktreeService {
             }
             throw WorktreeError.gitError(command: "git worktree add", stderr: result.stderr)
         }
+
+        Log.worktree.info("Created worktree at \(worktreePath) for branch \(branchName)")
         return worktreePath
     }
 
@@ -114,12 +120,14 @@ enum WorktreeService {
 
         let result = try await runGit(args, workingDirectory: repoRoot)
         guard result.exitCode == 0 else {
+            Log.worktree.error("Failed to remove worktree: \(result.stderr)")
             if result.stderr.contains("modified or untracked files") ||
                 result.stderr.contains("changes not committed") {
                 throw WorktreeError.uncommittedChanges(path: worktreePath)
             }
             throw WorktreeError.gitError(command: "git worktree remove", stderr: result.stderr)
         }
+        Log.worktree.info("Removed worktree at \(worktreePath)")
     }
 
     /// Checks whether a local branch exists.
@@ -155,6 +163,7 @@ enum WorktreeService {
             let contents = try? fm.contentsOfDirectory(at: current, includingPropertiesForKeys: nil)
             guard let contents, contents.isEmpty else { break }
             try fm.removeItem(at: current)
+            Log.worktree.debug("Pruned empty directory: \(current.path)")
             current = current.deletingLastPathComponent().standardizedFileURL
         }
     }
@@ -162,11 +171,13 @@ enum WorktreeService {
     /// Copies files from the main worktree to a new worktree based on copy rules.
     /// Uses POSIX `glob()` for source pattern expansion.
     /// Logs warnings on failure but does not throw.
+    @discardableResult
     static func copyFiles(
         copyRules: [CopyRule],
         mainWorktreePath: String,
         newWorktreePath: String
-    ) {
+    ) -> Int {
+        var copiedCount = 0
         let fm = FileManager.default
         let destBase = URL(filePath: newWorktreePath)
 
@@ -209,6 +220,7 @@ enum WorktreeService {
                     let destDir = destURL.deletingLastPathComponent()
                     try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
                     try fm.copyItem(at: sourceURL, to: destURL)
+                    copiedCount += 1
                 } catch {
                     Log.worktree.warning(
                         "Failed to copy '\(relativePath)': \(error.localizedDescription)"
@@ -216,6 +228,7 @@ enum WorktreeService {
                 }
             }
         }
+        return copiedCount
     }
 
     /// Ensures the worktree directory is listed in `.gitignore`.
@@ -238,10 +251,12 @@ enum WorktreeService {
                 handle.seekToEndOfFile()
                 handle.write(Data(block.utf8))
                 handle.closeFile()
+                Log.worktree.info("Appended \(entry) to .gitignore")
             }
         } else {
             let content = "# aterm worktree directory\n\(entry)\n"
             try content.write(toFile: gitignorePath, atomically: true, encoding: .utf8)
+            Log.worktree.info("Created .gitignore with \(entry)")
         }
     }
 
