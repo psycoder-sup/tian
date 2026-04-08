@@ -417,20 +417,43 @@ final class IPCCommandHandler {
     // MARK: - Status Commands
 
     private func handleStatusSet(_ request: IPCRequest) -> IPCResponse {
-        guard let label = stringParam("label", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: label")
+        let label = stringParam("label", from: request.params)
+        let stateStr = stringParam("state", from: request.params)
+
+        guard label != nil || stateStr != nil else {
+            return .failure(
+                code: 1,
+                message: "Missing required parameter: at least one of 'label' or 'state' must be provided."
+            )
+        }
+
+        var sessionState: ClaudeSessionState?
+        if let stateStr {
+            guard let parsed = ClaudeSessionState(rawValue: stateStr) else {
+                let validValues = ClaudeSessionState.allCases.map(\.rawValue).joined(separator: ", ")
+                return .failure(
+                    code: 1,
+                    message: "Invalid state: '\(stateStr)'. Valid values: \(validValues)."
+                )
+            }
+            sessionState = parsed
         }
 
         guard let paneId = UUID(uuidString: request.env.paneId) else {
             return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
         }
 
-        // Validate the pane still exists in the hierarchy
         guard resolvePane(id: paneId, tabId: nil) != nil else {
             return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
         }
 
-        statusManager.setStatus(paneID: paneId, label: label)
+        if let sessionState {
+            statusManager.setSessionState(paneID: paneId, state: sessionState)
+        }
+        if let label {
+            statusManager.setStatus(paneID: paneId, label: label)
+        }
+
         return .success()
     }
 

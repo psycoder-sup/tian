@@ -1,0 +1,1 @@
+- [aterm architecture context](project_aterm_architecture.md) — Key architecture patterns: @MainActor @Observable, WorktreeService subprocess pattern, NotificationCenter events

@@ -1,6 +1,6 @@
 ---
 name: aterm PRD review status
-description: Status and key findings from devil's advocate reviews of aterm PRDs (worktree-spaces v1.0 scored 0.72, workspace-sidebar v1.1 scored 0.93)
+description: Status and key findings from devil's advocate reviews of aterm PRDs (sidebar-status v1.0 scored 0.68, worktree-spaces v1.1 scored 0.82, workspace-sidebar v1.1 scored 0.93)
 type: project
 ---
 
@@ -77,6 +77,28 @@ Reviewed claude-session-status-prd v1.1 on 2026-04-07. Score: 0.90/1.0 (up from 
 3. Hook configuration merging strategy unmentioned -- note that hooks are additive to existing arrays
 
 **How to apply:** PRD is implementation-ready. Remaining items are refinement-level.
+
+## Sidebar Status PRD (Git & Claude Session Status)
+
+Reviewed sidebar-status-prd v1.1 on 2026-04-08. Score: 0.85/1.0 (up from 0.68 on v1.0).
+
+**Why:** All 5 required fixes from v1.0 addressed. Three new Major issues are ambiguity, not missing capabilities.
+
+**v1.0 fixes verified:**
+- OQ#8 multi-repo: FR-002a/b/c define one line per repo, Claude dot grouping, non-repo handling, ordering
+- PR caching: FR-056 specifies 60s TTL, decoupled from FSEvents, cache key by (repo_root, branch_name)
+- FSEvents lifecycle: FR-065-069 cover create/teardown/update/scope/watch-paths
+- Worktree resolution: FR-021 uses git rev-parse --git-dir and --git-common-dir
+- Working directory pinning: FR-020 defines sticky behavior with explicit unpin conditions
+
+**Remaining issues (3 Major, all clarification-level):**
+1. FR-021 specifies both manual .git parsing (steps 1-3) and git rev-parse (step 4) without clarifying which to use -- contradictory
+2. No fallback for git unavailable/failing (unlike FR-054 for gh) -- needs silent-failure spec
+3. Pane-to-repo reassignment policy unspecified -- does a pane move repos when user cd's, or is it fixed at first detection?
+
+**Minor:** NFR-008 3-repo cap needs single decision (not two options), hover popover target too small, sidebar min-width behavior unspecified, FR-002c "pinned first" ambiguous for non-worktree multi-repo Spaces.
+
+**How to apply:** If v1.2 review requested, verify the 3 Major clarification issues are resolved.
 
 ## Prior PRD (aterm main PRD, unrelated)
 

@@ -26,6 +26,7 @@
 		3113BE517AA7499EEBF7985E /* IPCServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDD28495BF6F33B6E06FFA4 /* IPCServerTests.swift */; };
 		312F1A1A9B57844586622C26 /* WorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18DADDD9ABD467A7293FB944 /* WorktreeService.swift */; };
 		31C4BE5C9E8370166CE34C11 /* IPCCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B1BCCD7EFC85F8714E804D /* IPCCommandHandler.swift */; };
+		356211223941A486BDED209F /* ClaudeSessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93252E4B61493867E2B361B /* ClaudeSessionState.swift */; };
 		371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79B8AE699DC05165B8DB77FB /* AtermAppDelegate.swift */; };
 		3B4B8BD094E04E3ADA2C59C5 /* WorktreeOrchestratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FF177FD3BCFB36B0AE0926 /* WorktreeOrchestratorTests.swift */; };
 		3ECA15E19DED31ABB327D57B /* PaneStatusManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */; };
@@ -41,6 +42,7 @@
 		576D7C67CD2ABC3D6212D35D /* FuzzyMatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B83ACF6C93E15513A7426AD /* FuzzyMatch.swift */; };
 		5D9BABA189C7FD43E6DD91C0 /* WorkspaceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A12E56E28418852B337D523 /* WorkspaceManager.swift */; };
 		5DA0DB5FA623CD23A0B6B0EA /* SidebarExpandedContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBBE055580A36D1C42C44F98 /* SidebarExpandedContentView.swift */; };
+		5DC18615C41BCBE70F9EF9EC /* ClaudeSessionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC1641ED1AAFDE5AE0553764 /* ClaudeSessionStateTests.swift */; };
 		614169E13C06F706BD1AC2EB /* IPCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCC3C97094E4F393B40DDF8F /* IPCClient.swift */; };
 		62E5AE6742D345F75044B030 /* SessionSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E525580CF41960A80B6B86B /* SessionSerializer.swift */; };
 		633C1065EB3495D6EC1699E1 /* IPCMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2971BC30B95D2A70533867D9 /* IPCMessage.swift */; };
@@ -237,6 +239,7 @@
 		C5B058BDEC2112358D0B26AB /* SessionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateTests.swift; sourceTree = "<group>"; };
 		C5DF37CE54228595CC692730 /* SidebarContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarContainerView.swift; sourceTree = "<group>"; };
 		C87EEFD338CAFFD633A2CDC4 /* SessionStateMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateMigrator.swift; sourceTree = "<group>"; };
+		C93252E4B61493867E2B361B /* ClaudeSessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSessionState.swift; sourceTree = "<group>"; };
 		CB98C5FAE75C8562E5011DD1 /* TabBarItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarItemView.swift; sourceTree = "<group>"; };
 		CBBE055580A36D1C42C44F98 /* SidebarExpandedContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarExpandedContentView.swift; sourceTree = "<group>"; };
 		CCF7E434C1DBF96E7093C19B /* DirectoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryPicker.swift; sourceTree = "<group>"; };
@@ -251,6 +254,7 @@
 		DA38B1419B85C286BA9BCFF2 /* SpaceCollectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCollectionTests.swift; sourceTree = "<group>"; };
 		DA9128BA20A54300EFE5FB7E /* WorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTests.swift; sourceTree = "<group>"; };
 		DA96EC976329DA972D7F4125 /* CommandLoggerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandLoggerTests.swift; sourceTree = "<group>"; };
+		DC1641ED1AAFDE5AE0553764 /* ClaudeSessionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSessionStateTests.swift; sourceTree = "<group>"; };
 		DDDD28495BF6F33B6E06FFA4 /* IPCServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPCServerTests.swift; sourceTree = "<group>"; };
 		E0BC24C498E99A701D837F92 /* SpaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceModel.swift; sourceTree = "<group>"; };
 		E457AD7AF4D832679DC4C447 /* DefaultWorkingDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultWorkingDirectoryTests.swift; sourceTree = "<group>"; };
@@ -455,6 +459,7 @@
 			isa = PBXGroup;
 			children = (
 				D5F904991148280D4B79C115 /* ANSIStripperTests.swift */,
+				DC1641ED1AAFDE5AE0553764 /* ClaudeSessionStateTests.swift */,
 				55FB73668E10EC8C8D4B1836 /* CloseConfirmationDialogTests.swift */,
 				DA96EC976329DA972D7F4125 /* CommandLoggerTests.swift */,
 				E457AD7AF4D832679DC4C447 /* DefaultWorkingDirectoryTests.swift */,
@@ -515,6 +520,7 @@
 		CE46D525964361E3A7B31F5B /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				C93252E4B61493867E2B361B /* ClaudeSessionState.swift */,
 				7190557580F160FB181AE9AF /* PaneHierarchyContext.swift */,
 				3CA9CC5F7F20EA01FE347E8F /* PaneStatusManager.swift */,
 				2F73A1A8A7548A7BE8CDBA8B /* Workspace.swift */,
@@ -793,6 +799,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B9CD36DFA0FE29A070816343 /* ANSIStripperTests.swift in Sources */,
+				5DC18615C41BCBE70F9EF9EC /* ClaudeSessionStateTests.swift in Sources */,
 				CDC545A32B1B79A0608EA68C /* CloseConfirmationDialogTests.swift in Sources */,
 				E573BF8A0151CFEAA4CDAE2E /* CommandLogger.swift in Sources */,
 				DA5F438C0BDA586410ACC5A1 /* CommandLoggerTests.swift in Sources */,
@@ -828,6 +835,7 @@
 				B7A094E67D56DF927E2DB5ED /* AtermApp.swift in Sources */,
 				371C0B331D3AD6E193B7839A /* AtermAppDelegate.swift in Sources */,
 				B4012A9DC937640EF4FBA6C7 /* BranchNameInputView.swift in Sources */,
+				356211223941A486BDED209F /* ClaudeSessionState.swift in Sources */,
 				0928F80846AFD8980E6CC152 /* CloseConfirmationDialog.swift in Sources */,
 				00480B683220EF013CAFB22E /* Colors.swift in Sources */,
 				AABC59D43FBCBA7EEB978E4D /* DebugOverlayView.swift in Sources */,

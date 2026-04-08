@@ -44,13 +44,13 @@ struct IPCCommandHandlerTests {
 
     // MARK: - Status Commands
 
-    @Test @MainActor func statusSetMissingLabelReturnsError() async {
+    @Test @MainActor func statusSetMissingBothLabelAndStateReturnsError() async {
         let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
         let request = IPCRequest(version: 1, command: "status.set", params: [:], env: dummyEnv)
         let response = await handler.handle(request)
         #expect(response.ok == false)
         #expect(response.error?.code == 1)
-        #expect(response.error?.message.contains("Missing required parameter: label") == true)
+        #expect(response.error?.message.contains("at least one of") == true)
     }
 
     @Test @MainActor func statusSetInvalidPaneUUIDReturnsError() async {
@@ -117,6 +117,54 @@ struct IPCCommandHandlerTests {
         let request = IPCRequest(version: 1, command: "status.clear", params: [:], env: dummyEnv)
         let response = await handler.handle(request)
         #expect(response.ok == true)
+    }
+
+    // MARK: - Status Set with State
+
+    @Test @MainActor func statusSetInvalidStateReturnsErrorWithValidValues() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
+        let request = IPCRequest(
+            version: 1,
+            command: "status.set",
+            params: ["state": .string("invalid_state")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid state") == true)
+        #expect(response.error?.message.contains("active") == true)
+        #expect(response.error?.message.contains("busy") == true)
+        #expect(response.error?.message.contains("needs_attention") == true)
+    }
+
+    @Test @MainActor func statusSetWithStateOnlyNonexistentPaneReturnsError() async {
+        let statusManager = PaneStatusManager()
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: statusManager)
+        let request = IPCRequest(
+            version: 1,
+            command: "status.set",
+            params: ["state": .string("busy")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.message.contains("Pane not found") == true)
+    }
+
+    @Test @MainActor func statusSetWithLabelOnlyStillWorks() async {
+        let statusManager = PaneStatusManager()
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: statusManager)
+        let request = IPCRequest(
+            version: 1,
+            command: "status.set",
+            params: ["label": .string("Thinking...")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        // Passes param validation, fails at pane lookup (dummyEnv uses zero UUID)
+        #expect(response.ok == false)
+        #expect(response.error?.message.contains("Pane not found") == true)
     }
 
     // MARK: - Notify Commands

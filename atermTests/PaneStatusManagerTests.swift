@@ -172,4 +172,149 @@ struct PaneStatusManagerTests {
 
         #expect(manager.statuses.isEmpty)
     }
+
+    // MARK: - setSessionState
+
+    @Test func setSessionStateStoresState() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .busy)
+
+        #expect(manager.sessionStates[paneID] == .busy)
+    }
+
+    @Test func setSessionStateDoesNotAffectStatuses() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .active)
+
+        #expect(manager.statuses[paneID] == nil)
+        #expect(manager.sessionStates[paneID] == .active)
+    }
+
+    @Test func setSessionStateReplacesExisting() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .idle)
+        manager.setSessionState(paneID: paneID, state: .busy)
+
+        #expect(manager.sessionStates[paneID] == .busy)
+    }
+
+    // MARK: - clearSessionState
+
+    @Test func clearSessionStateClearsOnlySessionState() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setStatus(paneID: paneID, label: "Building")
+        manager.setSessionState(paneID: paneID, state: .busy)
+        manager.clearSessionState(paneID: paneID)
+
+        #expect(manager.sessionStates[paneID] == nil)
+        #expect(manager.statuses[paneID]?.label == "Building")
+    }
+
+    // MARK: - clearStatus clears both
+
+    @Test func clearStatusClearsBothDictionaries() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setStatus(paneID: paneID, label: "Testing")
+        manager.setSessionState(paneID: paneID, state: .active)
+        manager.clearStatus(paneID: paneID)
+
+        #expect(manager.statuses[paneID] == nil)
+        #expect(manager.sessionStates[paneID] == nil)
+    }
+
+    // MARK: - clearAll clears both
+
+    @Test func clearAllClearsBothDictionaries() {
+        let manager = PaneStatusManager()
+        let a = UUID(), b = UUID()
+
+        manager.setStatus(paneID: a, label: "A")
+        manager.setSessionState(paneID: a, state: .busy)
+        manager.setStatus(paneID: b, label: "B")
+        manager.setSessionState(paneID: b, state: .idle)
+
+        manager.clearAll(for: [a])
+
+        #expect(manager.statuses[a] == nil)
+        #expect(manager.sessionStates[a] == nil)
+        #expect(manager.statuses[b]?.label == "B")
+        #expect(manager.sessionStates[b] == .idle)
+    }
+
+    // MARK: - sessionState(for:)
+
+    @Test func sessionStateForReturnsNilWhenAbsent() {
+        let manager = PaneStatusManager()
+        #expect(manager.sessionState(for: UUID()) == nil)
+    }
+
+    @Test func sessionStateForReturnsStoredState() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        manager.setSessionState(paneID: paneID, state: .needsAttention)
+        #expect(manager.sessionState(for: paneID) == .needsAttention)
+    }
+
+    // MARK: - sessionStates(in:)
+
+    @Test func sessionStatesInSpaceReturnsSortedNonInactive() {
+        let manager = PaneStatusManager()
+        let tab1 = TabModel()
+        let space = SpaceModel(name: "test", initialTab: tab1)
+        let tab2 = space.createTab()
+
+        let pane1 = tab1.paneViewModel.splitTree.focusedPaneID
+        let pane2 = tab2.paneViewModel.splitTree.focusedPaneID
+
+        manager.setSessionState(paneID: pane1, state: .idle)
+        manager.setSessionState(paneID: pane2, state: .busy)
+
+        let result = manager.sessionStates(in: space)
+
+        #expect(result.count == 2)
+        #expect(result[0].state == .busy)
+        #expect(result[1].state == .idle)
+    }
+
+    @Test func sessionStatesInSpaceExcludesInactive() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let space = SpaceModel(name: "test", initialTab: tab)
+        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+
+        manager.setSessionState(paneID: paneID, state: .inactive)
+
+        let result = manager.sessionStates(in: space)
+        #expect(result.isEmpty)
+    }
+
+    @Test func sessionStatesInSpaceExcludesPanesOutsideSpace() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let space = SpaceModel(name: "test", initialTab: tab)
+
+        manager.setSessionState(paneID: UUID(), state: .busy)
+
+        let result = manager.sessionStates(in: space)
+        #expect(result.isEmpty)
+    }
+
+    @Test func sessionStatesInSpaceReturnsEmptyWhenNone() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let space = SpaceModel(name: "test", initialTab: tab)
+
+        let result = manager.sessionStates(in: space)
+        #expect(result.isEmpty)
+    }
 }
