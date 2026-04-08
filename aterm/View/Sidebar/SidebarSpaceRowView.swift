@@ -12,30 +12,27 @@ struct SidebarSpaceRowView: View {
     @State private var isRenaming = false
     @State private var lastClickTime: Date?
 
+    private func accessibilityDescription(sessions: [(paneID: UUID, state: ClaudeSessionState)]) -> String {
+        var parts: [String] = [isActive ? "selected" : "not selected"]
+        if !sessions.isEmpty {
+            let descriptions = sessions.map { "\($0.state.rawValue)" }
+            parts.append("Claude sessions: \(descriptions.joined(separator: ", "))")
+        }
+        return parts.joined(separator: ". ")
+    }
+
     private var tabCountLabel: String {
         let count = space.tabs.count
         return count == 1 ? "1 tab" : "\(count) tabs"
     }
 
-    private var statusColor: Color {
-        if isActive {
-            Color(red: 0.35, green: 0.6, blue: 1.0).opacity(0.7)
-        } else {
-            Color(red: 0.45, green: 0.55, blue: 0.7).opacity(0.7)
-        }
-    }
-
     var body: some View {
+        let sessions = PaneStatusManager.shared.sessionStates(in: space)
+
         HStack(spacing: 8) {
             Circle()
                 .fill(isActive ? Color.green : Color(white: 0.5, opacity: 0.4))
                 .frame(width: 6, height: 6)
-
-            if space.worktreePath != nil {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-            }
 
             VStack(alignment: .leading, spacing: 2) {
                 InlineRenameView(
@@ -46,13 +43,7 @@ struct SidebarSpaceRowView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isActive ? Color(white: 0.9) : .secondary)
 
-                if let status = PaneStatusManager.shared.latestStatus(in: space) {
-                    Text(String(status.label.prefix(50)))
-                        .font(.system(size: 10))
-                        .foregroundStyle(statusColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
+                SpaceStatusAreaView(sessions: sessions, space: space, isActive: isActive)
             }
 
             Spacer()
@@ -117,7 +108,7 @@ struct SidebarSpaceRowView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("space-row-\(space.id)")
         .accessibilityLabel(space.name)
-        .accessibilityValue(isActive ? "selected" : "not selected")
+        .accessibilityValue(accessibilityDescription(sessions: sessions))
         .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
     }
 }

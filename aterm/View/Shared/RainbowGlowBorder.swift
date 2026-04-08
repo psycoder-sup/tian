@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Rainbow colors derived from the Figma conic gradient spec.
-private let rainbowColors: [Color] = [
+let rainbowColors: [Color] = [
     Color(red: 1.0,  green: 0.2,  blue: 0.2),
     Color(red: 1.0,  green: 0.55, blue: 0.0),
     Color(red: 1.0,  green: 0.85, blue: 0.0),
