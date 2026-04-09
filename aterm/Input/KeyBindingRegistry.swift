@@ -74,11 +74,11 @@ struct KeyBindingRegistry {
         registry.bindings[.newWorktreeSpace] = [KeyBinding(
             characters: "b", keyCode: nil, modifiers: [.command, .shift])]
 
-        // Workspace navigation
+        // Space navigation (across workspaces)
         // Cmd+Shift+Right (keyCode 124) / Cmd+Shift+Left (keyCode 123)
-        registry.bindings[.nextWorkspace] = [KeyBinding(
+        registry.bindings[.nextSpace] = [KeyBinding(
             characters: nil, keyCode: 124, modifiers: [.command, .shift])]
-        registry.bindings[.previousWorkspace] = [KeyBinding(
+        registry.bindings[.previousSpace] = [KeyBinding(
             characters: nil, keyCode: 123, modifiers: [.command, .shift])]
         registry.bindings[.newWorkspace] = [KeyBinding(
             characters: "n", keyCode: nil, modifiers: [.command, .shift])]

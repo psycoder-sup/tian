@@ -102,6 +102,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             }
 
             switch action {
+            case .nextSpace:
+                self.workspaceCollection.nextSpaceGlobal()
+                return nil
+            case .previousSpace:
+                self.workspaceCollection.previousSpaceGlobal()
+                return nil
             case .nextWorkspace:
                 self.workspaceCollection.nextWorkspace()
                 return nil

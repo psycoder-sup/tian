@@ -132,6 +132,44 @@ final class WorkspaceCollection {
         activeWorkspaceID = workspaces[prevIndex].id
     }
 
+    /// Navigate to the next space across all workspaces.
+    /// If on the last space of the current workspace, moves to the first space of the next workspace.
+    func nextSpaceGlobal() {
+        guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
+        let sc = workspaces[wsIndex].spaceCollection
+        guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
+
+        if spaceIndex + 1 < sc.spaces.count {
+            sc.activeSpaceID = sc.spaces[spaceIndex + 1].id
+        } else {
+            let nextWsIndex = (wsIndex + 1) % workspaces.count
+            activeWorkspaceID = workspaces[nextWsIndex].id
+            let nextSC = workspaces[nextWsIndex].spaceCollection
+            if let first = nextSC.spaces.first {
+                nextSC.activeSpaceID = first.id
+            }
+        }
+    }
+
+    /// Navigate to the previous space across all workspaces.
+    /// If on the first space of the current workspace, moves to the last space of the previous workspace.
+    func previousSpaceGlobal() {
+        guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
+        let sc = workspaces[wsIndex].spaceCollection
+        guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
+
+        if spaceIndex > 0 {
+            sc.activeSpaceID = sc.spaces[spaceIndex - 1].id
+        } else {
+            let prevWsIndex = (wsIndex - 1 + workspaces.count) % workspaces.count
+            activeWorkspaceID = workspaces[prevWsIndex].id
+            let prevSC = workspaces[prevWsIndex].spaceCollection
+            if let last = prevSC.spaces.last {
+                prevSC.activeSpaceID = last.id
+            }
+        }
+    }
+
     // MARK: - Reorder
 
     func reorderWorkspace(from sourceIndex: Int, to destinationIndex: Int) {
