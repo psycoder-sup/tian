@@ -163,6 +163,25 @@ enum GitStatusService {
         }
     }
 
+    // MARK: - Utilities
+
+    /// Wraps an async operation with a timeout. Returns nil if the operation exceeds the deadline.
+    static func withTimeout<T: Sendable>(
+        seconds: Double,
+        operation: @Sendable @escaping () async -> T
+    ) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await operation() }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            let result = await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
+
     // MARK: - Private
 
     private static func runGit(

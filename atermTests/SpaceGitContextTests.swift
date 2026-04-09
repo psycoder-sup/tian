@@ -206,6 +206,60 @@ struct SpaceGitContextTests {
         #expect(status.changedFiles.count == 2)
     }
 
+    // MARK: - Watcher Lifecycle
+
+    @Test func watcherStartedOnRepoDetection() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+
+        try await pollUntil(timeout: 5.0) {
+            !context.repoStatuses.isEmpty
+        }
+
+        #expect(context.activeWatcherCount == 1)
+    }
+
+    @Test func watcherStoppedOnRepoUnpin() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+
+        try await pollUntil(timeout: 5.0) {
+            !context.repoStatuses.isEmpty
+        }
+
+        #expect(context.activeWatcherCount == 1)
+
+        context.paneRemoved(paneID: paneID)
+
+        #expect(context.activeWatcherCount == 0)
+    }
+
+    @Test func teardownStopsAllWatchers() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        context.paneAdded(paneID: UUID(), workingDirectory: repo)
+
+        try await pollUntil(timeout: 5.0) {
+            !context.repoStatuses.isEmpty
+        }
+
+        context.teardown()
+
+        #expect(context.activeWatcherCount == 0)
+    }
+
     // MARK: - Helpers
 
     private func pollUntil(timeout: Double, condition: @MainActor () -> Bool) async throws {

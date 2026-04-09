@@ -29,6 +29,17 @@ final class SpaceGitContext {
     /// A directory we know maps to a specific repo, used for branch refresh.
     private var repoDirectories: [GitRepoID: String] = [:]
 
+    /// Active FSEvents watchers per repo.
+    private var watchers: [GitRepoID: GitRepoWatcher] = [:]
+
+    /// Git repo info needed for watcher creation (gitDir, commonDir).
+    private var repoInfo: [GitRepoID: (gitDir: String, commonDir: String)] = [:]
+
+    // MARK: - Public Computed
+
+    /// Number of active FSEvents watchers. Exposed for testing.
+    var activeWatcherCount: Int { watchers.count }
+
     // MARK: - Init
 
     /// Creates a git context for a Space.
@@ -82,6 +93,8 @@ final class SpaceGitContext {
             repoStatuses.removeValue(forKey: repoID)
             repoDirectories.removeValue(forKey: repoID)
             pinnedRepoOrder.removeAll { $0 == repoID }
+            repoInfo.removeValue(forKey: repoID)
+            stopWatcher(repoID: repoID)
             Log.git.debug("Unpinned orphaned repo: \(repoID.path)")
         }
     }
@@ -105,6 +118,11 @@ final class SpaceGitContext {
         pinnedRepoOrder.removeAll()
         paneDirectories.removeAll()
         repoDirectories.removeAll()
+        for watcher in watchers.values {
+            watcher.stop()
+        }
+        watchers.removeAll()
+        repoInfo.removeAll()
     }
 
     // MARK: - Private
@@ -136,6 +154,9 @@ final class SpaceGitContext {
                 self.pinnedRepoOrder.append(repoID)
                 Log.git.debug("Pinned new repo: \(repoID.path)")
             }
+
+            self.repoInfo[repoID] = (gitDir: repo.gitDir, commonDir: repo.commonDir)
+            self.startWatcher(repoID: repoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingDirectory: directory)
 
             self.refreshRepo(repoID: repoID, directory: directory)
         }
@@ -170,5 +191,33 @@ final class SpaceGitContext {
         }
 
         inFlightTasks[repoID] = task
+    }
+
+    // MARK: - Watcher Management
+
+    private func startWatcher(repoID: GitRepoID, gitDir: String, commonDir: String, workingDirectory: String) {
+        // Don't start a duplicate watcher if one already exists
+        guard watchers[repoID] == nil else { return }
+
+        let watchPaths = GitRepoWatcher.resolveWatchPaths(
+            gitDir: gitDir,
+            commonDir: commonDir,
+            workingDirectory: workingDirectory
+        )
+
+        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let dir = self.repoDirectories[repoID] else { return }
+                self.refreshRepo(repoID: repoID, directory: dir)
+            }
+        }
+
+        watchers[repoID] = watcher
+    }
+
+    private func stopWatcher(repoID: GitRepoID) {
+        watchers[repoID]?.stop()
+        watchers.removeValue(forKey: repoID)
     }
 }
