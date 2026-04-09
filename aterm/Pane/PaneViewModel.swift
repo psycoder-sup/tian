@@ -175,6 +175,7 @@ final class PaneViewModel {
             surfaceViews[leaf.paneID] = surfaceView
             if let cmd = leaf.restoreCommand {
                 restoreCommands[leaf.paneID] = cmd
+                surfaceView.initialInput = cmd + "\n"
             }
             return .leaf(paneID: leaf.paneID, workingDirectory: leaf.workingDirectory)
 
