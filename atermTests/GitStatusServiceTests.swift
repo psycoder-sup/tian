@@ -193,6 +193,16 @@ struct GitStatusServiceTests {
         #expect(result.summary.totalCount == 150)
     }
 
+    // MARK: - fetchPRStatus
+
+    @Test func fetchPRStatusReturnsNilForNonGitDir() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let result = await GitStatusService.fetchPRStatus(directory: dir, branch: "main")
+        #expect(result == nil)
+    }
+
     // MARK: - Helpers
 
     private func makeTempGitRepo() throws -> String {

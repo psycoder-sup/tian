@@ -163,6 +163,104 @@ enum GitStatusService {
         }
     }
 
+    /// Fetches GitHub PR status for the given branch using `gh` CLI.
+    /// Returns nil if gh is not installed, not authenticated, no PR exists, or any error occurs.
+    /// Has a 10-second timeout per NFR-006.
+    static func fetchPRStatus(
+        directory: String,
+        branch: String
+    ) async -> PRStatus? {
+        let result = await withTimeout(seconds: 10) {
+            await Self._fetchPRStatus(directory: directory, branch: branch)
+        }
+        return result ?? nil
+    }
+
+    private static func _fetchPRStatus(
+        directory: String,
+        branch: String
+    ) async -> PRStatus? {
+        do {
+            let result = try await runProcess(
+                executablePath: "/usr/bin/env",
+                arguments: ["gh", "pr", "view", "--json", "state,url,isDraft"],
+                workingDirectory: directory
+            )
+            guard result.exitCode == 0, !result.stdout.isEmpty else {
+                Log.git.debug("gh pr view returned no data for \(branch) in \(directory)")
+                return nil
+            }
+
+            guard let data = result.stdout.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let stateString = json["state"] as? String,
+                  let urlString = json["url"] as? String,
+                  let url = URL(string: urlString) else {
+                Log.git.debug("Failed to parse gh pr view output for \(branch)")
+                return nil
+            }
+
+            let isDraft = json["isDraft"] as? Bool ?? false
+
+            let state: PRState
+            if isDraft {
+                state = .draft
+            } else {
+                switch stateString.uppercased() {
+                case "OPEN": state = .open
+                case "MERGED": state = .merged
+                case "CLOSED": state = .closed
+                default:
+                    Log.git.debug("Unknown PR state: \(stateString)")
+                    return nil
+                }
+            }
+
+            Log.git.debug("PR status for \(branch): \(state.rawValue), url: \(urlString)")
+            return PRStatus(state: state, url: url)
+        } catch {
+            Log.git.debug("fetchPRStatus failed for \(branch): \(error)")
+            return nil
+        }
+    }
+
+    private static func runProcess(
+        executablePath: String,
+        arguments: [String],
+        workingDirectory: String
+    ) async throws -> (exitCode: Int32, stdout: String, stderr: String) {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(filePath: executablePath)
+                process.arguments = arguments
+                process.currentDirectoryURL = URL(filePath: workingDirectory)
+
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+
+                let stdout = String(data: stdoutData, encoding: .utf8)?
+                    .trimmingCharacters(in: .newlines) ?? ""
+                let stderr = String(data: stderrData, encoding: .utf8)?
+                    .trimmingCharacters(in: .newlines) ?? ""
+                continuation.resume(returning: (process.terminationStatus, stdout, stderr))
+            }
+        }
+    }
+
     // MARK: - Utilities
 
     /// Wraps an async operation with a timeout. Returns nil if the operation exceeds the deadline.
