@@ -1,21 +1,30 @@
 import SwiftUI
 
-/// Spinning rainbow gradient dot for the "busy" Claude session state.
-/// Animation always active regardless of Reduce Motion setting.
+/// Pulsing blue dot for the "busy" Claude session state.
+/// Animates with a smooth opacity pulse (1.0 → 0.4 → 1.0 over ~2s).
+/// Respects the system's Reduce Motion accessibility setting.
 struct BusyDotView: View {
-    @State private var rotation: Double = 0
+    @State private var isAnimating: Bool = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
         Circle()
-            .fill(
-                AngularGradient(colors: rainbowColors, center: .center)
-            )
+            .fill(Color(red: 0.2, green: 0.55, blue: 1.0))
             .frame(width: 8, height: 8)
-            .rotationEffect(.degrees(rotation))
+            .opacity(isAnimating ? 0.4 : 1.0)
+            .animation(
+                reduceMotion
+                    ? nil
+                    : .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                value: isAnimating
+            )
             .onAppear {
-                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                    rotation = 360
+                if !reduceMotion {
+                    isAnimating = true
                 }
+            }
+            .onChange(of: reduceMotion) { _, newValue in
+                isAnimating = !newValue
             }
     }
 }
