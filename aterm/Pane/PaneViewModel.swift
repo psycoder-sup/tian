@@ -16,6 +16,9 @@ final class PaneViewModel {
     /// Per-pane lifecycle state (running, exited, spawn-failed).
     private(set) var paneStates: [UUID: PaneState] = [:]
 
+    /// Per-pane restore commands registered via IPC. Persisted across sessions.
+    private(set) var restoreCommands: [UUID: String] = [:]
+
     /// Panes that have an active bell notification (glow indicator).
     private(set) var bellNotifications: Set<UUID> = []
 
@@ -62,9 +65,12 @@ final class PaneViewModel {
     static func fromState(_ root: PaneNodeState, focusedPaneID: UUID) -> PaneViewModel {
         var surfaces: [UUID: GhosttyTerminalSurface] = [:]
         var surfaceViews: [UUID: TerminalSurfaceView] = [:]
-        let paneNode = Self.buildPaneNode(from: root, surfaces: &surfaces, surfaceViews: &surfaceViews)
+        var restoreCommands: [UUID: String] = [:]
+        let paneNode = Self.buildPaneNode(from: root, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands)
         let splitTree = SplitTree(root: paneNode, focusedPaneID: focusedPaneID)
-        return PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews)
+        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews)
+        pvm.restoreCommands = restoreCommands
+        return pvm
     }
 
     private init(
@@ -156,7 +162,8 @@ final class PaneViewModel {
     private static func buildPaneNode(
         from state: PaneNodeState,
         surfaces: inout [UUID: GhosttyTerminalSurface],
-        surfaceViews: inout [UUID: TerminalSurfaceView]
+        surfaceViews: inout [UUID: TerminalSurfaceView],
+        restoreCommands: inout [UUID: String]
     ) -> PaneNode {
         switch state {
         case .pane(let leaf):
@@ -166,15 +173,18 @@ final class PaneViewModel {
             surfaceView.initialWorkingDirectory = leaf.workingDirectory
             surfaces[leaf.paneID] = surface
             surfaceViews[leaf.paneID] = surfaceView
+            if let cmd = leaf.restoreCommand {
+                restoreCommands[leaf.paneID] = cmd
+            }
             return .leaf(paneID: leaf.paneID, workingDirectory: leaf.workingDirectory)
 
         case .split(let split):
             guard let direction = SplitDirection.from(stateValue: split.direction) else {
                 // Invalid direction — treat as a single pane with the first leaf
-                return buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews)
+                return buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands)
             }
-            let first = buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews)
-            let second = buildPaneNode(from: split.second, surfaces: &surfaces, surfaceViews: &surfaceViews)
+            let first = buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands)
+            let second = buildPaneNode(from: split.second, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands)
             return .split(id: UUID(), direction: direction, ratio: split.ratio, first: first, second: second)
         }
     }
@@ -234,6 +244,7 @@ final class PaneViewModel {
         surfaceViews.removeValue(forKey: paneID)
         paneStates.removeValue(forKey: paneID)
         bellNotifications.remove(paneID)
+        restoreCommands.removeValue(forKey: paneID)
         PaneStatusManager.shared.clearStatus(paneID: paneID)
 
         if result == .lastPane {
@@ -267,6 +278,14 @@ final class PaneViewModel {
 
     func updateRatio(splitID: UUID, newRatio: Double) {
         splitTree.updateRatio(splitID: splitID, newRatio: newRatio)
+    }
+
+    func setRestoreCommand(paneID: UUID, command: String) {
+        restoreCommands[paneID] = command
+    }
+
+    func restoreCommand(for paneID: UUID) -> String? {
+        restoreCommands[paneID]
     }
 
     /// Restart the shell in an existing pane (destroy old surface, create new one).
@@ -303,6 +322,7 @@ final class PaneViewModel {
         surfaces.removeAll()
         surfaceViews.removeAll()
         paneStates.removeAll()
+        restoreCommands.removeAll()
 
         for observer in observers {
             NotificationCenter.default.removeObserver(observer)
