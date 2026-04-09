@@ -13,6 +13,7 @@ final class IPCServer: Sendable {
     private let queue = DispatchQueue(label: "com.aterm.ipc-server", qos: .userInitiated)
     nonisolated(unsafe) private var listeningFD: Int32 = -1
     nonisolated(unsafe) private var isRunning = false
+    nonisolated(unsafe) private var boundInode: UInt64 = 0
 
     init(commandHandler: @Sendable @escaping (IPCRequest) async -> IPCResponse) {
         self.commandHandler = commandHandler
@@ -25,43 +26,12 @@ final class IPCServer: Sendable {
 
         if FileManager.default.fileExists(atPath: path) {
             if isSocketAlive(path: path) {
-                Log.ipc.warning("Another aterm instance is already listening on \(path)")
-                return
+                Log.ipc.warning("Another aterm instance is listening on \(path); taking over")
             }
             unlink(path)
-            Log.ipc.info("Removed stale socket file at \(path)")
         }
 
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else {
-            Log.ipc.error("Failed to create socket: \(String(cString: strerror(errno)))")
-            return
-        }
-
-        var addr = Self.makeSockaddr(path: path)
-        guard addr != nil else {
-            Log.ipc.error("Socket path too long: \(path)")
-            close(fd)
-            return
-        }
-
-        let bindResult = Self.withSockaddr(&addr!) { ptr, len in
-            Darwin.bind(fd, ptr, len)
-        }
-        guard bindResult == 0 else {
-            Log.ipc.error("Failed to bind socket: \(String(cString: strerror(errno)))")
-            close(fd)
-            return
-        }
-
-        chmod(path, 0o600)
-
-        guard listen(fd, 128) == 0 else {
-            Log.ipc.error("Failed to listen on socket: \(String(cString: strerror(errno)))")
-            close(fd)
-            unlink(path)
-            return
-        }
+        guard let fd = createListeningSocket(path: path) else { return }
 
         self.listeningFD = fd
         self.isRunning = true
@@ -74,6 +44,7 @@ final class IPCServer: Sendable {
 
     func stop() {
         isRunning = false
+        boundInode = 0
 
         let fd = listeningFD
         if fd >= 0 {
@@ -88,19 +59,90 @@ final class IPCServer: Sendable {
     // MARK: - Accept Loop
 
     private func acceptLoop() {
+        var consecutiveErrors = 0
+        let maxConsecutiveErrors = 10
+        let path = Self.socketPath
+
         while isRunning {
             let clientFD = Darwin.accept(listeningFD, nil, nil)
             if clientFD < 0 {
-                if errno == EINTR { continue }
+                let err = errno
+                if err == EINTR { continue }
                 if !isRunning { break }
-                Log.ipc.error("accept() failed: \(String(cString: strerror(errno)))")
-                break
+
+                if err == EAGAIN || err == EWOULDBLOCK {
+                    checkSocketFile(path: path)
+                    continue
+                }
+
+                // Transient error — retry with backoff
+                consecutiveErrors += 1
+                Log.ipc.error("accept() failed (\(consecutiveErrors)/\(maxConsecutiveErrors)): \(String(cString: strerror(err)))")
+                if consecutiveErrors >= maxConsecutiveErrors {
+                    Log.ipc.error("Too many consecutive accept errors; attempting socket recovery")
+                    if rebindSocket(path: path) {
+                        consecutiveErrors = 0
+                        continue
+                    }
+                    Log.ipc.error("Socket recovery failed; IPC server exiting")
+                    break
+                }
+                Thread.sleep(forTimeInterval: Double(min(consecutiveErrors, 5)) * 0.1)
+                continue
             }
+
+            consecutiveErrors = 0
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.handleConnection(fd: clientFD)
             }
         }
+    }
+
+    // MARK: - Socket Recovery
+
+    private func checkSocketFile(path: String) {
+        var st = stat()
+        let currentInode = boundInode
+
+        guard stat(path, &st) == 0 else {
+            Log.ipc.warning("Socket file disappeared from \(path); rebinding")
+            _ = rebindSocket(path: path)
+            return
+        }
+
+        if currentInode != 0 && UInt64(st.st_ino) != currentInode {
+            if !isSocketAlive(path: path) {
+                Log.ipc.warning("Socket file replaced with stale socket; reclaiming \(path)")
+                _ = rebindSocket(path: path)
+            } else {
+                Log.ipc.info("Socket file replaced by active instance; shutting down IPC server")
+                isRunning = false
+            }
+        }
+    }
+
+    private func rebindSocket(path: String) -> Bool {
+        let oldFD = listeningFD
+        listeningFD = -1
+
+        unlink(path)
+
+        guard let fd = createListeningSocket(path: path) else {
+            listeningFD = oldFD
+            return false
+        }
+
+        if oldFD >= 0 { close(oldFD) }
+
+        guard isRunning else {
+            close(fd)
+            return false
+        }
+
+        listeningFD = fd
+        Log.ipc.info("Socket successfully rebound to \(path)")
+        return true
     }
 
     // MARK: - Connection Handling
@@ -161,6 +203,55 @@ final class IPCServer: Sendable {
         } catch {
             Log.ipc.error("Failed to encode IPC response: \(error)")
         }
+    }
+
+    // MARK: - Socket Setup
+
+    /// Creates a Unix domain socket, binds it to `path`, starts listening,
+    /// sets the accept timeout, and records the bound inode.
+    /// Returns the listening fd on success, or nil on failure (errors are logged).
+    private func createListeningSocket(path: String) -> Int32? {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            Log.ipc.error("Failed to create socket: \(String(cString: strerror(errno)))")
+            return nil
+        }
+
+        var addr = Self.makeSockaddr(path: path)
+        guard addr != nil else {
+            Log.ipc.error("Socket path too long: \(path)")
+            close(fd)
+            return nil
+        }
+
+        let bindResult = Self.withSockaddr(&addr!) { ptr, len in
+            Darwin.bind(fd, ptr, len)
+        }
+        guard bindResult == 0 else {
+            Log.ipc.error("Failed to bind socket: \(String(cString: strerror(errno)))")
+            close(fd)
+            return nil
+        }
+
+        chmod(path, 0o600)
+
+        guard listen(fd, 128) == 0 else {
+            Log.ipc.error("Failed to listen on socket: \(String(cString: strerror(errno)))")
+            close(fd)
+            unlink(path)
+            return nil
+        }
+
+        // Periodic timeout so the accept loop can check socket file health
+        var acceptTimeout = timeval(tv_sec: 5, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &acceptTimeout, socklen_t(MemoryLayout<timeval>.size))
+
+        var st = stat()
+        if stat(path, &st) == 0 {
+            boundInode = UInt64(st.st_ino)
+        }
+
+        return fd
     }
 
     // MARK: - Socket Address Helpers
