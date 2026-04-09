@@ -73,7 +73,7 @@ struct SpaceStatusAreaView: View {
                 ClaudeSessionDotsView(states: sessions.map(\.state).sorted { $0 > $1 })
             }
 
-            if let status = latestStatus, !hasRepoLines && !hasSessions {
+            if let status = latestStatus {
                 Text(String(status.label.prefix(50)))
                     .font(.system(size: 10))
                     .foregroundStyle(statusColor)
