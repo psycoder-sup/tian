@@ -137,16 +137,20 @@ extension PaneNodeState: Codable {
 
 extension PaneNode {
     /// Converts the runtime PaneNode to its Codable state representation.
-    func toState() -> PaneNodeState {
+    func toState(restoreCommands: [UUID: String] = [:]) -> PaneNodeState {
         switch self {
         case .leaf(let paneID, let workingDirectory):
-            return .pane(PaneLeafState(paneID: paneID, workingDirectory: workingDirectory))
+            return .pane(PaneLeafState(
+                paneID: paneID,
+                workingDirectory: workingDirectory,
+                restoreCommand: restoreCommands[paneID]
+            ))
         case .split(_, let direction, let ratio, let first, let second):
             return .split(PaneSplitState(
                 direction: direction.stateValue,
                 ratio: ratio,
-                first: first.toState(),
-                second: second.toState()
+                first: first.toState(restoreCommands: restoreCommands),
+                second: second.toState(restoreCommands: restoreCommands)
             ))
         }
     }

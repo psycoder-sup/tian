@@ -45,7 +45,7 @@ enum SessionSerializer {
                                 id: tab.id,
                                 name: tab.customName,
                                 activePaneId: tab.paneViewModel.splitTree.focusedPaneID,
-                                root: tab.paneViewModel.splitTree.root.toState()
+                                root: tab.paneViewModel.splitTree.root.toState(restoreCommands: tab.paneViewModel.restoreCommands)
                             )
                         }
                     )

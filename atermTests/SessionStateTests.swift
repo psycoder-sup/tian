@@ -449,6 +449,35 @@ struct SessionSnapshotTests {
         // default workspace has a directory set from init, but space does not
         #expect(snapshot.workspaces[0].spaces[0].defaultWorkingDirectory == nil)
     }
+
+    @Test func snapshotCapturesRestoreCommand() {
+        let collection = WorkspaceCollection()
+        let tab = collection.workspaces[0].spaceCollection.activeSpace!.activeTab!
+        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        tab.paneViewModel.setRestoreCommand(paneID: paneID, command: "claude --resume test123")
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        let root = snapshot.workspaces[0].spaces[0].tabs[0].root
+        if case .pane(let leaf) = root {
+            #expect(leaf.restoreCommand == "claude --resume test123")
+        } else {
+            Issue.record("Expected .pane")
+        }
+    }
+
+    @Test func snapshotNilRestoreCommandForRegularPane() {
+        let collection = WorkspaceCollection()
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        let root = snapshot.workspaces[0].spaces[0].tabs[0].root
+        if case .pane(let leaf) = root {
+            #expect(leaf.restoreCommand == nil)
+        } else {
+            Issue.record("Expected .pane")
+        }
+    }
 }
 
 // MARK: - Atomic Write Tests
