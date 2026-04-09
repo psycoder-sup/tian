@@ -67,6 +67,12 @@ final class SpaceGitContext {
 
     // MARK: - Public Methods
 
+    /// Called when the Space's worktree path is set post-init.
+    /// Triggers eager repo detection and marks the repo as the worktree repo for sort priority.
+    func setWorktreePath(_ path: String) {
+        detectAndRefresh(paneID: nil, directory: path, isWorktreeInit: true)
+    }
+
     /// Called when a pane's working directory changes (OSC 7).
     func paneWorkingDirectoryChanged(paneID: UUID, newDirectory: String) {
         paneDirectories[paneID] = newDirectory

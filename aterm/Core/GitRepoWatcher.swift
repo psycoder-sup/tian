@@ -33,14 +33,14 @@ final class GitRepoWatcher: @unchecked Sendable {
     }
 
     deinit {
-        stopOnQueue()
+        queue.sync { stopOnQueue() }
     }
 
     func stop() {
         queue.sync { stopOnQueue() }
     }
 
-    /// Must be called on `queue` (or from `deinit` where no concurrent access is possible).
+    /// Must be called on `queue`.
     private func stopOnQueue() {
         guard let stream = streamRef else { return }
         FSEventStreamStop(stream)
