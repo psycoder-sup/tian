@@ -196,9 +196,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        let windowCount = windowCoordinator?.windowCount ?? -1
+        Log.lifecycle.info("[WindowController.windowShouldClose] windowCount=\(windowCount), workspaces=\(self.workspaceCollection.workspaces.count)")
         // If this is the last window, delegate to the app termination flow
         // so session state is serialized and process detection runs.
         if windowCoordinator?.windowCount == 1 {
+            Log.lifecycle.info("[WindowController.windowShouldClose] last window — calling NSApp.terminate")
             NSApp.terminate(nil)
             return false
         }
@@ -210,6 +213,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        Log.lifecycle.info("[WindowController.windowWillClose] window closing")
         trafficLightAligner?.tearDown()
         removeKeyboardMonitor()
         windowCoordinator?.removeController(self)

@@ -46,9 +46,8 @@ struct SpaceStatusAreaView: View {
 
         VStack(alignment: .leading, spacing: 2) {
             if hasRepoLines {
-                let linesToShow = min(repoOrder.count, maxVisibleLines)
-                ForEach(0..<linesToShow, id: \.self) { index in
-                    let repoID = repoOrder[index]
+                let visibleRepos = Array(repoOrder.prefix(maxVisibleLines))
+                ForEach(visibleRepos, id: \.self) { repoID in
                     if let repoStatus = space.gitContext.repoStatuses[repoID] {
                         let repoDots = sessionsByRepo[repoID] ?? []
                         let prependedDots: [ClaudeSessionState] = (repoOrder.count == 1 && hasNonRepoDots) ? nonRepoDots : []
