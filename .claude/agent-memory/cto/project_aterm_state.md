@@ -12,6 +12,10 @@ As of 2026-04-09, aterm has working code through M7 (daily driver polish). 60+ S
 
 **Worktree Spaces spec written:** docs/feature/worktree-spaces/worktree-spaces-spec.md v1.0. 9 implementation phases. Key technical decisions: TOMLKit for TOML parsing, ghostty_surface_text() for command injection, OSC 7 (surfacePwdNotification) for shell readiness, incremental split approach for layout application preserving initial pane session. Schema version bumps from 1 to 2 for worktreePath persistence.
 
-**Why:** Worktree Spaces is the next feature after CLI tool, automating git worktree-backed development environments.
+**Sidebar git status implemented:** SpaceGitContext, GitStatusService, GitRepoWatcher, PRStatusCache all implemented. SidebarSpaceRowView shows repo status lines with branch, diff badges, PR indicators. Claude session dots display per-pane via ClaudeSessionDotsView/BusyDotView/SpaceStatusAreaView.
 
-**How to apply:** Implementation should follow the 9 phases in the spec. Phase 1 (TOML parsing) and Phase 2 (git service) are independently testable. Phase 4 (text injection) should validate ghostty_surface_text() early.
+**Claude Session Status mostly implemented:** ClaudeSessionState enum, PaneStatusManager.sessionStates, IPCCommandHandler.handleStatusSet with --state support, and sidebar dot views all exist. Remaining gaps: CLI --state flag missing, BusyDotView uses rainbow spin instead of opacity pulse, Reduce Motion not respected, status label hidden when sessions present.
+
+**Why:** Claude Session Status spec (docs/feature/claude-session-status/claude-session-status-spec.md) covers only the remaining gaps (4 phases).
+
+**How to apply:** Most of the feature is already working. Implementation only needs: CLI flag addition, BusyDotView animation change, SpaceStatusAreaView label coexistence fix.

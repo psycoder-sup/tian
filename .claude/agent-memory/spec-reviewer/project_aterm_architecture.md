@@ -15,7 +15,7 @@ aterm is a macOS terminal emulator using SwiftUI + Ghostty. Key architecture pat
 - **Test framework**: Swift Testing (`import Testing`, `@Test`, `#expect`), temp git repos in WorktreeServiceTests
 - **Hierarchy**: Workspace > SpaceCollection > SpaceModel > TabModel > PaneViewModel > SplitTree
 - **Logger**: `Log` enum in `aterm/Utilities/Logger.swift` with categories: core, view, ghostty, persistence, lifecycle, perf, ipc, worktree
-- **RainbowGlowBorder.swift**: `rainbowColors` is `private let` at file scope - not accessible from other files
+- **RainbowGlowBorder.swift**: `rainbowColors` is `let` at file scope (internal access) - accessible from other files in the module
 - **Sandbox**: disabled (`ENABLE_APP_SANDBOX: false`)
 
 **Why:** Needed to ground spec reviews in actual codebase patterns rather than assumptions.
