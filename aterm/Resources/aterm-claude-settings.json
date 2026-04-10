@@ -2,42 +2,70 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "aterm-cli pane set-restore-command --command 'claude --resume $SESSION_ID'"
-      },
-      {
-        "type": "command",
-        "command": "$ATERM_CLI_PATH status set --state active"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "aterm-cli pane set-restore-command --command 'claude --resume $SESSION_ID'"
+          },
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state active"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "$ATERM_CLI_PATH status set --state busy"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state busy"
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "type": "command",
-        "command": "$ATERM_CLI_PATH status set --state idle"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state idle"
+          }
+        ]
       }
     ],
     "Notification": [
       {
-        "type": "command",
         "matcher": "idle_prompt",
-        "command": "$ATERM_CLI_PATH status set --state idle"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state idle"
+          }
+        ]
       },
       {
-        "type": "command",
         "matcher": "permission_prompt",
-        "command": "$ATERM_CLI_PATH status set --state needs_attention"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state needs_attention"
+          }
+        ]
       }
     ],
     "SessionEnd": [
       {
-        "type": "command",
-        "command": "$ATERM_CLI_PATH status set --state inactive"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$ATERM_CLI_PATH status set --state inactive"
+          }
+        ]
       }
     ]
   }
