@@ -30,7 +30,7 @@ struct PaneView: View {
         // Layer 2: Dim overlay for unfocused panes
         .overlay {
             if showDimOverlay {
-                Color.black.opacity(0.22)
+                Color.black.opacity(0.30)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
