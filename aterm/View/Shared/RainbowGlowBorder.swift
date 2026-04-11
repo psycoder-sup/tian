@@ -76,3 +76,15 @@ struct RainbowGlow: View {
         .allowsHitTesting(false)
     }
 }
+
+// MARK: - Session state indicator (static colored border)
+
+struct SessionStateBorder: View {
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: glowCornerRadius)
+            .strokeBorder(color, lineWidth: 2)
+            .allowsHitTesting(false)
+    }
+}
