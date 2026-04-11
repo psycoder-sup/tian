@@ -84,8 +84,12 @@ final class IPCServer: Sendable {
                         consecutiveErrors = 0
                         continue
                     }
-                    Log.ipc.error("Socket recovery failed; IPC server exiting")
-                    break
+                    // Back off and retry from scratch instead of exiting
+                    Log.ipc.error("Socket recovery failed; will retry in 5s")
+                    consecutiveErrors = 0
+                    Thread.sleep(forTimeInterval: 5)
+                    if isRunning { _ = rebindSocket(path: path) }
+                    continue
                 }
                 Thread.sleep(forTimeInterval: Double(min(consecutiveErrors, 5)) * 0.1)
                 continue
@@ -96,6 +100,18 @@ final class IPCServer: Sendable {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.handleConnection(fd: clientFD)
             }
+        }
+
+        // Accept loop exited — clean up the socket file so stale files
+        // don't prevent future connections or confuse clients.
+        if !isRunning {
+            let fd = listeningFD
+            if fd >= 0 {
+                listeningFD = -1
+                close(fd)
+            }
+            unlink(path)
+            Log.ipc.info("Accept loop exited; socket cleaned up")
         }
     }
 
@@ -112,13 +128,11 @@ final class IPCServer: Sendable {
         }
 
         if currentInode != 0 && UInt64(st.st_ino) != currentInode {
-            if !isSocketAlive(path: path) {
-                Log.ipc.warning("Socket file replaced with stale socket; reclaiming \(path)")
-                _ = rebindSocket(path: path)
-            } else {
-                Log.ipc.info("Socket file replaced by active instance; shutting down IPC server")
-                isRunning = false
-            }
+            // The socket file's inode changed — someone replaced it.
+            // Always reclaim rather than shutting down, because isSocketAlive
+            // can self-trigger (connecting to our own socket).
+            Log.ipc.warning("Socket file inode changed (was \(currentInode), now \(st.st_ino)); reclaiming \(path)")
+            _ = rebindSocket(path: path)
         }
     }
 
@@ -135,11 +149,9 @@ final class IPCServer: Sendable {
 
         if oldFD >= 0 { close(oldFD) }
 
-        guard isRunning else {
-            close(fd)
-            return false
-        }
-
+        // Always install the new FD. If isRunning became false, the accept
+        // loop's while-check will exit and the cleanup block handles closing.
+        // Previously this would close the fd but leave the socket file orphaned.
         listeningFD = fd
         Log.ipc.info("Socket successfully rebound to \(path)")
         return true
