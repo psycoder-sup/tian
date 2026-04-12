@@ -28,8 +28,10 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCente
                 frame: frame,
                 isFullscreen: isFullscreen
             )
-        } else {
+        } else if isUITesting {
             windowCoordinator.openWindow()
+        } else {
+            windowCoordinator.openEmptyWindow()
         }
 
         // Start IPC server

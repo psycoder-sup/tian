@@ -7,10 +7,11 @@ import Foundation
 @MainActor
 final class MockWorkspaceProvider: WorkspaceProviding {
     var collections: [WorkspaceCollection] = []
+    var keyWindowWorkspace: Workspace?
 
     var allWorkspaceCollections: [WorkspaceCollection] { collections }
 
-    func activeWorkspaceForKeyWindow() -> Workspace? { nil }
+    func activeWorkspaceForKeyWindow() -> Workspace? { keyWindowWorkspace }
 }
 
 // MARK: - Tests
@@ -354,6 +355,44 @@ struct WorktreeOrchestratorTests {
 
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+    }
+
+    // MARK: - Workspace ID targeting (Bug 1 regression)
+
+    @Test func createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
+        let repoA = try makeTempGitRepo()
+        let repoC = try makeTempGitRepo()
+        let repoCName = URL(filePath: repoC).lastPathComponent
+        let centralBaseC = (NSHomeDirectory() as NSString)
+            .appendingPathComponent(".worktrees/\(repoCName)")
+        defer {
+            cleanup(repoA)
+            cleanup(repoC)
+            cleanup(centralBaseC)
+        }
+
+        let collectionA = WorkspaceCollection(workingDirectory: repoA)
+        let collectionC = WorkspaceCollection(workingDirectory: repoC)
+        let workspaceA = collectionA.activeWorkspace!
+        let workspaceC = collectionC.activeWorkspace!
+
+        // Simulate the bug scenario: key window's active workspace is A, but we
+        // target C explicitly via workspaceID. The new space must land in C.
+        let provider = MockWorkspaceProvider()
+        provider.collections = [collectionA, collectionC]
+        provider.keyWindowWorkspace = workspaceA
+
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "feature-c",
+            existingBranch: false,
+            repoPath: repoC,
+            workspaceID: workspaceC.id
+        )
+
+        #expect(workspaceC.spaceCollection.spaces.contains { $0.id == result.spaceID })
+        #expect(!workspaceA.spaceCollection.spaces.contains { $0.id == result.spaceID })
     }
 }
 

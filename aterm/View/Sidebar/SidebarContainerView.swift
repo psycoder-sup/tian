@@ -11,6 +11,7 @@ extension Notification.Name {
 
 extension Notification {
     static let worktreeWorkingDirectoryKey = "workingDirectory"
+    static let worktreeWorkspaceIDKey = "worktreeWorkspaceID"
 }
 
 struct SidebarContainerView: View {
@@ -154,6 +155,8 @@ struct SidebarContainerView: View {
             .onChange(of: spaceCollection.activeSpaceID) { _, _ in
                 spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
             }
+        } else if workspaceCollection.workspaces.isEmpty {
+            WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
         }
     }
 

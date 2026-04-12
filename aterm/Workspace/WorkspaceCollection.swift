@@ -6,12 +6,11 @@ import Observation
 @MainActor @Observable
 final class WorkspaceCollection {
     private(set) var workspaces: [Workspace]
-    var activeWorkspaceID: UUID
+    /// `nil` iff `workspaces.isEmpty`. Always points at a current workspace otherwise.
+    var activeWorkspaceID: UUID?
 
-    /// Set when the last workspace is removed and `onEmpty` is nil.
-    var shouldQuit: Bool = false
-
-    /// Called when the last workspace is removed. When set, `shouldQuit` is not used.
+    /// Called when the last workspace is removed. Optional — when unset, the
+    /// collection simply becomes empty and the view layer renders the empty state.
     var onEmpty: (() -> Void)?
 
     private var workspaceCounter: Int = 1
@@ -29,12 +28,23 @@ final class WorkspaceCollection {
         wireWorkspaceClose(workspace)
     }
 
+    /// Empty collection for fresh-launch empty-state windows.
+    static func empty() -> WorkspaceCollection {
+        let empty: [Workspace] = []
+        return WorkspaceCollection(workspaces: empty, activeWorkspaceID: nil)
+    }
+
     /// Restore a workspace collection with pre-built workspaces.
-    init(workspaces: [Workspace], activeWorkspaceID: UUID) {
+    /// Accepts an empty array — `activeWorkspaceID` is normalized to `nil` in that case.
+    init(workspaces: [Workspace], activeWorkspaceID: UUID?) {
         self.workspaces = workspaces
-        self.activeWorkspaceID = workspaces.contains(where: { $0.id == activeWorkspaceID })
-            ? activeWorkspaceID
-            : workspaces[0].id
+        if workspaces.isEmpty {
+            self.activeWorkspaceID = nil
+        } else if let id = activeWorkspaceID, workspaces.contains(where: { $0.id == id }) {
+            self.activeWorkspaceID = id
+        } else {
+            self.activeWorkspaceID = workspaces[0].id
+        }
 
         for workspace in workspaces {
             wireWorkspaceClose(workspace)
@@ -90,11 +100,8 @@ final class WorkspaceCollection {
         workspaces.remove(at: index)
 
         if workspaces.isEmpty {
-            if let onEmpty {
-                onEmpty()
-            } else {
-                shouldQuit = true
-            }
+            activeWorkspaceID = nil
+            onEmpty?()
             return
         }
 

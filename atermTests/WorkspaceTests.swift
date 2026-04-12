@@ -111,7 +111,32 @@ struct WorkspaceCollectionTests {
         #expect(collection.activeWorkspaceID == collection.workspaces[0].id)
     }
 
+    // MARK: - Empty Collection
+
+    @Test func emptyCollectionHasNoWorkspaces() {
+        let collection = WorkspaceCollection.empty()
+        #expect(collection.workspaces.isEmpty)
+        #expect(collection.activeWorkspaceID == nil)
+        #expect(collection.activeWorkspace == nil)
+        #expect(collection.activeSpaceCollection == nil)
+    }
+
+    @Test func emptyCollectionCreateWorkspaceActivates() {
+        let collection = WorkspaceCollection.empty()
+        let ws = collection.createWorkspace(name: "first", workingDirectory: "/tmp/proj")
+        #expect(ws != nil)
+        #expect(collection.workspaces.count == 1)
+        #expect(collection.activeWorkspaceID == ws?.id)
+        #expect(collection.activeWorkspace?.id == ws?.id)
+    }
+
     // MARK: - Creation
+
+    @Test func createWorkspaceStoresWorkingDirectory() {
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "first", workingDirectory: "/tmp/proj")
+        #expect(ws?.defaultWorkingDirectory?.path == "/tmp/proj")
+    }
 
     @Test func createWorkspaceAppendsAndActivates() {
         let collection = WorkspaceCollection()
@@ -223,13 +248,14 @@ struct WorkspaceCollectionTests {
         #expect(emptyCalled)
     }
 
-    @Test func removeLastWorkspaceSetsQuitWhenNoCallback() {
+    @Test func removeLastWorkspaceEmptiesCollectionWhenNoCallback() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
 
         collection.removeWorkspace(id: ws.id)
         #expect(collection.workspaces.isEmpty)
-        #expect(collection.shouldQuit)
+        #expect(collection.activeWorkspaceID == nil)
+        #expect(collection.activeWorkspace == nil)
     }
 
     @Test func removeNonexistentWorkspaceIsNoOp() {
@@ -378,6 +404,5 @@ struct WorkspaceCollectionTests {
         tab.paneViewModel.closePane(paneID: paneID)
 
         #expect(collection.workspaces.count == 1)
-        #expect(!collection.shouldQuit)
     }
 }

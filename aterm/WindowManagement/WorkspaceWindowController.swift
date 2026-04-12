@@ -43,10 +43,6 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
 
-        workspaceCollection.onEmpty = { [weak self] in
-            self?.window?.close()
-        }
-
         installTrafficLightAligner(window: window)
         observeActiveWorkspaceName()
         installKeyboardMonitor()
@@ -115,10 +111,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 self.workspaceCollection.previousWorkspace()
                 return nil
             case .newWorkspace:
-                self.workspaceCollection.createWorkspace()
+                WorkspaceCreationFlow.createWorkspace(in: self.workspaceCollection)
                 return nil
             case .closeWorkspace:
-                self.workspaceCollection.removeWorkspace(id: self.workspaceCollection.activeWorkspaceID)
+                if let id = self.workspaceCollection.activeWorkspaceID {
+                    self.workspaceCollection.removeWorkspace(id: id)
+                }
                 return nil
             case .toggleSidebar:
                 self.handleSidebarToggle()

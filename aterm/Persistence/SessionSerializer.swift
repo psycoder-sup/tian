@@ -62,7 +62,9 @@ enum SessionSerializer {
         return SessionState(
             version: currentVersion,
             savedAt: Date(),
-            activeWorkspaceId: collection.activeWorkspaceID,
+            // Fallback sentinel when `workspaces` is empty; SessionRestorer.validate
+            // rejects empty-workspace states on read, so the value is unobservable.
+            activeWorkspaceId: collection.activeWorkspaceID ?? UUID(),
             workspaces: workspaces
         )
     }

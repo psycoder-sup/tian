@@ -38,7 +38,9 @@ struct WorkspaceWindowContent: View {
                                 _ = try await worktreeOrchestrator.createWorktreeSpace(
                                     branchName: branch,
                                     existingBranch: existing,
-                                    remoteRef: remoteRef
+                                    remoteRef: remoteRef,
+                                    repoPath: ctx.repoRoot.path,
+                                    workspaceID: ctx.workspaceID
                                 )
                             } catch {
                                 worktreeOrchestrator.presentError(error)
@@ -74,6 +76,7 @@ struct WorkspaceWindowContent: View {
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }
             let wd = notification.userInfo?[Notification.worktreeWorkingDirectoryKey] as? String ?? ""
+            let workspaceID = notification.userInfo?[Notification.worktreeWorkspaceIDKey] as? UUID
             Task {
                 guard let repoRoot = try? await WorktreeService.resolveRepoRoot(from: wd) else {
                     return
@@ -87,7 +90,9 @@ struct WorkspaceWindowContent: View {
                     config = WorktreeConfig()
                 }
                 branchInputContext = BranchInputContext(
-                    repoRoot: repoURL, worktreeDir: config.worktreeDir
+                    repoRoot: repoURL,
+                    worktreeDir: config.worktreeDir,
+                    workspaceID: workspaceID
                 )
             }
         }
@@ -99,4 +104,7 @@ struct WorkspaceWindowContent: View {
 private struct BranchInputContext {
     let repoRoot: URL
     let worktreeDir: String
+    // Optional because the Cmd+Shift+B keyboard path posts the notification
+    // without a workspace ID (it implicitly targets the active workspace).
+    let workspaceID: UUID?
 }
