@@ -111,6 +111,21 @@ struct WorkspaceCollectionTests {
         #expect(collection.activeWorkspaceID == collection.workspaces[0].id)
     }
 
+    // MARK: - Empty Collection
+
+    @Test func emptyCollectionHasNoWorkspaces() {
+        let collection = WorkspaceCollection.empty()
+        #expect(collection.workspaces.isEmpty)
+        #expect(collection.activeWorkspace == nil)
+        #expect(collection.activeSpaceCollection == nil)
+    }
+
+    @Test func createWorkspaceStoresWorkingDirectory() {
+        let collection = WorkspaceCollection()
+        let ws = collection.createWorkspace(name: "first", workingDirectory: "/tmp/proj")
+        #expect(ws?.defaultWorkingDirectory?.path == "/tmp/proj")
+    }
+
     // MARK: - Creation
 
     @Test func createWorkspaceAppendsAndActivates() {
@@ -223,13 +238,13 @@ struct WorkspaceCollectionTests {
         #expect(emptyCalled)
     }
 
-    @Test func removeLastWorkspaceSetsQuitWhenNoCallback() {
+    @Test func removeLastWorkspaceEmptiesCollectionWhenNoCallback() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
 
         collection.removeWorkspace(id: ws.id)
         #expect(collection.workspaces.isEmpty)
-        #expect(collection.shouldQuit)
+        #expect(collection.activeWorkspace == nil)
     }
 
     @Test func removeNonexistentWorkspaceIsNoOp() {
@@ -378,6 +393,5 @@ struct WorkspaceCollectionTests {
         tab.paneViewModel.closePane(paneID: paneID)
 
         #expect(collection.workspaces.count == 1)
-        #expect(!collection.shouldQuit)
     }
 }

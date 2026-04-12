@@ -111,7 +111,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 self.workspaceCollection.previousWorkspace()
                 return nil
             case .newWorkspace:
-                self.workspaceCollection.createWorkspace()
+                WorkspaceCreationFlow.createWorkspace(in: self.workspaceCollection)
                 return nil
             case .closeWorkspace:
                 self.workspaceCollection.removeWorkspace(id: self.workspaceCollection.activeWorkspaceID)

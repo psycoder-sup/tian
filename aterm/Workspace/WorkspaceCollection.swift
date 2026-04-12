@@ -8,10 +8,8 @@ final class WorkspaceCollection {
     private(set) var workspaces: [Workspace]
     var activeWorkspaceID: UUID
 
-    /// Set when the last workspace is removed and `onEmpty` is nil.
-    var shouldQuit: Bool = false
-
-    /// Called when the last workspace is removed. When set, `shouldQuit` is not used.
+    /// Called when the last workspace is removed. Optional — when unset, the
+    /// collection simply becomes empty and the view layer renders the empty state.
     var onEmpty: (() -> Void)?
 
     private var workspaceCounter: Int = 1
@@ -34,6 +32,7 @@ final class WorkspaceCollection {
         self.activeWorkspaceID = UUID()
     }
 
+    /// Empty collection for fresh-launch empty-state windows.
     static func empty() -> WorkspaceCollection {
         WorkspaceCollection(empty: ())
     }
@@ -99,11 +98,7 @@ final class WorkspaceCollection {
         workspaces.remove(at: index)
 
         if workspaces.isEmpty {
-            if let onEmpty {
-                onEmpty()
-            } else {
-                shouldQuit = true
-            }
+            onEmpty?()
             return
         }
 
