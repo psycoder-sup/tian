@@ -59,14 +59,13 @@ enum WorkspaceCreationFlow {
             panel.prompt = "Choose"
             panel.message = "Choose a directory for your first workspace"
 
-            // Accessory view with a "Quit aterm" button. Tag 99 signals quit.
+            // Accessory view with a "Quit aterm" button wired to QuitResponder.
             let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 36))
             let quitButton = NSButton(frame: NSRect(x: 12, y: 6, width: 120, height: 24))
             quitButton.title = "Quit aterm"
             quitButton.bezelStyle = .rounded
             quitButton.target = QuitResponder.shared
             quitButton.action = #selector(QuitResponder.quitPressed(_:))
-            quitButton.tag = 99
             accessory.addSubview(quitButton)
             panel.accessoryView = accessory
             panel.isAccessoryViewDisclosed = true
