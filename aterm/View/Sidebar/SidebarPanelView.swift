@@ -26,7 +26,7 @@ struct SidebarPanelView: View {
 
     private var newWorkspaceButton: some View {
         Button {
-            workspaceCollection.createWorkspace()
+            WorkspaceCreationFlow.createWorkspace(in: workspaceCollection)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus")
