@@ -28,14 +28,8 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCente
                 frame: frame,
                 isFullscreen: isFullscreen
             )
-        } else if isUITesting {
-            windowCoordinator.openWindow()
         } else {
-            guard let url = WorkspaceCreationFlow.runFirstLaunchPicker() else {
-                NSApp.terminate(nil)
-                return
-            }
-            windowCoordinator.openWindow(initialWorkingDirectory: url.standardizedFileURL.path)
+            windowCoordinator.openWindow()
         }
 
         // Start IPC server
