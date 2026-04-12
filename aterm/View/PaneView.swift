@@ -27,10 +27,13 @@ struct PaneView: View {
             viewModel: viewModel,
             isFocused: isFocused
         )
-        // Layer 2: Dim overlay for unfocused panes
+        // Layer 2: Dim overlay for unfocused panes.
+        // Fill with terminal background color so the background hex is preserved;
+        // only foreground content (text, cursor) blends toward bg and appears dimmed.
         .overlay {
             if showDimOverlay {
-                Color.black.opacity(0.30)
+                Color(nsColor: GhosttyApp.shared.defaultBackgroundColor)
+                    .opacity(0.30)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
