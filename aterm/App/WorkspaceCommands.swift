@@ -9,7 +9,7 @@ struct WorkspaceCommands: Commands {
 
             Button("New Workspace") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {
-                    controller.workspaceCollection.createWorkspace()
+                    WorkspaceCreationFlow.createWorkspace(in: controller.workspaceCollection)
                 }
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
