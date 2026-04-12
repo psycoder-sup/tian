@@ -150,8 +150,13 @@ struct BranchListServiceTests {
         try runGitSync(["init"], in: dir)
         try runGitSync(["remote", "add", "origin", "/nonexistent/repo.git"], in: dir)
 
-        await #expect(throws: WorktreeError.self) {
+        do {
             try await BranchListService.fetchRemotes(repoRoot: dir)
+            Issue.record("expected fetchRemotes to throw")
+        } catch WorktreeError.gitError {
+            // expected
+        } catch {
+            Issue.record("expected WorktreeError.gitError, got \(error)")
         }
     }
 }
