@@ -22,7 +22,6 @@ enum BranchListService {
 
     static func listBranches(repoRoot: String) async throws -> [BranchEntry] {
         let inUse = try await loadInUseBranchSet(repoRoot: repoRoot)
-        let currentPerWorktree = try await loadCurrentHeads(repoRoot: repoRoot)
 
         // format: <refname>%00<upstream>%00<committerdate:iso-strict>
         let format = "%(refname)%00%(upstream)%00%(committerdate:iso-strict)"
@@ -68,7 +67,7 @@ enum BranchListService {
                         kind: .local(upstream: upstreamDisplay),
                         committerDate: committerDate,
                         isInUse: inUse.contains(name),
-                        isCurrent: currentPerWorktree.contains(name)
+                        isCurrent: inUse.contains(name)
                     )
                 )
             } else if refname.hasPrefix("refs/remotes/") {
@@ -115,11 +114,6 @@ enum BranchListService {
         return set
     }
 
-    private static func loadCurrentHeads(repoRoot: String) async throws -> Set<String> {
-        // Same source as loadInUseBranchSet — every non-bare worktree's HEAD is its "current" branch.
-        return try await loadInUseBranchSet(repoRoot: repoRoot)
-    }
-
     private static func runGit(
         _ arguments: [String],
         workingDirectory: String
@@ -136,17 +130,20 @@ enum BranchListService {
                 process.standardError = stderr
                 do {
                     try process.run()
-                    process.waitUntilExit()
-                    let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-                    let errData = stderr.fileHandleForReading.readDataToEndOfFile()
-                    continuation.resume(returning: (
-                        process.terminationStatus,
-                        String(data: outData, encoding: .utf8) ?? "",
-                        String(data: errData, encoding: .utf8) ?? ""
-                    ))
                 } catch {
                     continuation.resume(throwing: error)
+                    return
                 }
+
+                let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
+                let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+
+                continuation.resume(returning: (
+                    process.terminationStatus,
+                    String(data: stdoutData, encoding: .utf8) ?? "",
+                    String(data: stderrData, encoding: .utf8) ?? ""
+                ))
             }
         }
     }
