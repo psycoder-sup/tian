@@ -159,3 +159,19 @@ enum BranchListService {
         }
     }
 }
+
+// MARK: - Protocol for injection
+
+protocol BranchListProviding: Sendable {
+    func listBranches(repoRoot: String) async throws -> [BranchEntry]
+    func fetchRemotes(repoRoot: String) async throws
+}
+
+struct BranchListServiceAdapter: BranchListProviding {
+    func listBranches(repoRoot: String) async throws -> [BranchEntry] {
+        try await BranchListService.listBranches(repoRoot: repoRoot)
+    }
+    func fetchRemotes(repoRoot: String) async throws {
+        try await BranchListService.fetchRemotes(repoRoot: repoRoot)
+    }
+}
