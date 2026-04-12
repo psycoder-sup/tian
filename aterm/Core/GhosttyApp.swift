@@ -215,6 +215,11 @@ final class GhosttyApp: @unchecked Sendable {
         // App-level actions
         if target.tag == GHOSTTY_TARGET_APP {
             switch action.tag {
+            case GHOSTTY_ACTION_QUIT:
+                DispatchQueue.main.async {
+                    NSApp.terminate(nil)
+                }
+                return true
             case GHOSTTY_ACTION_RELOAD_CONFIG:
                 reloadConfig()
                 return true
