@@ -45,4 +45,56 @@ enum WorkspaceCreationFlow {
         panel.message = "Choose a directory for this workspace"
         return panel.runModal() == .OK ? panel.url : nil
     }
+
+    /// Runs a modal directory picker that keeps re-presenting itself until the
+    /// user picks a directory. An accessory "Quit aterm" button is the only
+    /// non-picking exit, returning nil so the caller can terminate the app.
+    static func runFirstLaunchPicker() -> URL? {
+        while true {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.allowsMultipleSelection = false
+            panel.canCreateDirectories = true
+            panel.prompt = "Choose"
+            panel.message = "Choose a directory for your first workspace"
+
+            // Accessory view with a "Quit aterm" button. Tag 99 signals quit.
+            let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 36))
+            let quitButton = NSButton(frame: NSRect(x: 12, y: 6, width: 120, height: 24))
+            quitButton.title = "Quit aterm"
+            quitButton.bezelStyle = .rounded
+            quitButton.target = QuitResponder.shared
+            quitButton.action = #selector(QuitResponder.quitPressed(_:))
+            quitButton.tag = 99
+            accessory.addSubview(quitButton)
+            panel.accessoryView = accessory
+            panel.isAccessoryViewDisclosed = true
+
+            QuitResponder.shared.quitRequested = false
+            let response = panel.runModal()
+
+            if QuitResponder.shared.quitRequested {
+                return nil
+            }
+            if response == .OK, let url = panel.url {
+                return url
+            }
+            // Any other dismissal (Cancel, close, Esc) — loop and re-present.
+        }
+    }
+}
+
+/// Local responder for the first-launch picker's "Quit aterm" accessory button.
+/// `NSOpenPanel` does not expose an out-of-band quit channel, so we stop the
+/// modal and flag the intent for the picker loop to read.
+@MainActor
+private final class QuitResponder: NSObject {
+    static let shared = QuitResponder()
+    var quitRequested = false
+
+    @objc func quitPressed(_ sender: NSButton) {
+        quitRequested = true
+        NSApp.stopModal(withCode: .cancel)
+    }
 }
