@@ -70,6 +70,8 @@ The Xcode project is generated via **XcodeGen** (`project.yml`). After adding, r
 
 When using `xcodebuild`, always pass `-derivedDataPath .build` to keep build artifacts in the project directory.
 
+Prefer `scripts/build.sh [Debug|Release]` (defaults to Debug) — it runs `xcodegen generate` then `xcodebuild` with the correct flags, avoiding stale-pbxproj bugs.
+
 ## Scratch / Temporary Files
 
 Use `.dev/tmp/` for temporary code, experiments, and scratch files instead of `/tmp`. The `.dev/tmp/` subdirectory is gitignored; `.dev/` itself is tracked.
