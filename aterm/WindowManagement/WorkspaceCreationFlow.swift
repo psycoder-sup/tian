@@ -18,4 +18,31 @@ enum WorkspaceCreationFlow {
         }
         return basename
     }
+
+    /// Presents a directory picker and, if the user picks a directory, creates
+    /// and activates a workspace in `collection` anchored to that directory.
+    ///
+    /// - Returns: The created workspace, or nil if the user cancelled.
+    @discardableResult
+    static func createWorkspace(in collection: WorkspaceCollection) -> Workspace? {
+        guard let url = runPicker() else { return nil }
+        let standardized = url.standardizedFileURL
+        if let name = deriveWorkspaceName(from: standardized) {
+            return collection.createWorkspace(name: name, workingDirectory: standardized.path)
+        } else {
+            return collection.createWorkspace(workingDirectory: standardized.path)
+        }
+    }
+
+    /// Runs a directory-only `NSOpenPanel`. Returns the chosen URL, or nil on cancel.
+    private static func runPicker() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.message = "Choose a directory for this workspace"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
 }
