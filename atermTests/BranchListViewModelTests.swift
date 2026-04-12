@@ -270,4 +270,40 @@ struct BranchListViewModelTests {
         #expect(model.usedCachedRemotes == true)
         #expect(model.rows.map(\.displayName) == ["a"])  // cached list still shown
     }
+
+    @Test
+    func load_clearsStaleLoadErrorAfterRecovery() async {
+        // Step 1 fails (first listBranches throws), then step 2's fetch + reload succeed.
+        // loadError must be cleared so the UI doesn't show a stale error over valid rows.
+        let service = FakingListService()
+        await service.setFailFirstListOnly(true)
+        await service.setEntriesOnRecovery([entry(local: "a")])
+
+        let model = BranchListViewModel(service: service)
+        await model.load(repoRoot: "/unused")
+
+        #expect(model.loadError == nil)
+        #expect(model.rows.map(\.displayName) == ["a"])
+    }
+}
+
+private actor FakingListService: BranchListProviding {
+    private var failFirstListOnly = false
+    private var listCallCount = 0
+    private var recoveryEntries: [BranchEntry] = []
+
+    func setFailFirstListOnly(_ v: Bool) { failFirstListOnly = v }
+    func setEntriesOnRecovery(_ entries: [BranchEntry]) { recoveryEntries = entries }
+
+    func listBranches(repoRoot: String) async throws -> [BranchEntry] {
+        listCallCount += 1
+        if failFirstListOnly && listCallCount == 1 {
+            throw WorktreeError.gitError(command: "git for-each-ref", stderr: "boom")
+        }
+        return recoveryEntries
+    }
+
+    func fetchRemotes(repoRoot: String) async throws {
+        // success (no-op)
+    }
 }

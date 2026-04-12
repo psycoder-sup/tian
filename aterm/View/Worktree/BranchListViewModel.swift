@@ -44,6 +44,7 @@ final class BranchListViewModel {
     }
 
     func load(repoRoot: String) async {
+        usedCachedRemotes = false
         // Step 1: cache-only read (fast path)
         do {
             rawEntries = try await service.listBranches(repoRoot: repoRoot)
@@ -62,6 +63,7 @@ final class BranchListViewModel {
             usedCachedRemotes = false
             do {
                 rawEntries = try await service.listBranches(repoRoot: repoRoot)
+                loadError = nil   // step-2 success clears any stale error from step 1
                 recomputeRows()
             } catch {
                 // keep previously-loaded rows; surface the error
