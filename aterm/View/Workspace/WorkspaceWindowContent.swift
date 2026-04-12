@@ -31,18 +31,36 @@ struct WorkspaceWindowContent: View {
                 BranchNameInputView(
                     repoRoot: ctx.repoRoot,
                     worktreeDir: ctx.worktreeDir,
-                    onSubmit: { branch, existing, _ in
+                    onSubmit: { branch, existing, remoteRef in
                         branchInputContext = nil
                         Task {
-                            _ = try? await worktreeOrchestrator.createWorktreeSpace(
-                                branchName: branch, existingBranch: existing
-                            )
+                            do {
+                                _ = try await worktreeOrchestrator.createWorktreeSpace(
+                                    branchName: branch,
+                                    existingBranch: existing,
+                                    remoteRef: remoteRef
+                                )
+                            } catch {
+                                worktreeOrchestrator.presentError(error)
+                            }
                         }
                     },
                     onCancel: { branchInputContext = nil }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
+        }
+        .alert(
+            "Worktree creation failed",
+            isPresented: Binding(
+                get: { worktreeOrchestrator.lastError != nil },
+                set: { if !$0 { worktreeOrchestrator.lastError = nil } }
+            ),
+            presenting: worktreeOrchestrator.lastError
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { err in
+            Text(String(describing: err))   // WorktreeError conforms to CustomStringConvertible
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
         .animation(.easeInOut(duration: 0.15), value: branchInputContext != nil)
