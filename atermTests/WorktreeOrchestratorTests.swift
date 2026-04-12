@@ -291,7 +291,12 @@ struct WorktreeOrchestratorTests {
 
         let clone = FileManager.default.temporaryDirectory
             .appendingPathComponent("aterm-orch-clone-\(UUID().uuidString)").path
-        defer { cleanup(clone) }
+        let cloneCentralBase = (NSHomeDirectory() as NSString)
+            .appendingPathComponent(".worktrees/\(URL(filePath: clone).lastPathComponent)")
+        defer {
+            cleanup(clone)
+            cleanup(cloneCentralBase)
+        }
         try runGitSync(["clone", remote, clone], in: FileManager.default.temporaryDirectory.path)
 
         let (provider, workspace) = makeProvider(repoPath: clone)
