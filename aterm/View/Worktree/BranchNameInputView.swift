@@ -76,18 +76,26 @@ struct BranchNameInputView: View {
     // MARK: - Subviews
 
     private var branchList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if viewModel.rows.isEmpty {
-                    Text(viewModel.loadError ?? "No matching branches")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    ForEach(viewModel.rows) { row in
-                        branchRow(row)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if viewModel.rows.isEmpty {
+                        Text(viewModel.loadError ?? "No matching branches")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        ForEach(viewModel.rows) { row in
+                            branchRow(row).id(row.id)
+                        }
                     }
+                }
+            }
+            .onChange(of: viewModel.highlightedID) { _, new in
+                guard let new else { return }
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo(new, anchor: .center)
                 }
             }
         }
