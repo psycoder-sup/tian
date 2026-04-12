@@ -97,4 +97,55 @@ struct BranchListViewModelTests {
         #expect(rows[0].isInUse == true)
         #expect(rows[0].isCurrent == true)
     }
+
+    // MARK: - Edge cases
+
+    @Test
+    func dedup_handlesEmptyInput() {
+        #expect(BranchListViewModel.dedup([]).isEmpty)
+    }
+
+    // MARK: - formatRelative
+
+    @Test
+    func formatRelative_justNowUnder60Seconds() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-30), now: now) == "just now")
+    }
+
+    @Test
+    func formatRelative_minutesAgo() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-5 * 60), now: now) == "5m ago")
+    }
+
+    @Test
+    func formatRelative_hoursAgo() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-3 * 3600), now: now) == "3h ago")
+    }
+
+    @Test
+    func formatRelative_yesterdayBetween24And48Hours() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-30 * 3600), now: now) == "yesterday")
+    }
+
+    @Test
+    func formatRelative_daysAgo() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-3 * 86_400), now: now) == "3d ago")
+    }
+
+    @Test
+    func formatRelative_weeksAgo() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-10 * 86_400), now: now) == "1w ago")
+    }
+
+    @Test
+    func formatRelative_monthsAgo() {
+        let now = Date()
+        #expect(BranchListViewModel.formatRelative(now.addingTimeInterval(-60 * 86_400), now: now) == "2mo ago")
+    }
 }

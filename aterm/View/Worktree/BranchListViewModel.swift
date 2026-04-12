@@ -65,9 +65,8 @@ final class BranchListViewModel {
             switch e.kind {
             case .local:
                 localsByName[e.displayName] = e
-            case .remote(let remoteName):
+            case .remote:
                 remotesByName[e.displayName, default: []].append(e)
-                _ = remoteName
             }
         }
 
@@ -80,8 +79,12 @@ final class BranchListViewModel {
 
             if let local = localsByName[e.displayName] {
                 let remotes = remotesByName[e.displayName] ?? []
-                let badge: BranchRow.Badge =
-                    remotes.isEmpty ? .local : .localAndOrigin(remotes.first!.kind.remoteNameOrEmpty)
+                let badge: BranchRow.Badge
+                if let firstRemote = remotes.first {
+                    badge = .localAndOrigin(firstRemote.kind.remoteName)
+                } else {
+                    badge = .local
+                }
                 out.append(
                     BranchRow(
                         id: local.id,
@@ -95,7 +98,7 @@ final class BranchListViewModel {
                     )
                 )
             } else if let remote = remotesByName[e.displayName]?.first {
-                let remoteName = remote.kind.remoteNameOrEmpty
+                let remoteName = remote.kind.remoteName
                 out.append(
                     BranchRow(
                         id: remote.id,
@@ -126,8 +129,12 @@ final class BranchListViewModel {
 }
 
 private extension BranchEntry.Kind {
-    var remoteNameOrEmpty: String {
-        if case .remote(let name) = self { return name }
-        return ""
+    /// Returns the remote name. Traps if called on a `.local` case —
+    /// callers must guarantee they only pass remote kinds.
+    var remoteName: String {
+        switch self {
+        case .remote(let name): return name
+        case .local: preconditionFailure("remoteName called on .local kind")
+        }
     }
 }
