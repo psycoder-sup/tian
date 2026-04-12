@@ -91,6 +91,17 @@ enum BranchListService {
         return entries
     }
 
+    static func fetchRemotes(repoRoot: String) async throws {
+        let result = try await runGit(
+            ["fetch", "--all", "--prune"], workingDirectory: repoRoot
+        )
+        guard result.exitCode == 0 else {
+            throw WorktreeError.gitError(
+                command: "git fetch --all --prune", stderr: result.stderr
+            )
+        }
+    }
+
     // MARK: - Internals
 
     private static func loadInUseBranchSet(repoRoot: String) async throws -> Set<String> {

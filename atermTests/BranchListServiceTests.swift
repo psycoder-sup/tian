@@ -117,4 +117,41 @@ struct BranchListServiceTests {
             Issue.record("expected remote kind")
         }
     }
+
+    @Test
+    func fetchRemotes_refreshesRemoteRefs() async throws {
+        let remote = try makeTempGitRepo()
+        defer { cleanup(remote) }
+
+        let clone = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aterm-fetch-\(UUID().uuidString)").path
+        defer { cleanup(clone) }
+        try runGitSync(["clone", remote, clone], in: FileManager.default.temporaryDirectory.path)
+
+        // Add a new branch in the remote AFTER cloning
+        try runGitSync(["branch", "feat/new-after-clone"], in: remote)
+
+        // Before fetch — the clone should not see the new branch
+        let before = try await BranchListService.listBranches(repoRoot: clone)
+        #expect(before.first { $0.displayName == "feat/new-after-clone" } == nil)
+
+        // Fetch, then re-list
+        try await BranchListService.fetchRemotes(repoRoot: clone)
+        let after = try await BranchListService.listBranches(repoRoot: clone)
+        #expect(after.first { $0.displayName == "feat/new-after-clone" } != nil)
+    }
+
+    @Test
+    func fetchRemotes_throwsGitErrorOnFailure() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aterm-bad-fetch-\(UUID().uuidString)").path
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { cleanup(dir) }
+        try runGitSync(["init"], in: dir)
+        try runGitSync(["remote", "add", "origin", "/nonexistent/repo.git"], in: dir)
+
+        await #expect(throws: WorktreeError.self) {
+            try await BranchListService.fetchRemotes(repoRoot: dir)
+        }
+    }
 }
