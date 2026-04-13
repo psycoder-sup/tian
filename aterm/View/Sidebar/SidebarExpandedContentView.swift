@@ -168,16 +168,32 @@ struct SidebarExpandedContentView: View {
         WorktreeCloseDialog.show(on: window, worktreePath: wtPath.path) { response in
             switch response {
             case .removeWorktreeAndClose:
-                Task {
-                    try? await worktreeOrchestrator.removeWorktreeSpace(
-                        spaceID: space.id, force: false
-                    )
-                }
+                Task { await removeWorktree(space: space, force: false) }
             case .closeOnly:
                 workspace.spaceCollection.removeSpace(id: space.id)
             case .cancel:
                 break
             }
+        }
+    }
+
+    private func removeWorktree(space: SpaceModel, force: Bool) async {
+        do {
+            try await worktreeOrchestrator.removeWorktreeSpace(
+                spaceID: space.id, force: force
+            )
+        } catch let error as WorktreeError {
+            if case .uncommittedChanges(let path) = error, let window = NSApp.keyWindow {
+                WorktreeForceRemoveDialog.show(on: window, worktreePath: path) { response in
+                    if response == .forceRemove {
+                        Task { await removeWorktree(space: space, force: true) }
+                    }
+                }
+            } else {
+                worktreeOrchestrator.presentError(error)
+            }
+        } catch {
+            worktreeOrchestrator.presentError(error)
         }
     }
 

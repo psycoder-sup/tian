@@ -53,7 +53,7 @@ struct WorkspaceWindowContent: View {
             }
         }
         .alert(
-            "Worktree creation failed",
+            "Worktree error",
             isPresented: Binding(
                 get: { worktreeOrchestrator.lastError != nil },
                 set: { if !$0 { worktreeOrchestrator.lastError = nil } }
