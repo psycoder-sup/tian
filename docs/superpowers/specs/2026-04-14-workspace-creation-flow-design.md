@@ -51,9 +51,14 @@ Reuses the current modal-overlay presentation of `BranchNameInputView`. Layout, 
 ### Keyboard
 
 - `Tab` cycles field → checkbox → Create.
-- `↑/↓` navigate the branch list (only when list visible). Navigating a row also writes that row's branch name into the text field (autocomplete semantic). The user can clear or re-edit freely; nothing is "locked in" until Create.
+- `↑/↓` move the highlight in the branch list (only when list visible). The text field is **not** modified by arrow-key movement — highlight and `inputText` are independent.
 - `Enter` submits if Create is enabled.
 - `Esc` cancels the modal.
+
+### Highlight semantics
+
+- `BranchListViewModel.recomputeRows` already auto-highlights the first selectable row whenever a non-empty filter produces matches. This is preserved.
+- New rule: when `query` is empty (browse mode), no row is auto-highlighted. This prevents Enter from silently checking out the most-recent branch when the user just opens the modal and presses Enter without thinking. (The user can still arrow-down to start selecting, which will then assign a highlight.)
 
 ### Create button enabled
 
@@ -77,16 +82,16 @@ When worktree is unchecked, no sanitization is applied — spaces and any other 
 **Unchecked (plain space):**
 
 1. Validate `inputText` non-empty (Create is disabled otherwise).
-2. Call `SpaceCollection.createSpace(name: inputText, workingDirectory: workspace.defaultWorkingDirectory)`.
+2. Call `SpaceCollection.createSpace(name: inputText, workingDirectory: <resolved working directory string>)`. Working directory is resolved via the existing `spaceCollection.resolveWorkingDirectory()` helper (returns a `String`).
 3. Dismiss modal.
 
 **Checked (worktree):**
 
-1. Because arrow-key navigation writes the highlighted branch name back into `inputText`, the submit logic only needs to consider `inputText`:
-   - If `inputText` (post-sanitization) exactly matches an existing local or remote branch name, use that branch (checkout existing).
-   - Otherwise, treat as a new branch named `inputText`.
-2. Call the existing `WorktreeOrchestrator.createWorktreeSpace(...)`, passing the resolved branch and using `inputText` for `SpaceModel.name`.
-3. Dismiss on success. On failure, keep the modal open with the error in the footer; user can retry or cancel.
+1. Resolve the branch reference. The branch list view model is the source of truth for "is this a known branch":
+   - If `branchListViewModel.selectedRow()` is non-nil (a row is highlighted) → use that row's branch (checkout existing). The `displayName` is the branch name; if `remoteRef` is set, the orchestrator checks out from the remote.
+   - Else, treat `inputText` as a new branch name. (Note: when the user types an exact match of an existing branch, the filter narrows to that one row and the auto-highlight rule selects it — so this path naturally subsumes the "exact-match-while-typing" case.)
+2. Dismiss the modal immediately, then call `WorktreeOrchestrator.createWorktreeSpace(branchName: <name>, existingBranch: <bool>, remoteRef: <ref?>, repoPath: <repo path>, workspaceID: <id>)`. The branch name is also used for `SpaceModel.name` (the orchestrator already does this — no API change).
+3. On orchestrator failure, the existing alert pipeline (`worktreeOrchestrator.lastError`) surfaces the error. Modal does not stay open.
 
 ## Architecture
 
@@ -94,26 +99,29 @@ When worktree is unchecked, no sanitization is applied — spaces and any other 
 
 | File | Change |
 |---|---|
-| `tian/View/Worktree/BranchNameInputView.swift` | Renamed & refactored to `CreateSpaceView.swift`. Segmented "New/Existing branch" picker removed. File may move to a neutral directory (e.g. `View/CreateSpace/`) — implementation detail, not required by this spec. |
-| `tian/View/Worktree/BranchListViewModel.swift` | Reused unchanged in behavior. Stays in place; optionally co-located with the renamed view. |
-| `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Remove `arrow.triangle.branch` button and its `onNewWorktreeSpace` callback. Enlarge `+` button. Update tooltip. |
-| `tian/View/Sidebar/SidebarExpandedContentView.swift` | Drop the `onNewWorktreeSpace` plumbing. |
-| `tian/Input/KeyBindingRegistry.swift` | Remove `newWorktreeSpace` (⇧⌘B). Keep `newSpace` (⇧⌘T); it now posts `NewSpaceRequested`. |
-| Wherever existing `Notification.Name` extensions live (e.g. `tian/Core/Notifications.swift` or inline in the posting view) | Add `NewSpaceRequested`. Remove `WorktreeSpaceRequested` if it existed as a distinct name. |
-| `tian/Tab/SpaceCollection.swift` | Add optional `name: String?` parameter to `createSpace(workingDirectory:)`. `nil` preserves existing "Space N" auto-naming; non-nil uses the given name verbatim. |
-| `tian/Workspace/Workspace.swift` | Add `@Observable` transient property `lastCreateWorktreeChoice: Bool?`. Not persisted to `SessionState`. |
-| `tian/WindowManagement/WorkspaceWindowContent.swift` (or wherever the modal host lives) | Listen for `NewSpaceRequested`; hold `@State var createSpaceRequest: CreateSpaceRequest?`; render `CreateSpaceView` as an overlay when non-nil. Remove the separate worktree-modal presentation path. |
+| `tian/View/Worktree/BranchNameInputView.swift` | Renamed & refactored to `tian/View/CreateSpace/CreateSpaceView.swift`. Segmented "New/Existing branch" picker removed; checkbox added; placeholder switches; live space→`-` sanitization in worktree mode. |
+| `tian/View/Worktree/BranchListViewModel.swift` | Moved to `tian/View/CreateSpace/BranchListViewModel.swift`. One behavior tweak: `recomputeRows()` does **not** auto-highlight when the query is empty. The `Mode` enum becomes unused (kept for backwards-compat with anyone using the type, or deleted in the same change — see plan). |
+| `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Remove `arrow.triangle.branch` button and the `onNewWorktreeSpace` parameter. Enlarge `+` icon (font size 14, hit area unchanged). Update accessibility label / context-menu copy from "New Worktree Space..." to "New Space...". `onAddSpace` now posts the unified notification (caller in `SidebarExpandedContentView` posts the notification — see below). |
+| `tian/View/Sidebar/SidebarExpandedContentView.swift` | `addSpace(to:)` posts `Notification.Name.showCreateSpaceInput` (renamed from `showWorktreeBranchInput`) with `Notification.createSpaceWorkspaceIDKey`. Removes the `onNewWorktreeSpace` closure. |
+| `tian/View/Sidebar/SidebarContainerView.swift` | Renames `Notification.Name.showWorktreeBranchInput` → `showCreateSpaceInput`. Removes `worktreeWorkingDirectoryKey` (no longer needed — the listener resolves the working directory itself from the workspace). Renames `worktreeWorkspaceIDKey` → `createSpaceWorkspaceIDKey`. |
+| `tian/Input/KeyAction.swift` | Remove `case newWorktreeSpace`. |
+| `tian/Input/KeyBindingRegistry.swift` | Remove the `.newWorktreeSpace` binding. `newSpace` (⇧⌘T) is unchanged. |
+| `tian/WindowManagement/WorkspaceWindowController.swift` | Remove the `.newWorktreeSpace` switch case and the `handleNewWorktreeSpace()` helper. The `.newSpace` case stops calling `collection.createSpace(workingDirectory:)` directly and instead posts `Notification.Name.showCreateSpaceInput` with the workspace ID — same path as the sidebar `+` button. |
+| `tian/Tab/SpaceCollection.swift` | Add optional `name: String?` parameter to `createSpace(name:workingDirectory:)`. `nil` preserves existing "Space N" auto-naming; non-nil uses the given name verbatim. |
+| `tian/Workspace/Workspace.swift` | Add `@Observable` transient property `var lastCreateWorktreeChoice: Bool?` (default `nil`). Not added to `WorkspaceSnapshot` — does not persist across launches. |
+| `tian/View/Workspace/WorkspaceWindowContent.swift` | Replace `branchInputContext: BranchInputContext?` with `createSpaceRequest: CreateSpaceRequest?`. Listen for `.showCreateSpaceInput`. Render `CreateSpaceView` as overlay when set. |
 
 ### Trigger flow
 
 ```
 Sidebar "+" button ───┐
-                      ├──► post NewSpaceRequested(workspaceID)
-Keybinding ⇧⌘T ──────┘
+                      ├──► post .showCreateSpaceInput
+Keybinding ⇧⌘T ──────┘    object: workspaceCollection
+                          userInfo: { createSpaceWorkspaceIDKey: <workspace.id> }
 
-WorkspaceWindowContent (listening for its workspaceID)
-  └──► sets @State createSpaceRequest = .init(...)
-         └──► overlay renders CreateSpaceView
+WorkspaceWindowContent (filters object === workspaceCollection)
+  └──► sets @State createSpaceRequest = CreateSpaceRequest(workspaceID:)
+         └──► overlay renders CreateSpaceView(workspace:, ...)
 ```
 
 ### `CreateSpaceView` state
@@ -128,16 +136,18 @@ WorkspaceWindowContent (listening for its workspaceID)
 
 ```swift
 // Before
-func createSpace(workingDirectory: URL) -> SpaceModel
+@discardableResult
+func createSpace(workingDirectory: String = "~") -> SpaceModel
 
 // After
-func createSpace(name: String? = nil, workingDirectory: URL) -> SpaceModel
+@discardableResult
+func createSpace(name: String? = nil, workingDirectory: String = "~") -> SpaceModel
 ```
 
-- `name == nil` → existing behavior: auto-name "Space N".
+- `name == nil` → existing behavior: auto-name "Space N" (preserved for callers that don't yet supply names — e.g. session restore paths and tests).
 - `name != nil` → use `name` verbatim. No trimming beyond what the view already did. No uniqueness check.
 
-Callers updated: `CreateSpaceView` always passes a non-nil name. Session restore and existing tests keep passing `nil` to preserve auto-naming semantics. `WorktreeOrchestrator` passes the branch name.
+Callers updated: `CreateSpaceView` always passes a non-nil name. The `WorktreeOrchestrator` already constructs `SpaceModel` directly (it does not call `createSpace`); it remains unchanged on this axis.
 
 ### Retired code
 
