@@ -131,10 +131,10 @@
 		CE8F62DDD24987000A13DF7A /* WorkspaceCreationFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83AD114AA36C4A2D08D90BBE /* WorkspaceCreationFlow.swift */; };
 		D023FBA5000775358BD3C6AE /* GitRepoWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B135FCF8D99B9BD4A3A9442 /* GitRepoWatcherTests.swift */; };
 		D06AE84597AEDF9025C77F0E /* SpaceGitContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1481DC1BE3159A71371719 /* SpaceGitContext.swift */; };
+		D1643576BFEDA81E98B43B23 /* BranchListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D46540DCEFEE5FFFC7F0847 /* BranchListViewModel.swift */; };
 		D9A7D0DD4B333139FBF85224 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC4FB6ECF756FB902120276E /* SessionState.swift */; };
 		DB181B740310B7C699E9E208 /* KeyAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE01F67DC990766D7C1B9FE /* KeyAction.swift */; };
 		E22F16CCCB55FFACD2C4125B /* GhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C30F8DA01C9ACC4088A9DC /* GhosttyApp.swift */; };
-		E813A2023EFB09C028EC12E3 /* BranchListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62EFA009DDEC7DC752F3C370 /* BranchListViewModel.swift */; };
 		E8C50612DBF599520D4CE78D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01EB4B29F2BF0FDD8BABFE5 /* main.swift */; };
 		EA107E923F3B37254DC62FA5 /* SessionSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B34D3462E9FEEA419DF10D3 /* SessionSerializer.swift */; };
 		EB366F6AFD87C90F0E472D07 /* SpaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D6B0FE9645D785EF2795FF1 /* SpaceModel.swift */; };
@@ -230,10 +230,10 @@
 		5907BFA07FE90913D8E13962 /* QuitFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuitFlowCoordinator.swift; sourceTree = "<group>"; };
 		5B5C423470A570BB3218B56F /* WorktreeOrchestratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorktreeOrchestratorTests.swift; sourceTree = "<group>"; };
 		5C17F10F7F1D49C9FB671D23 /* ANSIStripperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSIStripperTests.swift; sourceTree = "<group>"; };
+		5D46540DCEFEE5FFFC7F0847 /* BranchListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchListViewModel.swift; sourceTree = "<group>"; };
 		609FABE9561B5F6DF36F0C40 /* IPCCommandHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPCCommandHandler.swift; sourceTree = "<group>"; };
 		61588F65635E21D9416955F5 /* SplitLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitLayoutTests.swift; sourceTree = "<group>"; };
 		61629EF32494B963BA16A2DA /* SplitContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitContainerView.swift; sourceTree = "<group>"; };
-		62EFA009DDEC7DC752F3C370 /* BranchListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchListViewModel.swift; sourceTree = "<group>"; };
 		62FDC5AA8C1AADD7E19D4466 /* ClaudeSessionDotsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSessionDotsView.swift; sourceTree = "<group>"; };
 		657C8ED1BF2938572CB7DA50 /* SessionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStateTests.swift; sourceTree = "<group>"; };
 		65B5061ACD4F7F0180881789 /* SplitNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitNavigation.swift; sourceTree = "<group>"; };
@@ -382,6 +382,14 @@
 			path = Workspace;
 			sourceTree = "<group>";
 		};
+		23830A3EB55FD8C8B4C8BE4B /* CreateSpace */ = {
+			isa = PBXGroup;
+			children = (
+				5D46540DCEFEE5FFFC7F0847 /* BranchListViewModel.swift */,
+			);
+			path = CreateSpace;
+			sourceTree = "<group>";
+		};
 		244C337BBAD29B2348432955 /* View */ = {
 			isa = PBXGroup;
 			children = (
@@ -395,6 +403,7 @@
 				4E74E42B9E6B13136E4141EA /* SplitTreeView.swift */,
 				E047EB48BB51F0CE41A21F0E /* TerminalContentView.swift */,
 				B91792E3C605A2A1B6417188 /* TerminalSurfaceView.swift */,
+				23830A3EB55FD8C8B4C8BE4B /* CreateSpace */,
 				A393472E13F0CE9C5537278C /* Shared */,
 				E2E1A0B68647FF3B365451F3 /* Sidebar */,
 				1409833C786A9ED4C407318B /* TabBar */,
@@ -553,7 +562,6 @@
 		A0672E69400C9C41C4102348 /* Worktree */ = {
 			isa = PBXGroup;
 			children = (
-				62EFA009DDEC7DC752F3C370 /* BranchListViewModel.swift */,
 				50E7BB77C29C70C55C457648 /* BranchNameInputView.swift */,
 				A7CFB672AAC29C2374B1EBEA /* SetupCancelButton.swift */,
 				F6A23B694BB44B8C4C2CBC16 /* WorktreeCloseDialog.swift */,
@@ -677,7 +685,7 @@
 			path = Sidebar;
 			sourceTree = "<group>";
 		};
-		"TEMP_59480372-56D8-474D-888C-5E12D4489F10" /* Resources */ = {
+		"TEMP_8E6864A7-4C8C-440D-9FBD-0243BDAF6CEC" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -983,7 +991,7 @@
 				94449FF3D0527E2AE070B5FD /* ANSIStripper.swift in Sources */,
 				641D32EF8293F32A9B8B213B /* AppMetrics.swift in Sources */,
 				8407EEB561443152F6B3014A /* BranchListService.swift in Sources */,
-				E813A2023EFB09C028EC12E3 /* BranchListViewModel.swift in Sources */,
+				D1643576BFEDA81E98B43B23 /* BranchListViewModel.swift in Sources */,
 				22306B7165B45EAA149B8C83 /* BranchNameInputView.swift in Sources */,
 				F8158835E0466392F26B0CCB /* BusyDotView.swift in Sources */,
 				017E9AE15465F997D537115A /* ChangeBadgeView.swift in Sources */,
