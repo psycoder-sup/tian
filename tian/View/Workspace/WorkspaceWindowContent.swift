@@ -5,7 +5,7 @@ struct WorkspaceWindowContent: View {
     let worktreeOrchestrator: WorktreeOrchestrator
 
     @State private var showDebugOverlay = false
-    @State private var branchInputContext: BranchInputContext?
+    @State private var createSpaceRequest: CreateSpaceRequest?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -27,27 +27,39 @@ struct WorkspaceWindowContent: View {
             }
         }
         .overlay {
-            if let ctx = branchInputContext {
-                BranchNameInputView(
-                    repoRoot: ctx.repoRoot,
-                    worktreeDir: ctx.worktreeDir,
-                    onSubmit: { branch, existing, remoteRef in
-                        branchInputContext = nil
+            if let req = createSpaceRequest, let workspace = req.workspace {
+                CreateSpaceView(
+                    workspace: workspace,
+                    repoRoot: req.repoRoot,
+                    worktreeDir: req.worktreeDir,
+                    onSubmitPlain: { name in
+                        let captured = req
+                        createSpaceRequest = nil
+                        let wd = captured.workspace?.spaceCollection.resolveWorkingDirectory() ?? "~"
+                        captured.workspace?.spaceCollection.createSpace(
+                            name: name,
+                            workingDirectory: wd
+                        )
+                    },
+                    onSubmitWorktree: { submission in
+                        let captured = req
+                        createSpaceRequest = nil
+                        guard let repoRoot = captured.repoRoot else { return }
                         Task {
                             do {
                                 _ = try await worktreeOrchestrator.createWorktreeSpace(
-                                    branchName: branch,
-                                    existingBranch: existing,
-                                    remoteRef: remoteRef,
-                                    repoPath: ctx.repoRoot.path,
-                                    workspaceID: ctx.workspaceID
+                                    branchName: submission.branchName,
+                                    existingBranch: submission.existingBranch,
+                                    remoteRef: submission.remoteRef,
+                                    repoPath: repoRoot.path,
+                                    workspaceID: captured.workspace?.id
                                 )
                             } catch {
                                 worktreeOrchestrator.presentError(error)
                             }
                         }
                     },
-                    onCancel: { branchInputContext = nil }
+                    onCancel: { createSpaceRequest = nil }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -65,7 +77,7 @@ struct WorkspaceWindowContent: View {
             Text(String(describing: err))   // WorktreeError conforms to CustomStringConvertible
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
-        .animation(.easeInOut(duration: 0.15), value: branchInputContext != nil)
+        .animation(.easeInOut(duration: 0.15), value: createSpaceRequest != nil)
         .animation(.easeInOut(duration: 0.15), value: worktreeOrchestrator.isCreating)
         .onReceive(NotificationCenter.default.publisher(for: .toggleDebugOverlay)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,
@@ -76,41 +88,52 @@ struct WorkspaceWindowContent: View {
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }
             let workspaceID = notification.userInfo?[Notification.createSpaceWorkspaceIDKey] as? UUID
-            // Resolve working directory from the workspace itself rather than
-            // expecting it in userInfo.
             let workspace: Workspace? = {
-                guard let id = workspaceID else { return workspaceCollection.activeWorkspace }
-                return workspaceCollection.workspaces.first { $0.id == id }
-            }()
-            let wd = workspace?.spaceCollection.resolveWorkingDirectory() ?? ""
-            Task {
-                guard let repoRoot = try? await WorktreeService.resolveRepoRoot(from: wd) else {
-                    return
+                if let id = workspaceID,
+                   let ws = workspaceCollection.workspaces.first(where: { $0.id == id }) {
+                    return ws
                 }
-                let repoURL = URL(filePath: repoRoot)
-                let configURL = WorktreeService.resolveConfigFile(repoRoot: repoURL)
+                return workspaceCollection.activeWorkspace
+            }()
+            guard let workspace else { return }
+            let wd = workspace.spaceCollection.resolveWorkingDirectory()
+            Task {
+                let repoURL: URL?
+                let configRepo: URL
+                if let repoRootPath = try? await WorktreeService.resolveRepoRoot(from: wd) {
+                    repoURL = URL(filePath: repoRootPath)
+                    configRepo = repoURL!
+                } else {
+                    repoURL = nil
+                    configRepo = URL(filePath: wd.isEmpty ? NSHomeDirectory() : wd)
+                }
+                let configURL = WorktreeService.resolveConfigFile(repoRoot: configRepo)
                 let config: WorktreeConfig
                 if let configURL, let parsed = try? WorktreeConfigParser.parse(fileURL: configURL) {
                     config = parsed
                 } else {
                     config = WorktreeConfig()
                 }
-                branchInputContext = BranchInputContext(
+                createSpaceRequest = CreateSpaceRequest(
+                    workspace: workspace,
                     repoRoot: repoURL,
-                    worktreeDir: config.worktreeDir,
-                    workspaceID: workspaceID
+                    worktreeDir: config.worktreeDir
                 )
             }
         }
     }
 }
 
-// MARK: - Branch Input Context
+// MARK: - Create Space Request
 
-private struct BranchInputContext {
-    let repoRoot: URL
+private struct CreateSpaceRequest: Equatable {
+    weak var workspace: Workspace?
+    let repoRoot: URL?
     let worktreeDir: String
-    // Optional because the Cmd+Shift+B keyboard path posts the notification
-    // without a workspace ID (it implicitly targets the active workspace).
-    let workspaceID: UUID?
+
+    static func == (lhs: CreateSpaceRequest, rhs: CreateSpaceRequest) -> Bool {
+        lhs.workspace?.id == rhs.workspace?.id
+            && lhs.repoRoot == rhs.repoRoot
+            && lhs.worktreeDir == rhs.worktreeDir
+    }
 }
