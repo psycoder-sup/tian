@@ -219,8 +219,11 @@ struct BranchListViewModelTests {
             entry(local: "c", date: now.addingTimeInterval(-20)),
         ])
         await model.load(repoRoot: "/unused")
-        // highlight starts on "a"
-        #expect(model.highlightedID == "local:a")
+        // Empty query → no auto-highlight. First moveHighlight anchors to first
+        // selectable row ("a"), then a second move skips the in-use "b".
+        #expect(model.highlightedID == nil)
+        model.moveHighlight(.down)
+        #expect(model.highlightedID == "local:a")  // anchored to first selectable
         model.moveHighlight(.down)
         #expect(model.highlightedID == "local:c")  // skipped "b"
         model.moveHighlight(.up)
@@ -284,6 +287,30 @@ struct BranchListViewModelTests {
 
         #expect(model.loadError == nil)
         #expect(model.rows.map(\.displayName) == ["a"])
+    }
+
+    // MARK: - Empty-query / browse-mode highlight
+
+    @Test func emptyQueryDoesNotAutoHighlight() async {
+        let viewModel = BranchListViewModel(service: FakeService([
+            entry(local: "main",         date: Date()),
+            entry(local: "feature/auth", date: Date().addingTimeInterval(-3600)),
+        ]))
+        await viewModel.load(repoRoot: "/tmp/fake-repo")
+        // Query starts empty; rows are populated; highlight must be nil.
+        #expect(!viewModel.rows.isEmpty)
+        #expect(viewModel.highlightedID == nil)
+    }
+
+    @Test func nonEmptyQueryAutoHighlightsFirstRow() async {
+        let viewModel = BranchListViewModel(service: FakeService([
+            entry(local: "main",         date: Date()),
+            entry(local: "feature/auth", date: Date().addingTimeInterval(-3600)),
+        ]))
+        await viewModel.load(repoRoot: "/tmp/fake-repo")
+        viewModel.query = "fea"
+        #expect(viewModel.highlightedID != nil)
+        #expect(viewModel.rows.first?.displayName == "feature/auth")
     }
 }
 
