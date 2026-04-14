@@ -33,4 +33,28 @@ struct CreateSpaceFlowTests {
         #expect(s2.name == "feature/auth")
         #expect(s1.id != s2.id)
     }
+
+    // MARK: - Branch name sanitization
+
+    @Test func sanitizeReplacesSpacesWithDashes() {
+        #expect(CreateSpaceView.sanitizeBranchName("foo bar baz") == "foo-bar-baz")
+        #expect(CreateSpaceView.sanitizeBranchName(" leading") == "-leading")
+        #expect(CreateSpaceView.sanitizeBranchName("trailing ") == "trailing-")
+        #expect(CreateSpaceView.sanitizeBranchName("no-spaces") == "no-spaces")
+    }
+
+    @Test func sanitizeLeavesInvalidCharsAlone() {
+        #expect(CreateSpaceView.sanitizeBranchName("foo~bar") == "foo~bar")
+        #expect(CreateSpaceView.sanitizeBranchName("a:b") == "a:b")
+    }
+
+    @Test func invalidCharsDetected() {
+        #expect(CreateSpaceView.containsInvalidBranchChars("good-name") == false)
+        #expect(CreateSpaceView.containsInvalidBranchChars("nope~") == true)
+        #expect(CreateSpaceView.containsInvalidBranchChars("a^b") == true)
+        #expect(CreateSpaceView.containsInvalidBranchChars("a:b") == true)
+        #expect(CreateSpaceView.containsInvalidBranchChars("a..b") == true)
+        #expect(CreateSpaceView.containsInvalidBranchChars("-leading") == true)
+        #expect(CreateSpaceView.containsInvalidBranchChars("") == false)
+    }
 }

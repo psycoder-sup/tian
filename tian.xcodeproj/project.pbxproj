@@ -23,7 +23,6 @@
 		208DF6D1B0AA9858B23712BE /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = E54F093B858D398EE2617980 /* ArgumentParser */; };
 		20AF6323F0F0AB228066C57B /* WorkingDirectoryResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDDE2ED7D2608697304D67E /* WorkingDirectoryResolverTests.swift */; };
 		21AC6781B4B7489148506218 /* SidebarExpandedContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E455F6E7F7488A6B2BC5B2 /* SidebarExpandedContentView.swift */; };
-		22306B7165B45EAA149B8C83 /* BranchNameInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E7BB77C29C70C55C457648 /* BranchNameInputView.swift */; };
 		23E6489B3FA38A33C5C1BBC7 /* SpaceDragItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFED1506E346F83A65931BAD /* SpaceDragItem.swift */; };
 		295A98524608ECE3CD5355C2 /* tian-cli in Resources */ = {isa = PBXBuildFile; fileRef = 092AB2597E484AA828879F40 /* tian-cli */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2B5BB76626C0F9F0FC1D31DE /* SpaceCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6590C4F1AFA0E55D489EE0D /* SpaceCollection.swift */; };
@@ -122,6 +121,7 @@
 		C098E93AB50A8E8D6E75AEFF /* FuzzyMatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7140393154BCD53CFFD83DFE /* FuzzyMatchTests.swift */; };
 		C0E3FC24613692FDF2EF9C2A /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2CD64B85352B5982ABE1B55 /* Logger.swift */; };
 		C1582D2CF730CA1104472130 /* OutputFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9698F7F1BEBF1C432FA185DF /* OutputFormatter.swift */; };
+		C21005B4D43E8D07D68F6C40 /* CreateSpaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D6E4FF851A43BA3FF840EE1 /* CreateSpaceView.swift */; };
 		C4A3E856B0D6346AE36A0BA8 /* PRStatusIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1669416BDE11E81BA9B9C1 /* PRStatusIndicatorView.swift */; };
 		C6CAEFC12D6D036CF92584AC /* SessionRestorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CB56C32480CC3BB01AB1368 /* SessionRestorerTests.swift */; };
 		C8EBE80EA4174113821732D8 /* ShellReadinessWaiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5162002EFF8A791CA0E99AE /* ShellReadinessWaiter.swift */; };
@@ -222,7 +222,6 @@
 		4D1CF8E5CD889C94F7100606 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4E74E42B9E6B13136E4141EA /* SplitTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTreeView.swift; sourceTree = "<group>"; };
 		50A300DFD4B65ECB86A0CCB3 /* DirectoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryPicker.swift; sourceTree = "<group>"; };
-		50E7BB77C29C70C55C457648 /* BranchNameInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BranchNameInputView.swift; sourceTree = "<group>"; };
 		51D80B9916749BC96966D909 /* PaneExitOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneExitOverlay.swift; sourceTree = "<group>"; };
 		55B7F7BEF5AB6488083ABEF5 /* PaneNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneNode.swift; sourceTree = "<group>"; };
 		562E6880ADE2A5E402341C06 /* EnvironmentBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBuilderTests.swift; sourceTree = "<group>"; };
@@ -261,6 +260,7 @@
 		9698F7F1BEBF1C432FA185DF /* OutputFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFormatter.swift; sourceTree = "<group>"; };
 		98A860BB860703E889E39D94 /* WorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTests.swift; sourceTree = "<group>"; };
 		9A1481DC1BE3159A71371719 /* SpaceGitContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceGitContext.swift; sourceTree = "<group>"; };
+		9D6E4FF851A43BA3FF840EE1 /* CreateSpaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateSpaceView.swift; sourceTree = "<group>"; };
 		9E4783A27ED48AAB25877490 /* DefaultWorkingDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultWorkingDirectoryTests.swift; sourceTree = "<group>"; };
 		9F33A96A756FDCDA426B9926 /* SpaceStatusAreaViewLabelCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceStatusAreaViewLabelCoexistenceTests.swift; sourceTree = "<group>"; };
 		9F3AABE6DD7D1FF64EE62DBE /* SidebarContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarContainerView.swift; sourceTree = "<group>"; };
@@ -386,6 +386,7 @@
 			isa = PBXGroup;
 			children = (
 				5D46540DCEFEE5FFFC7F0847 /* BranchListViewModel.swift */,
+				9D6E4FF851A43BA3FF840EE1 /* CreateSpaceView.swift */,
 			);
 			path = CreateSpace;
 			sourceTree = "<group>";
@@ -562,7 +563,6 @@
 		A0672E69400C9C41C4102348 /* Worktree */ = {
 			isa = PBXGroup;
 			children = (
-				50E7BB77C29C70C55C457648 /* BranchNameInputView.swift */,
 				A7CFB672AAC29C2374B1EBEA /* SetupCancelButton.swift */,
 				F6A23B694BB44B8C4C2CBC16 /* WorktreeCloseDialog.swift */,
 				EF121AA5B046AA14D62A8F5A /* WorktreeForceRemoveDialog.swift */,
@@ -685,7 +685,7 @@
 			path = Sidebar;
 			sourceTree = "<group>";
 		};
-		"TEMP_8E6864A7-4C8C-440D-9FBD-0243BDAF6CEC" /* Resources */ = {
+		"TEMP_DE6523DB-9335-44A4-AC7B-A02C19BE93E8" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -992,13 +992,13 @@
 				641D32EF8293F32A9B8B213B /* AppMetrics.swift in Sources */,
 				8407EEB561443152F6B3014A /* BranchListService.swift in Sources */,
 				D1643576BFEDA81E98B43B23 /* BranchListViewModel.swift in Sources */,
-				22306B7165B45EAA149B8C83 /* BranchNameInputView.swift in Sources */,
 				F8158835E0466392F26B0CCB /* BusyDotView.swift in Sources */,
 				017E9AE15465F997D537115A /* ChangeBadgeView.swift in Sources */,
 				A050DD6A90DA4D0596220306 /* ClaudeSessionDotsView.swift in Sources */,
 				3C8BD956DEDF67E010615947 /* ClaudeSessionState.swift in Sources */,
 				871B038FBC5CB27582C426AD /* CloseConfirmationDialog.swift in Sources */,
 				1DB93D09065D8F5996048A94 /* Colors.swift in Sources */,
+				C21005B4D43E8D07D68F6C40 /* CreateSpaceView.swift in Sources */,
 				7D3FBCC2A2DF7A0F10CE327F /* DebugOverlayView.swift in Sources */,
 				FC3EA821A17BA6A264C44801 /* DefaultDirectoryMenu.swift in Sources */,
 				EF4245F7C570DE87C718757B /* DirectoryPicker.swift in Sources */,
