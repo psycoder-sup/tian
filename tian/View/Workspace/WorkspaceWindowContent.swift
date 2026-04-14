@@ -72,11 +72,17 @@ struct WorkspaceWindowContent: View {
                   obj === workspaceCollection else { return }
             showDebugOverlay.toggle()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showWorktreeBranchInput)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .showCreateSpaceInput)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }
-            let wd = notification.userInfo?[Notification.worktreeWorkingDirectoryKey] as? String ?? ""
-            let workspaceID = notification.userInfo?[Notification.worktreeWorkspaceIDKey] as? UUID
+            let workspaceID = notification.userInfo?[Notification.createSpaceWorkspaceIDKey] as? UUID
+            // Resolve working directory from the workspace itself rather than
+            // expecting it in userInfo.
+            let workspace: Workspace? = {
+                guard let id = workspaceID else { return workspaceCollection.activeWorkspace }
+                return workspaceCollection.workspaces.first { $0.id == id }
+            }()
+            let wd = workspace?.spaceCollection.resolveWorkingDirectory() ?? ""
             Task {
                 guard let repoRoot = try? await WorktreeService.resolveRepoRoot(from: wd) else {
                     return

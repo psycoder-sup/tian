@@ -36,11 +36,10 @@ struct SidebarExpandedContentView: View {
                         onAddSpace: { addSpace(to: workspace) },
                         onNewWorktreeSpace: {
                             NotificationCenter.default.post(
-                                name: .showWorktreeBranchInput,
+                                name: .showCreateSpaceInput,
                                 object: workspaceCollection,
                                 userInfo: [
-                                    Notification.worktreeWorkingDirectoryKey: workspace.spaceCollection.resolveWorkingDirectory(),
-                                    Notification.worktreeWorkspaceIDKey: workspace.id
+                                    Notification.createSpaceWorkspaceIDKey: workspace.id
                                 ]
                             )
                         },

@@ -177,11 +177,15 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Worktree
 
     private func handleNewWorktreeSpace() {
-        let wd = workspaceCollection.activeSpaceCollection?.resolveWorkingDirectory() ?? ""
+        let workspaceID = workspaceCollection.activeWorkspaceID
+        var userInfo: [AnyHashable: Any] = [:]
+        if let id = workspaceID {
+            userInfo[Notification.createSpaceWorkspaceIDKey] = id
+        }
         NotificationCenter.default.post(
-            name: .showWorktreeBranchInput,
+            name: .showCreateSpaceInput,
             object: workspaceCollection,
-            userInfo: [Notification.worktreeWorkingDirectoryKey: wd]
+            userInfo: userInfo
         )
     }
 

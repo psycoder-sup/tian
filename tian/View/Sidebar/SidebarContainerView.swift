@@ -6,12 +6,11 @@ extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
     static let focusSidebar = Notification.Name("focusSidebar")
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
-    static let showWorktreeBranchInput = Notification.Name("showWorktreeBranchInput")
+    static let showCreateSpaceInput = Notification.Name("showCreateSpaceInput")
 }
 
 extension Notification {
-    static let worktreeWorkingDirectoryKey = "workingDirectory"
-    static let worktreeWorkspaceIDKey = "worktreeWorkspaceID"
+    static let createSpaceWorkspaceIDKey = "createSpaceWorkspaceID"
 }
 
 struct SidebarContainerView: View {
