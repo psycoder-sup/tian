@@ -8,7 +8,6 @@ struct SidebarWorkspaceHeaderView: View {
     let isCreatingWorktree: Bool
     let onToggleDisclosure: () -> Void
     let onAddSpace: () -> Void
-    let onNewWorktreeSpace: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
 
@@ -39,23 +38,17 @@ struct SidebarWorkspaceHeaderView: View {
                     .scaleEffect(0.7)
             }
 
-            Button(action: onNewWorktreeSpace) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color(white: 0.4, opacity: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("new-worktree-space-\(workspace.id)")
-            .accessibilityLabel("New worktree space in \(workspace.name)")
-
             Button(action: onAddSpace) {
-                Text("+")
-                    .font(.system(size: 12, weight: .medium))
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color(white: 0.4, opacity: 1))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("add-space-\(workspace.id)")
             .accessibilityLabel("New space in \(workspace.name)")
+            .help("New space (⇧⌘T)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
@@ -80,7 +73,7 @@ struct SidebarWorkspaceHeaderView: View {
                 onSet: onSetDirectory
             )
             Divider()
-            Button("New Worktree Space...", action: onNewWorktreeSpace)
+            Button("New Space...", action: onAddSpace)
             Divider()
             Button("Close Workspace", action: onClose)
         }
