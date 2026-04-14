@@ -1,6 +1,6 @@
-# aterm
+# tian
 
-A native macOS terminal emulator built with SwiftUI. Uses the full ghostty embedding API (`ghostty_app_t` / `ghostty_surface_t`) from the Ghostty project. Ghostty handles PTY, VT parsing, Metal rendering, font atlas, cursor, selection, scrollback, and color themes internally. aterm provides the NSView + CAMetalLayer and forwards keyboard/mouse events.
+A native macOS terminal emulator built with SwiftUI. Uses the full ghostty embedding API (`ghostty_app_t` / `ghostty_surface_t`) from the Ghostty project. Ghostty handles PTY, VT parsing, Metal rendering, font atlas, cursor, selection, scrollback, and color themes internally. tian provides the NSView + CAMetalLayer and forwards keyboard/mouse events.
 
 ## Target
 
@@ -8,7 +8,7 @@ A native macOS terminal emulator built with SwiftUI. Uses the full ghostty embed
 
 ## Concepts
 
-aterm organizes terminals in a 4-level hierarchy:
+tian organizes terminals in a 4-level hierarchy:
 
 ```
 Workspace → Space → Tab → Pane (split tree)
@@ -44,7 +44,7 @@ Cascading close via `onEmpty` callbacks: `PaneViewModel` → `TabModel` → `Spa
 - `Pane/` — `PaneViewModel`, `SplitTree`, `PaneNode`, `SplitNavigation`, `SplitLayout`, `PaneHierarchyContext`, `PaneStatusManager`
 - `Core/` — `GhosttyApp`, `GhosttyTerminalSurface`, notifications, IPC, `ClaudeSessionState`, `GitTypes`
 - `View/` — SwiftUI components (terminal, sidebar, tabs, splits)
-- `WindowManagement/` — `WorkspaceWindowController`, `WindowCoordinator`, `AtermAppDelegate`
+- `WindowManagement/` — `WorkspaceWindowController`, `WindowCoordinator`, `TianAppDelegate`
 - `Persistence/` — Session serialization/restoration (`SessionState`)
 - `DragAndDrop/` — Drag item types for reordering workspaces/spaces/tabs
 - `Input/` — Key binding registry and handling
@@ -53,20 +53,20 @@ Cascading close via `onEmpty` callbacks: `PaneViewModel` → `TabModel` → `Spa
 
 ### Key Layers
 
-- **App** — `AtermApp` (SwiftUI entry point, GhosttyApp init), `AtermAppDelegate` (lifecycle, session restoration)
+- **App** — `TianApp` (SwiftUI entry point, GhosttyApp init), `TianAppDelegate` (lifecycle, session restoration)
 - **Window** — `WindowCoordinator` (multi-window management), `WorkspaceWindowController` (NSWindowController per window)
 - **Core** — `GhosttyApp` (singleton wrapping `ghostty_app_t`, runtime callbacks, clipboard, tick), `GhosttyTerminalSurface` (per-terminal `ghostty_surface_t` wrapper)
 - **View** — `TerminalSurfaceView` (persistent NSView + CAMetalLayer, keyboard/mouse/IME forwarding), `WorkspaceWindowContent` (SwiftUI root per window)
 
 ### State Management
 
-All model classes use `@MainActor @Observable`. Ghostty surface events flow through `NotificationCenter` (surface close/exit/title/pwd/bell). `PaneHierarchyContext` carries workspace/space/tab IDs down to panes as `ATERM_*` environment variables.
+All model classes use `@MainActor @Observable`. Ghostty surface events flow through `NotificationCenter` (surface close/exit/title/pwd/bell). `PaneHierarchyContext` carries workspace/space/tab IDs down to panes as `TIAN_*` environment variables.
 
 ## Build
 
 Run `scripts/build-ghostty.sh` to build and vendor GhosttyKit.xcframework from the ghostty source. Requires `zig` (`brew install zig`).
 
-The Xcode project is generated via **XcodeGen** (`project.yml`). After adding, removing, or renaming source files, run `xcodegen generate` to regenerate `aterm.xcodeproj`. Never edit `project.pbxproj` manually.
+The Xcode project is generated via **XcodeGen** (`project.yml`). After adding, removing, or renaming source files, run `xcodegen generate` to regenerate `tian.xcodeproj`. Never edit `project.pbxproj` manually.
 
 When using `xcodebuild`, always pass `-derivedDataPath .build` to keep build artifacts in the project directory.
 

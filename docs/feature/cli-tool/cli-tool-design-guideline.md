@@ -1,4 +1,4 @@
-# Design Guideline: CLI Tool (`aterm`)
+# Design Guideline: CLI Tool (`tian`)
 
 **Author:** psycoder
 **Date:** 2026-04-05
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-The `aterm` CLI tool enables programmatic control of the aterm terminal emulator from within its own shell sessions. It communicates with the running aterm app over a Unix domain socket to manage the workspace hierarchy (Workspace > Space > Tab > Pane), report process status to the sidebar, and trigger macOS system notifications.
+The `tian` CLI tool enables programmatic control of the tian terminal emulator from within its own shell sessions. It communicates with the running tian app over a Unix domain socket to manage the workspace hierarchy (Workspace > Space > Tab > Pane), report process status to the sidebar, and trigger macOS system notifications.
 
 This document provides implementation-ready design guidance covering IPC architecture, binary structure, app-side request handling, status display integration, notification delivery, environment variable injection, error handling, and testing strategy. All designs reference the actual codebase and existing patterns.
 
@@ -17,7 +17,7 @@ This document provides implementation-ready design guidance covering IPC archite
 
 Two use cases drive the design:
 
-1. **Claude Code hooks** -- `aterm status set --label "Thinking..."`, `aterm status clear`, `aterm notify "Build complete"`. Lightweight, high-frequency, latency-sensitive.
+1. **Claude Code hooks** -- `tian status set --label "Thinking..."`, `tian status clear`, `tian notify "Build complete"`. Lightweight, high-frequency, latency-sensitive.
 2. **Scripts and AI agents** -- Full CRUD on Workspace/Space/Tab/Pane. Lower frequency, correctness-critical.
 
 ---
@@ -26,25 +26,25 @@ Two use cases drive the design:
 
 ### Journey 1: Claude Code Hook Integration (Status + Notifications)
 
-**Persona:** Claude Code running inside an aterm pane via hooks (PreToolUse, PostToolUse, Stop).
+**Persona:** Claude Code running inside an tian pane via hooks (PreToolUse, PostToolUse, Stop).
 
 **Preconditions:**
-- aterm is running with an active shell session
-- `ATERM_SOCKET`, `ATERM_PANE_ID`, `ATERM_SPACE_ID` are present in the environment
-- `aterm` is on PATH (injected by the app into the PTY environment)
+- tian is running with an active shell session
+- `TIAN_SOCKET`, `TIAN_PANE_ID`, `TIAN_SPACE_ID` are present in the environment
+- `tian` is on PATH (injected by the app into the PTY environment)
 
 ```
 Hook fires (PreToolUse)
   |
   v
-aterm status set --label "Reading file..."  ──> CLI validates env vars
+tian status set --label "Reading file..."  ──> CLI validates env vars
   |                                               |
   |                                               v
   |                                         Connects to Unix socket
   |                                               |
   |                                               v
   |                                         Sends JSON request {action: "status.set",
-  |                                           paneID: $ATERM_PANE_ID, label: "Reading file..."}
+  |                                           paneID: $TIAN_PANE_ID, label: "Reading file..."}
   |                                               |
   |                                               v
   |                                         App IPC handler receives on background thread
@@ -67,10 +67,10 @@ Hook receives exit 0                        CLI prints nothing, exits 0
 Hook fires (Stop)
   |
   v
-aterm status clear  ────────────────────>   Same flow, StatusModel.clearStatus(paneID:)
+tian status clear  ────────────────────>   Same flow, StatusModel.clearStatus(paneID:)
   |
   v
-aterm notify "Task complete" --title "Claude Code"
+tian notify "Task complete" --title "Claude Code"
   |
   v
 CLI sends notify request  ─────────────>   App checks UNUserNotificationCenter auth
@@ -87,15 +87,15 @@ CLI exits 0 or 4                            Notification banner appears
 
 | Error | Behavior | Exit Code |
 |-------|----------|-----------|
-| `ATERM_SOCKET` missing | "Error: Not running inside aterm." | 2 |
-| Socket file missing/stale | "Error: Cannot connect to aterm (socket not found)." | 2 |
+| `TIAN_SOCKET` missing | "Error: Not running inside tian." | 2 |
+| Socket file missing/stale | "Error: Cannot connect to tian (socket not found)." | 2 |
 | App crashed mid-request | CLI times out after 5s, "Error: Connection timed out." | 2 |
 | Pane closed before status set | "Error: Pane not found: <id>" | 1 |
 | Notification permission denied | "Warning: Notification permission denied." (stderr) | 4 |
 
 **Edge cases:**
 - **Rapid status updates:** Multiple `status set` calls in quick succession. Each replaces the previous -- no queueing. The IPC handler processes serially via `@MainActor`, so no data races.
-- **Pane closed during hook execution:** The hook's `ATERM_PANE_ID` becomes stale. The IPC handler returns a "pane not found" error. The hook exits non-zero but this is non-fatal for Claude Code.
+- **Pane closed during hook execution:** The hook's `TIAN_PANE_ID` becomes stale. The IPC handler returns a "pane not found" error. The hook exits non-zero but this is non-fatal for Claude Code.
 - **App restarted between hooks:** The socket disappears. The next CLI call fails with exit code 2. The new app instance creates a fresh socket but the old env vars are stale.
 
 ---
@@ -109,7 +109,7 @@ CLI exits 0 or 4                            Notification banner appears
 ```
 # Script: set up a "my-project" workspace
 # Step 1: Create workspace
-WS_ID=$(aterm workspace create "my-project" --directory ~/Code/my-project)
+WS_ID=$(tian workspace create "my-project" --directory ~/Code/my-project)
   |
   v
 CLI sends: {action: "workspace.create", name: "my-project", directory: "~/Code/my-project"}
@@ -122,8 +122,8 @@ CLI stdout: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 Exit 0
 
 # Step 2: Create spaces in the new workspace
-SPACE_DEV=$(aterm space create "development" --workspace $WS_ID)
-SPACE_TEST=$(aterm space create "testing" --workspace $WS_ID)
+SPACE_DEV=$(tian space create "development" --workspace $WS_ID)
+SPACE_TEST=$(tian space create "testing" --workspace $WS_ID)
   |
   v
 App: workspace.spaceCollection.createSpace(workingDirectory:)
@@ -132,8 +132,8 @@ App: workspace.spaceCollection.createSpace(workingDirectory:)
 CLI stdout: "<new-space-uuid>"
 
 # Step 3: Create tabs and split panes
-TAB_SERVER=$(aterm tab create --space $SPACE_DEV --directory ~/Code/my-project)
-aterm pane split --direction horizontal
+TAB_SERVER=$(tian tab create --space $SPACE_DEV --directory ~/Code/my-project)
+tian pane split --direction horizontal
   |
   v
 App: space.createTab(workingDirectory:)
@@ -143,7 +143,7 @@ App: tab.paneViewModel.splitPane(direction: .horizontal)
 CLI stdout: "<new-tab-uuid>" / "<new-pane-uuid>"
 
 # Step 4: Navigate to the dev space
-aterm space focus $SPACE_DEV
+tian space focus $SPACE_DEV
 ```
 
 **Error states:**
@@ -158,29 +158,29 @@ aterm space focus $SPACE_DEV
 **Edge cases:**
 - **Concurrent script commands:** Two scripts create workspaces simultaneously. The `@MainActor` serialization ensures no data races on `WorkspaceCollection.workspaces`. Each command gets a unique UUID.
 - **Script creates workspace in background, app is quit:** Socket disappears. All subsequent commands fail with exit code 2.
-- **Stale env var after workspace focus:** After `aterm workspace focus $WS_ID`, the calling pane's `ATERM_WORKSPACE_ID` env var still points to the *original* workspace. This is expected -- env vars are set at spawn time and do not update. The CLI sends all env vars; the IPC handler uses them for "defaults to current" resolution, not for validation (except stale-detection on hierarchy lookups).
+- **Stale env var after workspace focus:** After `tian workspace focus $WS_ID`, the calling pane's `TIAN_WORKSPACE_ID` env var still points to the *original* workspace. This is expected -- env vars are set at spawn time and do not update. The CLI sends all env vars; the IPC handler uses them for "defaults to current" resolution, not for validation (except stale-detection on hierarchy lookups).
 
 ---
 
 ### Journey 3: First-Time User Discovery
 
-**Persona:** A developer who has aterm installed and runs `aterm` from a different terminal emulator (iTerm2, Terminal.app) or discovers the CLI by tab-completing.
+**Persona:** A developer who has tian installed and runs `tian` from a different terminal emulator (iTerm2, Terminal.app) or discovers the CLI by tab-completing.
 
 ```
-$ aterm workspace list                     # From iTerm2
+$ tian workspace list                     # From iTerm2
 
-Error: Not running inside aterm.
-The aterm CLI can only be used from within an aterm terminal session.
+Error: Not running inside tian.
+The tian CLI can only be used from within an tian terminal session.
 
 Exit code: 2
 ```
 
 ```
-$ aterm --help                             # From anywhere
+$ tian --help                             # From anywhere
 
-aterm - Control aterm terminal emulator from within its shell sessions.
+tian - Control tian terminal emulator from within its shell sessions.
 
-Usage: aterm <resource> <verb> [arguments] [--flags]
+Usage: tian <resource> <verb> [arguments] [--flags]
 
 Resources:
   workspace    Manage workspaces
@@ -194,13 +194,13 @@ Options:
   --help       Show help for a command
   --version    Show CLI version
 
-Note: This CLI only works from within an aterm terminal session.
-Environment variables ATERM_SOCKET and ATERM_PANE_ID must be present.
+Note: This CLI only works from within an tian terminal session.
+Environment variables TIAN_SOCKET and TIAN_PANE_ID must be present.
 
-Exit code: 0 (--help always succeeds even outside aterm)
+Exit code: 0 (--help always succeeds even outside tian)
 ```
 
-**Design decision:** `--help` and `--version` succeed without env vars. All other commands check `ATERM_SOCKET` first. This lets users discover the CLI without needing to be inside aterm.
+**Design decision:** `--help` and `--version` succeed without env vars. All other commands check `TIAN_SOCKET` first. This lets users discover the CLI without needing to be inside tian.
 
 ---
 
@@ -209,7 +209,7 @@ Exit code: 0 (--help always succeeds even outside aterm)
 **Persona:** A script attempting to close a workspace/space/tab that contains panes with running foreground processes.
 
 ```
-$ aterm workspace close $WS_ID
+$ tian workspace close $WS_ID
 
 Error: Workspace "my-project" has 3 panes with running processes:
   - Space "development", Tab "Tab 1", Pane d4e5f6a7-...  (node)
@@ -221,7 +221,7 @@ Exit code: 3
 ```
 
 ```
-$ aterm workspace close $WS_ID --force
+$ tian workspace close $WS_ID --force
 
 Workspace "my-project" closed (3 running processes terminated).
 
@@ -245,11 +245,11 @@ Exit code: 0
 ### Socket Location and Lifecycle
 
 ```
-Socket path: $TMPDIR/aterm-<uid>.sock
-Example:     /var/folders/xx/xxxxx/T/aterm-501.sock
+Socket path: $TMPDIR/tian-<uid>.sock
+Example:     /var/folders/xx/xxxxx/T/tian-501.sock
 ```
 
-**Why `$TMPDIR`:** Per-user, writable without sudo, automatically cleaned on reboot. The UID suffix handles multi-user systems. `$TMPDIR` is preferred over `~/Library/Application Support/aterm/` because socket files should not survive app termination.
+**Why `$TMPDIR`:** Per-user, writable without sudo, automatically cleaned on reboot. The UID suffix handles multi-user systems. `$TMPDIR` is preferred over `~/Library/Application Support/tian/` because socket files should not survive app termination.
 
 **Lifecycle:**
 
@@ -257,7 +257,7 @@ Example:     /var/folders/xx/xxxxx/T/aterm-501.sock
 App Launch
   |
   v
-Check for stale socket file at $TMPDIR/aterm-<uid>.sock
+Check for stale socket file at $TMPDIR/tian-<uid>.sock
   |-- exists? --> unlink() it (stale from crash)
   v
 Create socket, bind, listen  (mode 0600, owner-only)
@@ -303,7 +303,7 @@ Length-prefixed framing avoids the delimiter-parsing pitfalls of newline-delimit
 - `v`: Protocol version. Allows version mismatch detection.
 - `action`: Dot-separated resource.verb (e.g., `workspace.create`, `status.set`, `pane.split`).
 - `params`: Action-specific parameters.
-- `env`: All ATERM_* env var values from the calling shell. Sent with every request for stale detection and "defaults to current" resolution.
+- `env`: All TIAN_* env var values from the calling shell. Sent with every request for stale detection and "defaults to current" resolution.
 
 **Response schema (success):**
 
@@ -425,11 +425,11 @@ Each CLI invocation opens a new connection, sends one request, receives one resp
 ### Binary Target Structure
 
 ```
-aterm.app/
+tian.app/
   Contents/
     MacOS/
-      aterm           <-- Main app executable
-      aterm-cli       <-- CLI binary (standalone, no GhosttyKit dependency)
+      tian           <-- Main app executable
+      tian-cli       <-- CLI binary (standalone, no GhosttyKit dependency)
 ```
 
 The CLI binary is a separate Swift executable target in `project.yml`. It links only against Foundation and System (for Unix socket operations). It must NOT link against GhosttyKit, AppKit, or SwiftUI.
@@ -437,15 +437,15 @@ The CLI binary is a separate Swift executable target in `project.yml`. It links 
 **project.yml addition:**
 
 ```yaml
-  aterm-cli:
+  tian-cli:
     type: tool
     platform: macOS
     sources:
-      - path: aterm-cli
+      - path: tian-cli
     settings:
       base:
-        PRODUCT_NAME: aterm-cli
-        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.cli
+        PRODUCT_NAME: tian-cli
+        PRODUCT_BUNDLE_IDENTIFIER: com.tian.cli
         SWIFT_VERSION: "6.0"
         INSTALL_PATH: ""
         SKIP_INSTALL: false
@@ -459,7 +459,7 @@ After adding, run `xcodegen generate` to regenerate the project.
 ### Source Layout
 
 ```
-aterm-cli/
+tian-cli/
   main.swift              -- Entry point, argument parsing, dispatch
   IPCClient.swift         -- Socket connect, send request, receive response
   Commands/
@@ -475,8 +475,8 @@ aterm-cli/
   Output/
     TableFormatter.swift  -- Human-readable table output
     JSONFormatter.swift   -- Machine-readable JSON output
-  CLILogger.swift         -- Logging to ~/Library/Logs/aterm/cli.log
-  EnvironmentCheck.swift  -- ATERM_* env var validation
+  CLILogger.swift         -- Logging to ~/Library/Logs/tian/cli.log
+  EnvironmentCheck.swift  -- TIAN_* env var validation
 ```
 
 ### Argument Parsing
@@ -488,10 +488,10 @@ Use Swift Argument Parser (`swift-argument-parser`) for argument parsing. It pro
 import ArgumentParser
 
 @main
-struct AtermCLI: ParsableCommand {
+struct TianCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "aterm",
-        abstract: "Control aterm terminal emulator from within its shell sessions.",
+        commandName: "tian",
+        abstract: "Control tian terminal emulator from within its shell sessions.",
         version: "1.0.0",
         subcommands: [
             WorkspaceCommand.self,
@@ -541,7 +541,7 @@ struct WorkspaceCommand: ParsableCommand {
 **Table output** (default for `list` commands):
 
 ```
-$ aterm workspace list
+$ tian workspace list
   NAME          ID                                     SPACES  ACTIVE
 * my-project    a1b2c3d4-e5f6-7890-abcd-ef1234567890   3       yes
   personal      f0e1d2c3-b4a5-6789-0123-456789abcdef   1       no
@@ -567,11 +567,11 @@ $ aterm workspace list
 
 ```
 # Create: print only the UUID (easy to capture with $(...))
-$ aterm workspace create "my-project"
+$ tian workspace create "my-project"
 a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 # Close: human-readable confirmation to stderr, nothing to stdout
-$ aterm workspace close a1b2c3d4-...
+$ tian workspace close a1b2c3d4-...
 # (no stdout output -- exit code 0 signals success)
 
 # Focus, status set/clear, notify: same pattern -- exit code only
@@ -581,12 +581,12 @@ $ aterm workspace close a1b2c3d4-...
 
 ### CLI Logging
 
-Every invocation is logged to `~/Library/Logs/aterm/cli.log`:
+Every invocation is logged to `~/Library/Logs/tian/cli.log`:
 
 ```
-2026-04-05T14:32:01.123Z  aterm workspace create "my-project" --directory ~/Code  exit=0  id=a1b2c3d4  dur=23ms
-2026-04-05T14:32:01.456Z  aterm status set --label "Thinking..."  exit=0  dur=8ms
-2026-04-05T14:32:05.789Z  aterm workspace close 00000000-...  exit=1  err="not found"  dur=12ms
+2026-04-05T14:32:01.123Z  tian workspace create "my-project" --directory ~/Code  exit=0  id=a1b2c3d4  dur=23ms
+2026-04-05T14:32:01.456Z  tian status set --label "Thinking..."  exit=0  dur=8ms
+2026-04-05T14:32:05.789Z  tian workspace close 00000000-...  exit=1  err="not found"  dur=12ms
 ```
 
 **Log rotation:** Rotate when file exceeds 5MB. Keep one `.1` backup. Check size before appending.
@@ -598,7 +598,7 @@ Every invocation is logged to `~/Library/Logs/aterm/cli.log`:
 ### New Files
 
 ```
-aterm/
+tian/
   IPC/
     IPCServer.swift          -- Socket server lifecycle (bind, listen, accept)
     IPCRequestRouter.swift   -- Parse action, dispatch to handler
@@ -615,7 +615,7 @@ aterm/
 ### IPCServer Lifecycle
 
 ```swift
-// aterm/IPC/IPCServer.swift
+// tian/IPC/IPCServer.swift
 
 @MainActor
 final class IPCServer {
@@ -626,7 +626,7 @@ final class IPCServer {
     init() {
         let uid = getuid()
         let tmpDir = NSTemporaryDirectory()
-        self.socketPath = "\(tmpDir)aterm-\(uid).sock"
+        self.socketPath = "\(tmpDir)tian-\(uid).sock"
     }
 
     func start() {
@@ -661,7 +661,7 @@ final class IPCServer {
         // Accept connections on a background queue
         let source = DispatchSource.makeReadSource(
             fileDescriptor: serverFD,
-            queue: DispatchQueue(label: "com.aterm.ipc", qos: .userInitiated)
+            queue: DispatchQueue(label: "com.tian.ipc", qos: .userInitiated)
         )
         source.setEventHandler { [weak self] in
             self?.acceptConnection()
@@ -693,12 +693,12 @@ final class IPCServer {
 }
 ```
 
-**Where to start/stop:** The `IPCServer` is owned by `AtermAppDelegate`. Start in `applicationDidFinishLaunching`, stop in `applicationWillTerminate`.
+**Where to start/stop:** The `IPCServer` is owned by `TianAppDelegate`. Start in `applicationDidFinishLaunching`, stop in `applicationWillTerminate`.
 
 ```swift
-// AtermAppDelegate.swift (modified)
+// TianAppDelegate.swift (modified)
 @MainActor
-class AtermAppDelegate: NSObject, NSApplicationDelegate {
+class TianAppDelegate: NSObject, NSApplicationDelegate {
     let workspaceManager = WorkspaceManager()
     let windowCoordinator = WindowCoordinator()
     private lazy var quitFlowCoordinator = QuitFlowCoordinator(windowCoordinator: windowCoordinator)
@@ -726,7 +726,7 @@ class AtermAppDelegate: NSObject, NSApplicationDelegate {
 ### Request Routing
 
 ```swift
-// aterm/IPC/IPCRequestRouter.swift
+// tian/IPC/IPCRequestRouter.swift
 
 @MainActor
 final class IPCRequestRouter {
@@ -747,7 +747,7 @@ final class IPCRequestRouter {
         // v1: single window, so we use the first (and only) controller
         guard let collection = windowCoordinator.allWorkspaceCollections.first else {
             return .error(code: "no_window",
-                         message: "No aterm window is open.",
+                         message: "No tian window is open.",
                          exitCode: 1)
         }
 
@@ -798,7 +798,7 @@ private func handleConnection(fd: Int32) {
         let responseData = try! JSONEncoder().encode(response)
 
         // Write response back (can happen off main thread)
-        DispatchQueue(label: "com.aterm.ipc.write").async {
+        DispatchQueue(label: "com.tian.ipc.write").async {
             writeLengthPrefixedData(fd: fd, data: responseData)
             close(fd)
         }
@@ -841,7 +841,7 @@ func focus(_ request: IPCRequest, collection: WorkspaceCollection) -> IPCRespons
 A new `@Observable` model that maps pane UUIDs to status labels:
 
 ```swift
-// aterm/Models/StatusModel.swift
+// tian/Models/StatusModel.swift
 
 @MainActor @Observable
 final class StatusModel {
@@ -877,7 +877,7 @@ final class StatusModel {
 }
 ```
 
-**Ownership:** The `StatusModel` is a singleton owned by `IPCRequestRouter` (or `AtermAppDelegate`). It is passed down to the view layer via the environment or as a direct dependency.
+**Ownership:** The `StatusModel` is a singleton owned by `IPCRequestRouter` (or `TianAppDelegate`). It is passed down to the view layer via the environment or as a direct dependency.
 
 **Cleanup on pane close:** Wire into the existing `PaneViewModel.closePane` flow. When a pane closes, its surface observer fires `surfaceCloseNotification`. We add a parallel listener in the IPC layer:
 
@@ -1022,7 +1022,7 @@ When no status:
 ### UNUserNotificationCenter Integration
 
 ```swift
-// aterm/IPC/Handlers/NotifyHandler.swift
+// tian/IPC/Handlers/NotifyHandler.swift
 
 import UserNotifications
 
@@ -1033,7 +1033,7 @@ enum NotifyHandler {
 
     static func send(_ request: IPCRequest) async -> IPCResponse {
         let message = request.params["message"] ?? ""
-        let title = request.params["title"] ?? "aterm"
+        let title = request.params["title"] ?? "tian"
         let subtitle = request.params["subtitle"]
         let paneID = request.env["paneID"] ?? ""
 
@@ -1050,7 +1050,7 @@ enum NotifyHandler {
         switch authStatus {
         case .denied:
             return .error(code: "permission_denied",
-                         message: "Notification permission denied. Enable in System Settings > Notifications > aterm.",
+                         message: "Notification permission denied. Enable in System Settings > Notifications > tian.",
                          exitCode: 4)
         case .notDetermined:
             // Should not happen after requesting, but handle gracefully
@@ -1105,11 +1105,11 @@ enum NotifyHandler {
 
 ### Click-to-Focus Routing
 
-When the user clicks a notification, aterm must activate the source pane. This requires implementing `UNUserNotificationCenterDelegate`:
+When the user clicks a notification, tian must activate the source pane. This requires implementing `UNUserNotificationCenterDelegate`:
 
 ```swift
-// In AtermAppDelegate (extended)
-extension AtermAppDelegate: UNUserNotificationCenterDelegate {
+// In TianAppDelegate (extended)
+extension TianAppDelegate: UNUserNotificationCenterDelegate {
     func setupNotificationDelegate() {
         UNUserNotificationCenter.current().delegate = self
     }
@@ -1187,14 +1187,14 @@ func createSurface(
 ) {
     // ... existing config setup ...
 
-    // Inject ATERM_* environment variables before shell spawn
+    // Inject TIAN_* environment variables before shell spawn
     if let ctx = environmentContext {
-        setenv("ATERM_SOCKET", ctx.socketPath, 1)
-        setenv("ATERM_PANE_ID", ctx.paneID.uuidString, 1)
-        setenv("ATERM_TAB_ID", ctx.tabID.uuidString, 1)
-        setenv("ATERM_SPACE_ID", ctx.spaceID.uuidString, 1)
-        setenv("ATERM_WORKSPACE_ID", ctx.workspaceID.uuidString, 1)
-        setenv("ATERM_CLI_PATH", ctx.cliPath, 1)
+        setenv("TIAN_SOCKET", ctx.socketPath, 1)
+        setenv("TIAN_PANE_ID", ctx.paneID.uuidString, 1)
+        setenv("TIAN_TAB_ID", ctx.tabID.uuidString, 1)
+        setenv("TIAN_SPACE_ID", ctx.spaceID.uuidString, 1)
+        setenv("TIAN_WORKSPACE_ID", ctx.workspaceID.uuidString, 1)
+        setenv("TIAN_CLI_PATH", ctx.cliPath, 1)
     }
 
     // PATH injection for CLI discovery
@@ -1213,12 +1213,12 @@ func createSurface(
 
     // Clean up process-level env vars (they've been inherited by the child PTY)
     if environmentContext != nil {
-        unsetenv("ATERM_SOCKET")
-        unsetenv("ATERM_PANE_ID")
-        unsetenv("ATERM_TAB_ID")
-        unsetenv("ATERM_SPACE_ID")
-        unsetenv("ATERM_WORKSPACE_ID")
-        unsetenv("ATERM_CLI_PATH")
+        unsetenv("TIAN_SOCKET")
+        unsetenv("TIAN_PANE_ID")
+        unsetenv("TIAN_TAB_ID")
+        unsetenv("TIAN_SPACE_ID")
+        unsetenv("TIAN_WORKSPACE_ID")
+        unsetenv("TIAN_CLI_PATH")
         // Restore original PATH
     }
 
@@ -1231,7 +1231,7 @@ func createSurface(
 A simple value type carrying the env var values:
 
 ```swift
-// aterm/IPC/PaneEnvironmentContext.swift
+// tian/IPC/PaneEnvironmentContext.swift
 
 struct PaneEnvironmentContext: Sendable {
     let socketPath: String
@@ -1250,7 +1250,7 @@ struct PaneEnvironmentContext: Sendable {
     ) -> PaneEnvironmentContext {
         let cliPath = Bundle.main.executableURL?
             .deletingLastPathComponent()
-            .appendingPathComponent("aterm-cli")
+            .appendingPathComponent("tian-cli")
             .path ?? ""
         return PaneEnvironmentContext(
             socketPath: socketPath,
@@ -1303,13 +1303,13 @@ Env vars are frozen at shell spawn time. They become stale when:
 
 | Scenario | Stale Var | Detection |
 |----------|-----------|-----------|
-| Tab moved between spaces | `ATERM_SPACE_ID` | IPC handler checks pane's actual parent hierarchy |
-| Space moved between workspaces | `ATERM_WORKSPACE_ID` | Same hierarchy check |
+| Tab moved between spaces | `TIAN_SPACE_ID` | IPC handler checks pane's actual parent hierarchy |
+| Space moved between workspaces | `TIAN_WORKSPACE_ID` | Same hierarchy check |
 | Workspace renamed | None (UUIDs don't change) | N/A |
 | Pane split creates new pane | None (new pane gets fresh env) | N/A |
 | App restarted | All (new UUIDs) | Socket path different |
 
-**Resolution:** The IPC handler validates env vars only when they are used for "default to current" resolution (e.g., `space create` without `--workspace` uses `ATERM_WORKSPACE_ID`). If the pane's actual parent chain does not match the env vars, return exit code 1 with a descriptive error.
+**Resolution:** The IPC handler validates env vars only when they are used for "default to current" resolution (e.g., `space create` without `--workspace` uses `TIAN_WORKSPACE_ID`). If the pane's actual parent chain does not match the env vars, return exit code 1 with a descriptive error.
 
 ---
 
@@ -1321,7 +1321,7 @@ Env vars are frozen at shell spawn time. They become stale when:
 |------|----------|---------|
 | 0 | Success | Command completed successfully |
 | 1 | General error | Invalid arguments, entity not found, stale env, empty name |
-| 2 | Connection error | Not in aterm, socket not found, timeout, connection refused |
+| 2 | Connection error | Not in tian, socket not found, timeout, connection refused |
 | 3 | Process safety | Running processes detected, --force not specified |
 | 4 | Permission denied | Notification permissions denied |
 
@@ -1329,21 +1329,21 @@ Env vars are frozen at shell spawn time. They become stale when:
 
 | Scenario | Where Detected | Exit Code | Error Message | Recovery |
 |----------|---------------|-----------|---------------|----------|
-| `ATERM_SOCKET` not set | CLI (EnvironmentCheck) | 2 | "Error: Not running inside aterm. The aterm CLI can only be used from within an aterm terminal session." | Run from within aterm |
-| Socket file does not exist | CLI (IPCClient.connect) | 2 | "Error: Cannot connect to aterm (socket not found at <path>). Is aterm running?" | Launch aterm, open a terminal |
-| Connection refused | CLI (IPCClient.connect) | 2 | "Error: Cannot connect to aterm (connection refused)." | Restart aterm |
-| Response timeout (5s) | CLI (IPCClient.recv) | 2 | "Error: Connection timed out. The aterm app may be unresponsive." | Restart aterm |
-| Protocol version mismatch | App (IPCRequestRouter) | 1 | "Error: Protocol version mismatch. CLI version X, app expects Y. Update the CLI." | Update aterm |
+| `TIAN_SOCKET` not set | CLI (EnvironmentCheck) | 2 | "Error: Not running inside tian. The tian CLI can only be used from within an tian terminal session." | Run from within tian |
+| Socket file does not exist | CLI (IPCClient.connect) | 2 | "Error: Cannot connect to tian (socket not found at <path>). Is tian running?" | Launch tian, open a terminal |
+| Connection refused | CLI (IPCClient.connect) | 2 | "Error: Cannot connect to tian (connection refused)." | Restart tian |
+| Response timeout (5s) | CLI (IPCClient.recv) | 2 | "Error: Connection timed out. The tian app may be unresponsive." | Restart tian |
+| Protocol version mismatch | App (IPCRequestRouter) | 1 | "Error: Protocol version mismatch. CLI version X, app expects Y. Update the CLI." | Update tian |
 | Invalid JSON in request | App (IPCServer) | 1 | "Error: Invalid request format." | Bug in CLI |
 | Unknown action | App (IPCRequestRouter) | 1 | "Error: Unknown action: <action>." | Check CLI version |
-| Workspace not found | App (WorkspaceHandler) | 1 | "Error: Workspace not found: <uuid>." | Use `aterm workspace list` |
-| Space not found | App (SpaceHandler) | 1 | "Error: Space not found: <uuid>." | Use `aterm space list` |
-| Tab not found | App (TabHandler) | 1 | "Error: Tab not found: <uuid>." | Use `aterm tab list` |
-| Pane not found | App (PaneHandler) | 1 | "Error: Pane not found: <uuid>." | Use `aterm pane list` |
+| Workspace not found | App (WorkspaceHandler) | 1 | "Error: Workspace not found: <uuid>." | Use `tian workspace list` |
+| Space not found | App (SpaceHandler) | 1 | "Error: Space not found: <uuid>." | Use `tian space list` |
+| Tab not found | App (TabHandler) | 1 | "Error: Tab not found: <uuid>." | Use `tian tab list` |
+| Pane not found | App (PaneHandler) | 1 | "Error: Pane not found: <uuid>." | Use `tian pane list` |
 | Empty workspace name | App (WorkspaceHandler) | 1 | "Error: Workspace name cannot be empty." | Provide a name |
 | Stale env: space not in workspace | App (hierarchy check) | 1 | "Error: Stale environment detected. Space <id> is no longer in workspace <id>." | Open new terminal in correct context |
 | Close with running processes | App (ProcessDetector) | 3 | "Error: <entity> has N panes with running processes. Use --force to close anyway." | Add --force flag |
-| Notification permission denied | App (NotifyHandler) | 4 | "Warning: Notification permission denied. Enable in System Settings > Notifications > aterm." (stderr) | Grant permission in System Settings |
+| Notification permission denied | App (NotifyHandler) | 4 | "Warning: Notification permission denied. Enable in System Settings > Notifications > tian." (stderr) | Grant permission in System Settings |
 | Invalid tab focus index | App (TabHandler) | 1 | "Error: Tab index out of range. Space has N tabs." | Use valid index |
 | Pane focus direction: no neighbor | App (PaneHandler) | 1 | "Error: No pane found in direction <dir>." | Pane is at edge |
 | Invalid UUID format | CLI (argument parsing) | 1 | "Error: Invalid UUID: <value>." | Provide valid UUID |
@@ -1372,7 +1372,7 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 
 ## 10. Testing Strategy
 
-### Unit Tests (aterm-cli target)
+### Unit Tests (tian-cli target)
 
 | Component | Test | Approach |
 |-----------|------|----------|
@@ -1384,7 +1384,7 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 | Response parsing | Success and error responses | Decode from fixture JSON |
 | CLILogger | Log format, rotation trigger | Write to temp file, check format |
 
-### Unit Tests (aterm target, app-side)
+### Unit Tests (tian target, app-side)
 
 | Component | Test | Approach |
 |-----------|------|----------|
@@ -1410,7 +1410,7 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 | Timeout behavior | Start server, don't respond, verify CLI times out |
 | Stale socket cleanup | Leave socket file, start server, verify it recovers |
 
-### UI Tests (atermUITests target)
+### UI Tests (tianUITests target)
 
 | Test | Approach |
 |------|----------|
@@ -1420,19 +1420,19 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 
 ### Manual Testing Checklist
 
-- [ ] Run `aterm workspace list` inside aterm -- table output correct
-- [ ] Run `aterm workspace list --format json` -- valid JSON
-- [ ] Run `aterm workspace list` outside aterm -- clear error, exit code 2
-- [ ] Run `aterm --help` outside aterm -- help text shown, exit code 0
-- [ ] Run `aterm status set --label "test"` -- sidebar updates within 100ms
-- [ ] Run `aterm status clear` -- sidebar label disappears
+- [ ] Run `tian workspace list` inside tian -- table output correct
+- [ ] Run `tian workspace list --format json` -- valid JSON
+- [ ] Run `tian workspace list` outside tian -- clear error, exit code 2
+- [ ] Run `tian --help` outside tian -- help text shown, exit code 0
+- [ ] Run `tian status set --label "test"` -- sidebar updates within 100ms
+- [ ] Run `tian status clear` -- sidebar label disappears
 - [ ] Close pane with status -- status automatically cleared
-- [ ] Run `aterm notify "hello"` -- notification appears
-- [ ] Click notification -- aterm window activates, source pane focused
-- [ ] Run `aterm workspace close <id>` with running processes -- safety error
-- [ ] Run `aterm workspace close <id> --force` -- closes despite processes
-- [ ] Kill aterm while CLI is in flight -- CLI times out in 5s
-- [ ] Restart aterm after crash -- stale socket cleaned up, new socket works
+- [ ] Run `tian notify "hello"` -- notification appears
+- [ ] Click notification -- tian window activates, source pane focused
+- [ ] Run `tian workspace close <id>` with running processes -- safety error
+- [ ] Run `tian workspace close <id> --force` -- closes despite processes
+- [ ] Kill tian while CLI is in flight -- CLI times out in 5s
+- [ ] Restart tian after crash -- stale socket cleaned up, new socket works
 
 ---
 
@@ -1445,26 +1445,26 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 **Deliverables:**
 1. `IPCServer` -- socket bind, listen, accept, length-prefixed read/write
 2. `IPCProtocol` -- `IPCRequest` and `IPCResponse` Codable types
-3. `IPCClient` -- connect, send, receive (in `aterm-cli` target)
-4. `EnvironmentCheck` -- validate ATERM_* env vars
-5. `aterm-cli` target in `project.yml` with `main.swift` entry point
-6. Wire `IPCServer.start()/stop()` in `AtermAppDelegate`
+3. `IPCClient` -- connect, send, receive (in `tian-cli` target)
+4. `EnvironmentCheck` -- validate TIAN_* env vars
+5. `tian-cli` target in `project.yml` with `main.swift` entry point
+6. Wire `IPCServer.start()/stop()` in `TianAppDelegate`
 7. Implement a single echo/ping action for end-to-end validation
 
 **Tests:** Socket lifecycle, length-prefix encoding, round-trip echo.
 
 **Files created/modified:**
-- NEW: `aterm/IPC/IPCServer.swift`
-- NEW: `aterm/IPC/IPCProtocol.swift`
-- NEW: `aterm-cli/main.swift`
-- NEW: `aterm-cli/IPCClient.swift`
-- NEW: `aterm-cli/EnvironmentCheck.swift`
-- MOD: `aterm/WindowManagement/AtermAppDelegate.swift` (start/stop server)
-- MOD: `project.yml` (add aterm-cli target)
+- NEW: `tian/IPC/IPCServer.swift`
+- NEW: `tian/IPC/IPCProtocol.swift`
+- NEW: `tian-cli/main.swift`
+- NEW: `tian-cli/IPCClient.swift`
+- NEW: `tian-cli/EnvironmentCheck.swift`
+- MOD: `tian/WindowManagement/TianAppDelegate.swift` (start/stop server)
+- MOD: `project.yml` (add tian-cli target)
 
 ### Phase 2: Environment Variable Injection (estimated: 2 days)
 
-**Goal:** Every shell session inside aterm has `ATERM_*` vars and `aterm` on PATH.
+**Goal:** Every shell session inside tian has `TIAN_*` vars and `tian` on PATH.
 
 **Deliverables:**
 1. `PaneEnvironmentContext` value type
@@ -1473,17 +1473,17 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 4. Wiring through `SpaceModel` -> `TabModel` -> `PaneViewModel`
 5. PATH prepend for CLI binary directory
 
-**Tests:** Verify env vars present in spawned shell (manual: `env | grep ATERM`).
+**Tests:** Verify env vars present in spawned shell (manual: `env | grep TIAN`).
 
 **Files created/modified:**
-- NEW: `aterm/IPC/PaneEnvironmentContext.swift`
-- MOD: `aterm/Core/GhosttyTerminalSurface.swift` (env injection in createSurface)
-- MOD: `aterm/Pane/PaneViewModel.swift` (environmentContextFactory, pass to createSurface)
-- MOD: `aterm/Tab/SpaceModel.swift` (wire environmentContextFactory)
+- NEW: `tian/IPC/PaneEnvironmentContext.swift`
+- MOD: `tian/Core/GhosttyTerminalSurface.swift` (env injection in createSurface)
+- MOD: `tian/Pane/PaneViewModel.swift` (environmentContextFactory, pass to createSurface)
+- MOD: `tian/Tab/SpaceModel.swift` (wire environmentContextFactory)
 
 ### Phase 3: Status Reporting (estimated: 2-3 days)
 
-**Goal:** `aterm status set/clear` works end-to-end with sidebar display.
+**Goal:** `tian status set/clear` works end-to-end with sidebar display.
 
 **Deliverables:**
 1. `StatusModel` (set, clear, pane close cleanup, activeLabel)
@@ -1495,29 +1495,29 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 **Tests:** StatusModel unit tests, visual verification of sidebar display.
 
 **Files created/modified:**
-- NEW: `aterm/Models/StatusModel.swift`
-- NEW: `aterm/IPC/Handlers/StatusHandler.swift`
-- NEW: `aterm-cli/Commands/StatusCommand.swift`
-- MOD: `aterm/View/Sidebar/SidebarSpaceRowView.swift` (status label)
-- MOD: `aterm/View/Sidebar/SidebarExpandedContentView.swift` (pass statusModel)
-- MOD: `aterm/Pane/PaneViewModel.swift` (pane close notification)
+- NEW: `tian/Models/StatusModel.swift`
+- NEW: `tian/IPC/Handlers/StatusHandler.swift`
+- NEW: `tian-cli/Commands/StatusCommand.swift`
+- MOD: `tian/View/Sidebar/SidebarSpaceRowView.swift` (status label)
+- MOD: `tian/View/Sidebar/SidebarExpandedContentView.swift` (pass statusModel)
+- MOD: `tian/Pane/PaneViewModel.swift` (pane close notification)
 
 ### Phase 4: Notifications (estimated: 1-2 days)
 
-**Goal:** `aterm notify` sends macOS notifications with click-to-focus.
+**Goal:** `tian notify` sends macOS notifications with click-to-focus.
 
 **Deliverables:**
 1. `NotifyHandler` (lazy auth, UNUserNotificationCenter integration)
 2. `NotifyCommand` (CLI argument parsing)
-3. `UNUserNotificationCenterDelegate` on `AtermAppDelegate` (click routing)
+3. `UNUserNotificationCenterDelegate` on `TianAppDelegate` (click routing)
 4. `focusPaneByID` hierarchy traversal
 
 **Tests:** Notification delivery, permission denied handling, click-to-focus.
 
 **Files created/modified:**
-- NEW: `aterm/IPC/Handlers/NotifyHandler.swift`
-- NEW: `aterm-cli/Commands/NotifyCommand.swift`
-- MOD: `aterm/WindowManagement/AtermAppDelegate.swift` (notification delegate)
+- NEW: `tian/IPC/Handlers/NotifyHandler.swift`
+- NEW: `tian-cli/Commands/NotifyCommand.swift`
+- MOD: `tian/WindowManagement/TianAppDelegate.swift` (notification delegate)
 
 ### Phase 5: Workspace CRUD + Navigation (estimated: 3-4 days)
 
@@ -1533,11 +1533,11 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 **Tests:** All workspace operations against real `WorkspaceCollection`.
 
 **Files created/modified:**
-- NEW: `aterm/IPC/Handlers/WorkspaceHandler.swift`
-- NEW: `aterm/IPC/IPCRequestRouter.swift`
-- NEW: `aterm-cli/Commands/WorkspaceCommand.swift`
-- NEW: `aterm-cli/Output/TableFormatter.swift`
-- NEW: `aterm-cli/Output/JSONFormatter.swift`
+- NEW: `tian/IPC/Handlers/WorkspaceHandler.swift`
+- NEW: `tian/IPC/IPCRequestRouter.swift`
+- NEW: `tian-cli/Commands/WorkspaceCommand.swift`
+- NEW: `tian-cli/Output/TableFormatter.swift`
+- NEW: `tian-cli/Output/JSONFormatter.swift`
 
 ### Phase 6: Space, Tab, Pane CRUD + Navigation (estimated: 4-5 days)
 
@@ -1553,12 +1553,12 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 **Tests:** Full CRUD for all entity types.
 
 **Files created/modified:**
-- NEW: `aterm/IPC/Handlers/SpaceHandler.swift`
-- NEW: `aterm/IPC/Handlers/TabHandler.swift`
-- NEW: `aterm/IPC/Handlers/PaneHandler.swift`
-- NEW: `aterm-cli/Commands/SpaceCommand.swift`
-- NEW: `aterm-cli/Commands/TabCommand.swift`
-- NEW: `aterm-cli/Commands/PaneCommand.swift`
+- NEW: `tian/IPC/Handlers/SpaceHandler.swift`
+- NEW: `tian/IPC/Handlers/TabHandler.swift`
+- NEW: `tian/IPC/Handlers/PaneHandler.swift`
+- NEW: `tian-cli/Commands/SpaceCommand.swift`
+- NEW: `tian-cli/Commands/TabCommand.swift`
+- NEW: `tian-cli/Commands/PaneCommand.swift`
 
 ### Phase 7: CLI Logging + Polish (estimated: 1-2 days)
 
@@ -1571,8 +1571,8 @@ The process names in parentheses come from `ghostty_surface_needs_confirm_quit` 
 4. Edge case handling (empty strings, max label length, large list outputs)
 
 **Files created/modified:**
-- NEW: `aterm-cli/CLILogger.swift`
-- MOD: `aterm/Utilities/Logger.swift` (add `ipc` category)
+- NEW: `tian-cli/CLILogger.swift`
+- MOD: `tian/Utilities/Logger.swift` (add `ipc` category)
 
 ### Dependency Graph
 
@@ -1597,13 +1597,13 @@ Phases 2, 3, 4, and 5 can proceed in parallel after Phase 1 is complete. Phase 6
 ## Appendix A: Full Request/Response Type Definitions
 
 ```swift
-// aterm/IPC/IPCProtocol.swift
+// tian/IPC/IPCProtocol.swift
 
 struct IPCRequest: Codable, Sendable {
     let v: Int                              // Protocol version
     let action: String                      // "resource.verb"
     let params: [String: String?]           // Action-specific parameters
-    let env: IPCEnvironment                 // Caller's ATERM_* env vars
+    let env: IPCEnvironment                 // Caller's TIAN_* env vars
 }
 
 struct IPCEnvironment: Codable, Sendable {
@@ -1640,12 +1640,12 @@ struct IPCError: Codable, Sendable {
 
 | Variable | Source | Example | When Stale |
 |----------|--------|---------|------------|
-| `ATERM_SOCKET` | `IPCServer.socketPath` | `/var/folders/.../T/aterm-501.sock` | App restarted |
-| `ATERM_PANE_ID` | `PaneViewModel` pane UUID | `d4e5f6a7-b8c9-0123-defg-456789012345` | Never (pane ID is stable) |
-| `ATERM_TAB_ID` | `TabModel.id` | `c3d4e5f6-a7b8-9012-cdef-123456789012` | Tab moved between spaces (not supported in v1) |
-| `ATERM_SPACE_ID` | `SpaceModel.id` | `b2c3d4e5-f6a7-8901-bcde-f12345678901` | Space moved between workspaces (drag-drop) |
-| `ATERM_WORKSPACE_ID` | `Workspace.id` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` | Workspace deleted while shell running |
-| `ATERM_CLI_PATH` | `Bundle.main` path | `.../aterm.app/Contents/MacOS/aterm-cli` | App bundle moved |
+| `TIAN_SOCKET` | `IPCServer.socketPath` | `/var/folders/.../T/tian-501.sock` | App restarted |
+| `TIAN_PANE_ID` | `PaneViewModel` pane UUID | `d4e5f6a7-b8c9-0123-defg-456789012345` | Never (pane ID is stable) |
+| `TIAN_TAB_ID` | `TabModel.id` | `c3d4e5f6-a7b8-9012-cdef-123456789012` | Tab moved between spaces (not supported in v1) |
+| `TIAN_SPACE_ID` | `SpaceModel.id` | `b2c3d4e5-f6a7-8901-bcde-f12345678901` | Space moved between workspaces (drag-drop) |
+| `TIAN_WORKSPACE_ID` | `Workspace.id` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` | Workspace deleted while shell running |
+| `TIAN_CLI_PATH` | `Bundle.main` path | `.../tian.app/Contents/MacOS/tian-cli` | App bundle moved |
 
 ## Appendix C: Sidebar Layout Mockup
 
@@ -1671,5 +1671,5 @@ Legend:
   ( ) = gray dot (inactive space)
   (.) = accent-color dot (workspace header)
   [+] = add space button
-  "Thinking..." = status from `aterm status set --label "Thinking..."`
+  "Thinking..." = status from `tian status set --label "Thinking..."`
 ```

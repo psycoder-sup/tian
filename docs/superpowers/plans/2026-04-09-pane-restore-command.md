@@ -13,11 +13,11 @@
 ### Task 1: Add `restoreCommand` to `PaneLeafState`
 
 **Files:**
-- Modify: `aterm/Persistence/SessionState.swift:80-83`
+- Modify: `tian/Persistence/SessionState.swift:80-83`
 
 - [ ] **Step 1: Write the failing test — `PaneLeafState` round-trips with `restoreCommand`**
 
-In `atermTests/SessionStateTests.swift`, add this test inside the `PaneNodeStateEncodingTests` struct:
+In `tianTests/SessionStateTests.swift`, add this test inside the `PaneNodeStateEncodingTests` struct:
 
 ```swift
 @Test func leafEncodesRestoreCommand() throws {
@@ -37,12 +37,12 @@ In `atermTests/SessionStateTests.swift`, add this test inside the `PaneNodeState
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/PaneNodeStateEncodingTests/leafEncodesRestoreCommand 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/PaneNodeStateEncodingTests/leafEncodesRestoreCommand 2>&1 | tail -20`
 Expected: Compilation error — `PaneLeafState` has no `restoreCommand` parameter.
 
 - [ ] **Step 3: Add `restoreCommand` to `PaneLeafState`**
 
-In `aterm/Persistence/SessionState.swift`, change `PaneLeafState`:
+In `tian/Persistence/SessionState.swift`, change `PaneLeafState`:
 
 ```swift
 struct PaneLeafState: Codable, Sendable, Equatable {
@@ -62,12 +62,12 @@ The default `nil` ensures all existing call sites (creating `PaneLeafState` with
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/PaneNodeStateEncodingTests/leafEncodesRestoreCommand 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/PaneNodeStateEncodingTests/leafEncodesRestoreCommand 2>&1 | tail -20`
 Expected: PASS
 
 - [ ] **Step 5: Write test — `PaneLeafState` decodes without `restoreCommand` (backward compat)**
 
-In `atermTests/SessionStateTests.swift`, add to `PaneNodeStateEncodingTests`:
+In `tianTests/SessionStateTests.swift`, add to `PaneNodeStateEncodingTests`:
 
 ```swift
 @Test func leafDecodesWithoutRestoreCommand() throws {
@@ -88,13 +88,13 @@ In `atermTests/SessionStateTests.swift`, add to `PaneNodeStateEncodingTests`:
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/PaneNodeStateEncodingTests/leafDecodesWithoutRestoreCommand 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/PaneNodeStateEncodingTests/leafDecodesWithoutRestoreCommand 2>&1 | tail -20`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add aterm/Persistence/SessionState.swift atermTests/SessionStateTests.swift
+git add tian/Persistence/SessionState.swift tianTests/SessionStateTests.swift
 git commit -m "feat(persistence): add optional restoreCommand to PaneLeafState"
 ```
 
@@ -103,11 +103,11 @@ git commit -m "feat(persistence): add optional restoreCommand to PaneLeafState"
 ### Task 2: Add `restoreCommands` dict to `PaneViewModel`
 
 **Files:**
-- Modify: `aterm/Pane/PaneViewModel.swift:9-17`
+- Modify: `tian/Pane/PaneViewModel.swift:9-17`
 
 - [ ] **Step 1: Add `restoreCommands` property to `PaneViewModel`**
 
-In `aterm/Pane/PaneViewModel.swift`, add after the `paneStates` property (line 17):
+In `tian/Pane/PaneViewModel.swift`, add after the `paneStates` property (line 17):
 
 ```swift
 /// Per-pane restore commands registered via IPC. Persisted across sessions.
@@ -116,7 +116,7 @@ private(set) var restoreCommands: [UUID: String] = [:]
 
 - [ ] **Step 2: Add `setRestoreCommand` and `restoreCommand(for:)` methods**
 
-In `aterm/Pane/PaneViewModel.swift`, add in the `// MARK: - Operations` section after `updateRatio`:
+In `tian/Pane/PaneViewModel.swift`, add in the `// MARK: - Operations` section after `updateRatio`:
 
 ```swift
 func setRestoreCommand(paneID: UUID, command: String) {
@@ -130,7 +130,7 @@ func restoreCommand(for paneID: UUID) -> String? {
 
 - [ ] **Step 3: Clean up `restoreCommands` in `closePane`**
 
-In `aterm/Pane/PaneViewModel.swift`, inside `closePane(paneID:)` (around line 236), add after `bellNotifications.remove(paneID)`:
+In `tian/Pane/PaneViewModel.swift`, inside `closePane(paneID:)` (around line 236), add after `bellNotifications.remove(paneID)`:
 
 ```swift
 restoreCommands.removeValue(forKey: paneID)
@@ -138,7 +138,7 @@ restoreCommands.removeValue(forKey: paneID)
 
 - [ ] **Step 4: Clean up `restoreCommands` in `cleanup()`**
 
-In `aterm/Pane/PaneViewModel.swift`, inside `cleanup()` (around line 305), add after `paneStates.removeAll()`:
+In `tian/Pane/PaneViewModel.swift`, inside `cleanup()` (around line 305), add after `paneStates.removeAll()`:
 
 ```swift
 restoreCommands.removeAll()
@@ -146,7 +146,7 @@ restoreCommands.removeAll()
 
 - [ ] **Step 5: Populate `restoreCommands` in `fromState`**
 
-In `aterm/Pane/PaneViewModel.swift`, modify the `fromState` method to pass restore commands through. Change the method:
+In `tian/Pane/PaneViewModel.swift`, modify the `fromState` method to pass restore commands through. Change the method:
 
 ```swift
 static func fromState(_ root: PaneNodeState, focusedPaneID: UUID) -> PaneViewModel {
@@ -163,7 +163,7 @@ static func fromState(_ root: PaneNodeState, focusedPaneID: UUID) -> PaneViewMod
 
 - [ ] **Step 6: Update `buildPaneNode` to extract `restoreCommand`**
 
-In `aterm/Pane/PaneViewModel.swift`, update the `buildPaneNode` method signature and leaf case:
+In `tian/Pane/PaneViewModel.swift`, update the `buildPaneNode` method signature and leaf case:
 
 ```swift
 private static func buildPaneNode(
@@ -198,13 +198,13 @@ private static func buildPaneNode(
 
 - [ ] **Step 7: Verify all tests still pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
 Expected: All tests PASS
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add aterm/Pane/PaneViewModel.swift
+git add tian/Pane/PaneViewModel.swift
 git commit -m "feat(pane): add restoreCommands dict to PaneViewModel"
 ```
 
@@ -213,12 +213,12 @@ git commit -m "feat(pane): add restoreCommands dict to PaneViewModel"
 ### Task 3: Add `initialInput` parameter to `GhosttyTerminalSurface.createSurface()`
 
 **Files:**
-- Modify: `aterm/Core/GhosttyTerminalSurface.swift:19`
-- Modify: `aterm/View/TerminalSurfaceView.swift:23-27,57`
+- Modify: `tian/Core/GhosttyTerminalSurface.swift:19`
+- Modify: `tian/View/TerminalSurfaceView.swift:23-27,57`
 
 - [ ] **Step 1: Add `initialInput` parameter to `createSurface`**
 
-In `aterm/Core/GhosttyTerminalSurface.swift`, change the `createSurface` signature (line 19):
+In `tian/Core/GhosttyTerminalSurface.swift`, change the `createSurface` signature (line 19):
 
 ```swift
 func createSurface(view: TerminalSurfaceView, workingDirectory: String? = nil, environmentVariables: [String: String] = [:], initialInput: String? = nil) {
@@ -226,7 +226,7 @@ func createSurface(view: TerminalSurfaceView, workingDirectory: String? = nil, e
 
 - [ ] **Step 2: Set `config.initial_input` before `ghostty_surface_new`**
 
-In `aterm/Core/GhosttyTerminalSurface.swift`, change the surface creation block (lines 63-70) to also handle `initialInput`:
+In `tian/Core/GhosttyTerminalSurface.swift`, change the surface creation block (lines 63-70) to also handle `initialInput`:
 
 ```swift
 let created: ghostty_surface_t? = envVars.withUnsafeMutableBufferPointer { envBuffer in
@@ -246,7 +246,7 @@ This uses the existing `Optional<String>.withCString` extension (line 185) — w
 
 - [ ] **Step 3: Add `initialInput` property to `TerminalSurfaceView`**
 
-In `aterm/View/TerminalSurfaceView.swift`, add after the `environmentVariables` property (line 26):
+In `tian/View/TerminalSurfaceView.swift`, add after the `environmentVariables` property (line 26):
 
 ```swift
 /// Restore command to replay into the shell on surface creation (e.g. "claude --resume <id>").
@@ -255,7 +255,7 @@ var initialInput: String?
 
 - [ ] **Step 4: Pass `initialInput` through in `viewDidMoveToWindow`**
 
-In `aterm/View/TerminalSurfaceView.swift`, change the `createSurface` call (line 57):
+In `tian/View/TerminalSurfaceView.swift`, change the `createSurface` call (line 57):
 
 ```swift
 terminalSurface.createSurface(view: self, workingDirectory: initialWorkingDirectory, environmentVariables: environmentVariables, initialInput: initialInput)
@@ -263,13 +263,13 @@ terminalSurface.createSurface(view: self, workingDirectory: initialWorkingDirect
 
 - [ ] **Step 5: Verify all tests still pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
 Expected: All tests PASS (no callers of `createSurface` broke since the new param has a default)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add aterm/Core/GhosttyTerminalSurface.swift aterm/View/TerminalSurfaceView.swift
+git add tian/Core/GhosttyTerminalSurface.swift tian/View/TerminalSurfaceView.swift
 git commit -m "feat(ghostty): add initialInput parameter to createSurface for command replay"
 ```
 
@@ -278,11 +278,11 @@ git commit -m "feat(ghostty): add initialInput parameter to createSurface for co
 ### Task 4: Wire `initialInput` through `PaneViewModel` restore path
 
 **Files:**
-- Modify: `aterm/Pane/PaneViewModel.swift:156-169`
+- Modify: `tian/Pane/PaneViewModel.swift:156-169`
 
 - [ ] **Step 1: Set `initialInput` on surface views during `buildPaneNode`**
 
-In `aterm/Pane/PaneViewModel.swift`, in the `buildPaneNode` method's `.pane` case, the `restoreCommands` dict is already populated (Task 2 Step 6). Now add `initialInput` to the surface view. Change the existing block:
+In `tian/Pane/PaneViewModel.swift`, in the `buildPaneNode` method's `.pane` case, the `restoreCommands` dict is already populated (Task 2 Step 6). Now add `initialInput` to the surface view. Change the existing block:
 
 ```swift
 if let cmd = leaf.restoreCommand {
@@ -295,13 +295,13 @@ The `+ "\n"` simulates pressing Enter so the shell executes the command. This re
 
 - [ ] **Step 2: Verify all tests still pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
 Expected: All tests PASS
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add aterm/Pane/PaneViewModel.swift
+git add tian/Pane/PaneViewModel.swift
 git commit -m "feat(pane): wire initialInput from restoreCommand during session restore"
 ```
 
@@ -310,12 +310,12 @@ git commit -m "feat(pane): wire initialInput from restoreCommand during session 
 ### Task 5: Add `pane.set-restore-command` IPC handler
 
 **Files:**
-- Modify: `aterm/Core/IPCCommandHandler.swift:31,58-59`
-- Test: `atermTests/IPCCommandHandlerTests.swift`
+- Modify: `tian/Core/IPCCommandHandler.swift:31,58-59`
+- Test: `tianTests/IPCCommandHandlerTests.swift`
 
 - [ ] **Step 1: Write failing tests for the new IPC command**
 
-In `atermTests/IPCCommandHandlerTests.swift`, add these tests:
+In `tianTests/IPCCommandHandlerTests.swift`, add these tests:
 
 ```swift
 // MARK: - Pane Restore Command
@@ -366,12 +366,12 @@ In `atermTests/IPCCommandHandlerTests.swift`, add these tests:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/IPCCommandHandlerTests/setRestoreCommandMissingCommandReturnsError 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/IPCCommandHandlerTests/setRestoreCommandMissingCommandReturnsError 2>&1 | tail -20`
 Expected: FAIL — "Unknown command: pane.set-restore-command"
 
 - [ ] **Step 3: Add the command case to the handler dispatch**
 
-In `aterm/Core/IPCCommandHandler.swift`, add in the `switch request.command` block after the `pane.focus` case (around line 58):
+In `tian/Core/IPCCommandHandler.swift`, add in the `switch request.command` block after the `pane.focus` case (around line 58):
 
 ```swift
 case "pane.set-restore-command": return handleSetRestoreCommand(request)
@@ -379,7 +379,7 @@ case "pane.set-restore-command": return handleSetRestoreCommand(request)
 
 - [ ] **Step 4: Implement the handler method**
 
-In `aterm/Core/IPCCommandHandler.swift`, add in the `// MARK: - Pane Commands` section after `handlePaneFocus`:
+In `tian/Core/IPCCommandHandler.swift`, add in the `// MARK: - Pane Commands` section after `handlePaneFocus`:
 
 ```swift
 private func handleSetRestoreCommand(_ request: IPCRequest) -> IPCResponse {
@@ -402,13 +402,13 @@ private func handleSetRestoreCommand(_ request: IPCRequest) -> IPCResponse {
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/IPCCommandHandlerTests 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/IPCCommandHandlerTests 2>&1 | tail -20`
 Expected: All IPCCommandHandler tests PASS
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add aterm/Core/IPCCommandHandler.swift atermTests/IPCCommandHandlerTests.swift
+git add tian/Core/IPCCommandHandler.swift tianTests/IPCCommandHandlerTests.swift
 git commit -m "feat(ipc): add pane.set-restore-command handler"
 ```
 
@@ -417,11 +417,11 @@ git commit -m "feat(ipc): add pane.set-restore-command handler"
 ### Task 6: Add CLI subcommand `pane set-restore-command`
 
 **Files:**
-- Modify: `aterm-cli/CommandRouter.swift:410-416`
+- Modify: `tian-cli/CommandRouter.swift:410-416`
 
 - [ ] **Step 1: Add `PaneSetRestoreCommand` struct**
 
-In `aterm-cli/CommandRouter.swift`, add after the `PaneFocus` struct (around line 512):
+In `tian-cli/CommandRouter.swift`, add after the `PaneFocus` struct (around line 512):
 
 ```swift
 struct PaneSetRestoreCommand: ParsableCommand {
@@ -442,7 +442,7 @@ struct PaneSetRestoreCommand: ParsableCommand {
 
 - [ ] **Step 2: Register the subcommand in `PaneGroup`**
 
-In `aterm-cli/CommandRouter.swift`, add `PaneSetRestoreCommand.self` to the `PaneGroup` subcommands array (line 410-416):
+In `tian-cli/CommandRouter.swift`, add `PaneSetRestoreCommand.self` to the `PaneGroup` subcommands array (line 410-416):
 
 ```swift
 struct PaneGroup: ParsableCommand {
@@ -462,13 +462,13 @@ struct PaneGroup: ParsableCommand {
 
 - [ ] **Step 3: Verify the project builds**
 
-Run: `xcodebuild build -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -10`
+Run: `xcodebuild build -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -10`
 Expected: BUILD SUCCEEDED
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add aterm-cli/CommandRouter.swift
+git add tian-cli/CommandRouter.swift
 git commit -m "feat(cli): add pane set-restore-command subcommand"
 ```
 
@@ -477,13 +477,13 @@ git commit -m "feat(cli): add pane set-restore-command subcommand"
 ### Task 7: Include `restoreCommand` in session serialization
 
 **Files:**
-- Modify: `aterm/Persistence/SessionState.swift:131-146` (PaneNode.toState)
-- Modify: `aterm/Persistence/SessionSerializer.swift:29-56`
-- Test: `atermTests/SessionStateTests.swift`
+- Modify: `tian/Persistence/SessionState.swift:131-146` (PaneNode.toState)
+- Modify: `tian/Persistence/SessionSerializer.swift:29-56`
+- Test: `tianTests/SessionStateTests.swift`
 
 - [ ] **Step 1: Write failing test — snapshot captures restoreCommand**
 
-In `atermTests/SessionStateTests.swift`, add to the `SessionSnapshotTests` struct:
+In `tianTests/SessionStateTests.swift`, add to the `SessionSnapshotTests` struct:
 
 ```swift
 @Test func snapshotCapturesRestoreCommand() {
@@ -518,12 +518,12 @@ In `atermTests/SessionStateTests.swift`, add to the `SessionSnapshotTests` struc
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/SessionSnapshotTests/snapshotCapturesRestoreCommand 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/SessionSnapshotTests/snapshotCapturesRestoreCommand 2>&1 | tail -20`
 Expected: FAIL — `restoreCommand` is always `nil` because `toState()` doesn't include it.
 
 - [ ] **Step 3: Update `PaneNode.toState()` to accept restore commands**
 
-In `aterm/Persistence/SessionState.swift`, change the `PaneNode.toState()` extension (lines 131-146):
+In `tian/Persistence/SessionState.swift`, change the `PaneNode.toState()` extension (lines 131-146):
 
 ```swift
 extension PaneNode {
@@ -550,7 +550,7 @@ extension PaneNode {
 
 - [ ] **Step 4: Update `SessionSerializer.snapshot` to pass restore commands**
 
-In `aterm/Persistence/SessionSerializer.swift`, change the line that calls `toState()` (inside the tabs map, line 48):
+In `tian/Persistence/SessionSerializer.swift`, change the line that calls `toState()` (inside the tabs map, line 48):
 
 ```swift
 root: tab.paneViewModel.splitTree.root.toState(restoreCommands: tab.paneViewModel.restoreCommands)
@@ -558,18 +558,18 @@ root: tab.paneViewModel.splitTree.root.toState(restoreCommands: tab.paneViewMode
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/SessionSnapshotTests 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/SessionSnapshotTests 2>&1 | tail -20`
 Expected: All PASS
 
 - [ ] **Step 6: Run full test suite to ensure nothing broke**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
 Expected: All tests PASS
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add aterm/Persistence/SessionState.swift aterm/Persistence/SessionSerializer.swift atermTests/SessionStateTests.swift
+git add tian/Persistence/SessionState.swift tian/Persistence/SessionSerializer.swift tianTests/SessionStateTests.swift
 git commit -m "feat(persistence): include restoreCommand in session serialization"
 ```
 
@@ -578,11 +578,11 @@ git commit -m "feat(persistence): include restoreCommand in session serializatio
 ### Task 8: End-to-end restore test
 
 **Files:**
-- Test: `atermTests/SessionStateTests.swift`
+- Test: `tianTests/SessionStateTests.swift`
 
 - [ ] **Step 1: Write round-trip test — serialize with restoreCommand, restore it**
 
-In `atermTests/SessionStateTests.swift`, add a new test struct:
+In `tianTests/SessionStateTests.swift`, add a new test struct:
 
 ```swift
 // MARK: - Restore Command Round-Trip Tests
@@ -719,12 +719,12 @@ struct RestoreCommandRoundTripTests {
 
 - [ ] **Step 2: Run tests to verify they pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/RestoreCommandRoundTripTests 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/RestoreCommandRoundTripTests 2>&1 | tail -20`
 Expected: All PASS
 
 - [ ] **Step 3: Write test — `PaneViewModel.fromState` populates `restoreCommands`**
 
-In `atermTests/SessionStateTests.swift`, add:
+In `tianTests/SessionStateTests.swift`, add:
 
 ```swift
 @MainActor
@@ -758,18 +758,18 @@ struct RestoreCommandPaneViewModelTests {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build -only-testing:atermTests/RestoreCommandPaneViewModelTests 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build -only-testing:tianTests/RestoreCommandPaneViewModelTests 2>&1 | tail -20`
 Expected: All PASS
 
 - [ ] **Step 5: Run full test suite**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -20`
 Expected: All tests PASS
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add atermTests/SessionStateTests.swift
+git add tianTests/SessionStateTests.swift
 git commit -m "test: add end-to-end round-trip and PaneViewModel restore command tests"
 ```
 
@@ -789,5 +789,5 @@ Expected: No new source files listed (only modifications)
 
 - [ ] **Step 2: Final full test suite run**
 
-Run: `xcodebuild test -scheme aterm -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -30`
+Run: `xcodebuild test -scheme tian -destination 'platform=macOS' -derivedDataPath .build 2>&1 | tail -30`
 Expected: All tests PASS, BUILD SUCCEEDED

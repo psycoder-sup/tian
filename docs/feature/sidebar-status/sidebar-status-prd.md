@@ -5,7 +5,7 @@
 **Version:** 1.3
 **Status:** Approved
 
-**Figma Reference:** [aterm - Terminal Emulator, node 178-102](https://www.figma.com/design/3y7iDarBkAZ8iXsFJykrd9/aterm---Terminal-Emulator?node-id=178-102)
+**Figma Reference:** [tian - Terminal Emulator, node 178-102](https://www.figma.com/design/3y7iDarBkAZ8iXsFJykrd9/tian---Terminal-Emulator?node-id=178-102)
 
 ---
 
@@ -15,7 +15,7 @@ This feature adds a rich status line to each Space row in the sidebar, combining
 
 The status line is the second line of the existing `SidebarSpaceRowView` VStack, replacing the current single-use status label. A Space may contain panes spread across multiple repositories (or some panes not in any git repo at all). In this case, the status line renders **one row per distinct git repo**, with each row showing the Claude dots for panes in that repo, followed by that repo's branch name, PR status, and git badges. Panes not inside any git repository have their Claude dots grouped on a separate line (or on the first repo line if only one repo is present).
 
-When no Claude session exists, the separator dot and Claude dots are omitted from each line. When no pane in the Space is inside a git repository, only the Claude dots (if any) appear. The feature introduces no new IPC commands -- Claude session state continues to use the extended `status.set` command from the Claude Session Status PRD (v1.3, Approved). Git status is read locally by aterm and does not flow through IPC.
+When no Claude session exists, the separator dot and Claude dots are omitted from each line. When no pane in the Space is inside a git repository, only the Claude dots (if any) appear. The feature introduces no new IPC commands -- Claude session state continues to use the extended `status.set` command from the Claude Session Status PRD (v1.3, Approved). Git status is read locally by tian and does not flow through IPC.
 
 ---
 
@@ -25,7 +25,7 @@ When no Claude session exists, the separator dot and Claude dots are omitted fro
 
 **Current Workaround:** The developer either (a) switches between Spaces to run `git status` and check Claude output, interrupting their current work, (b) relies on free-form `status.set --label` text to surface partial information, or (c) keeps a mental map of branch-to-Space assignments that quickly becomes stale.
 
-**Business Opportunity:** aterm's Space-as-worktree model is designed for parallel branch development. Surfacing git status and Claude session state directly in the sidebar makes this model self-documenting. The developer never needs to leave their current Space to know the state of all other Spaces. This closes the information gap that makes parallel worktree workflows feel chaotic and positions aterm's sidebar as an active project status board rather than a passive navigation list.
+**Business Opportunity:** tian's Space-as-worktree model is designed for parallel branch development. Surfacing git status and Claude session state directly in the sidebar makes this model self-documenting. The developer never needs to leave their current Space to know the state of all other Spaces. This closes the information gap that makes parallel worktree workflows feel chaotic and positions tian's sidebar as an active project status board rather than a passive navigation list.
 
 ---
 
@@ -121,7 +121,7 @@ When no Claude session exists, the separator dot and Claude dots are omitted fro
 3. The **watch path** for FSEvents is derived from the results: for regular repos (`--git-dir` returns `.git`), watch `.git/`. For worktrees (`--git-dir` returns a linked path like `../.git/worktrees/<name>`), watch both the linked gitdir AND `<common-dir>/refs/` to catch branch updates from other worktrees.
 4. Two panes are considered "in the same repo" when they resolve to the same `--git-common-dir`.
 
-> **Background (not implementation steps):** Under the hood, `git rev-parse --git-dir` returns `.git` for regular repos and the linked gitdir path for worktrees. The `.git` entry in a worktree checkout is a file containing `gitdir: <path>`, but aterm does not need to parse this manually — `git rev-parse` handles it.
+> **Background (not implementation steps):** Under the hood, `git rev-parse --git-dir` returns `.git` for regular repos and the linked gitdir path for worktrees. The `.git` entry in a worktree checkout is a file containing `gitdir: <path>`, but tian does not need to parse this manually — `git rev-parse` handles it.
 
 **FR-022:** Branch name must be shown for ALL Spaces whose resolved working directory is inside a git repository, not only worktree-backed Spaces. A Space with `worktreePath == nil` but whose working directory happens to be in a git repo must still show its branch.
 
@@ -413,8 +413,8 @@ File status letters use color coding: M = yellow/amber, A = green, D = red, R = 
 | `PaneStatusManager` | Existing code | Implemented | Tracks per-pane status labels. Must be extended to also store session state (per Claude Session Status PRD). |
 | `SidebarSpaceRowView` | Existing code | Implemented | The view being modified to add the status area. Currently shows status label from `PaneStatusManager.latestStatus(in:)`. |
 | `IPCCommandHandler.handleStatusSet` | Existing code | Implemented | The IPC handler to be extended with `--state` parameter support. |
-| `aterm-cli status set` | Existing CLI command | Implemented | The CLI command to be extended with `--state` flag. |
-| `gh` CLI | External tool | User-installed | Required for PR status. Must be installed and authenticated by the developer. Not bundled with aterm. |
+| `tian-cli status set` | Existing CLI command | Implemented | The CLI command to be extended with `--state` flag. |
+| `gh` CLI | External tool | User-installed | Required for PR status. Must be installed and authenticated by the developer. Not bundled with tian. |
 | `git` CLI | External tool | System-provided | Required for branch name, diff status, and repo resolution (`git rev-parse`). Available on all macOS systems with Xcode CLT. |
 | FSEvents / `DispatchSource.makeFileSystemObjectSource` | System API | Available | macOS file system event monitoring for .git directory watching. |
 | Claude Code hooks system | External | Available | Developer must install hook configuration in Claude Code settings. See Appendix A of Claude Session Status PRD. |

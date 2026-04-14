@@ -26,7 +26,7 @@ The implementation fits into the existing architecture by following established 
 
 ### 2.1 PaneStatusManager Extension
 
-The existing `PaneStatusManager` (at `aterm/Models/PaneStatusManager.swift`) must be extended to track typed session state alongside the existing free-form label. Currently it stores `[UUID: PaneStatus]` where `PaneStatus` has `label: String` (non-optional) and `updatedAt: Date`.
+The existing `PaneStatusManager` (at `tian/Models/PaneStatusManager.swift`) must be extended to track typed session state alongside the existing free-form label. Currently it stores `[UUID: PaneStatus]` where `PaneStatus` has `label: String` (non-optional) and `updatedAt: Date`.
 
 **New enum: `ClaudeSessionState`**
 
@@ -61,7 +61,7 @@ The enum should conform to `Sendable`, `Equatable`, `Comparable` (by priority), 
 
 ### 2.2 IPCCommandHandler Extension
 
-The existing `handleStatusSet` method in `IPCCommandHandler` (at `aterm/Core/IPCCommandHandler.swift`, line 419) currently requires a `label` parameter. Per the Claude Session Status PRD FR-005 through FR-008:
+The existing `handleStatusSet` method in `IPCCommandHandler` (at `tian/Core/IPCCommandHandler.swift`, line 419) currently requires a `label` parameter. Per the Claude Session Status PRD FR-005 through FR-008:
 
 - Accept an optional `state` parameter in addition to `label`.
 - At least one of `label` or `state` must be provided.
@@ -76,7 +76,7 @@ The `handleStatusClear` method clears both label and session state (calls existi
 
 A new `@MainActor @Observable` class that maintains the per-Space git repository context. One instance per `SpaceModel`. This is the core orchestrator that ties pane working directories to git repos, manages FSEvents watchers, and exposes git status data for the view layer.
 
-**Placement:** `aterm/Models/SpaceGitContext.swift`
+**Placement:** `tian/Models/SpaceGitContext.swift`
 
 **Owned by:** `SpaceModel` (as an `@Observable` property, created in `SpaceModel.init`). The context object itself is always created eagerly; repo detection within the context is lazy for non-worktree Spaces (see Initialization below).
 
@@ -152,9 +152,9 @@ There will be a brief period after non-worktree Space creation where no git stat
 
 ### 2.4 GitStatusService (New)
 
-A stateless service (enum with static methods, following the `WorktreeService` pattern at `aterm/Worktree/WorktreeService.swift`) that wraps git and gh CLI subprocess calls. All methods are `async` and run on background threads.
+A stateless service (enum with static methods, following the `WorktreeService` pattern at `tian/Worktree/WorktreeService.swift`) that wraps git and gh CLI subprocess calls. All methods are `async` and run on background threads.
 
-**Placement:** `aterm/Core/GitStatusService.swift`
+**Placement:** `tian/Core/GitStatusService.swift`
 
 **Methods:**
 
@@ -188,7 +188,7 @@ A file should be counted once in the highest-priority category if it appears in 
 
 Manages FSEvents streams for git repository directories. One watcher instance per detected repo per Space.
 
-**Placement:** `aterm/Core/GitRepoWatcher.swift`
+**Placement:** `tian/Core/GitRepoWatcher.swift`
 
 **Design:** Uses `DispatchSource.makeFileSystemObjectSource` (or `FSEventStreamCreate` via CoreServices) to watch the `.git` directory (or linked gitdir for worktrees). The PRD specifies FSEvents (FR-060), and `DispatchSource.makeFileSystemObjectSource` is the Swift-native way to do this on macOS.
 
@@ -218,7 +218,7 @@ However, `DispatchSource.makeFileSystemObjectSource` monitors a single file desc
 
 A simple in-memory cache for `gh pr view` results with a 60-second TTL per the PRD FR-056.
 
-**Placement:** `aterm/Core/PRStatusCache.swift`
+**Placement:** `tian/Core/PRStatusCache.swift`
 
 **Design:** `@MainActor @Observable` singleton (or per-`SpaceGitContext` instance -- per-context is preferred for lifecycle management per FR-056.6).
 
@@ -266,7 +266,7 @@ The complete data flow for a git status update:
 
 The complete data flow for a Claude session state change:
 
-1. Claude Code hook fires `aterm-cli status set --state busy`.
+1. Claude Code hook fires `tian-cli status set --state busy`.
 2. IPC arrives at `IPCCommandHandler.handleStatusSet`.
 3. Handler calls `PaneStatusManager.setSessionState(paneID:state:)`.
 4. `PaneStatusManager` (being `@Observable`) triggers observation updates.
@@ -301,7 +301,7 @@ The existing command at `IPCCommandHandler.handleStatusSet` (line 419) currently
 
 ### 3.2 No New IPC Commands
 
-Per the PRD, git status is read locally by aterm. No new IPC commands are introduced for git operations.
+Per the PRD, git status is read locally by tian. No new IPC commands are introduced for git operations.
 
 ### 3.3 GitStatusService Static Methods
 
@@ -366,7 +366,7 @@ The following state is managed locally in the view:
 New files follow the existing source layout conventions:
 
 ```
-aterm/
+tian/
   Models/
     PaneStatusManager.swift          (modified -- add session state tracking)
     SpaceGitContext.swift             (new -- per-Space git context orchestrator)
@@ -461,7 +461,7 @@ If no Claude dots exist for this line, items 1-2 are omitted and the line starts
 
 Per FR-013 and FR-072, the animation is always active regardless of Reduce Motion. This differs from the Claude Session Status PRD FR-023 which specifies respecting Reduce Motion -- the Sidebar Status PRD v1.3 explicitly overrides this to "always spins."
 
-The rainbow gradient reuses the `rainbowColors` constant already defined in `aterm/View/Shared/RainbowGlowBorder.swift`. Currently this constant is declared as `private let rainbowColors` at file scope. Change the access level by removing the `private` keyword, making it `let rainbowColors` (internal access, the Swift default). No file move is needed -- internal access is sufficient since all source files are in the same module. The `BusyDotView` can then reference `rainbowColors` directly.
+The rainbow gradient reuses the `rainbowColors` constant already defined in `tian/View/Shared/RainbowGlowBorder.swift`. Currently this constant is declared as `private let rainbowColors` at file scope. Change the access level by removing the `private` keyword, making it `let rainbowColors` (internal access, the Swift default). No file move is needed -- internal access is sufficient since all source files are in the same module. The `BusyDotView` can then reference `rainbowColors` directly.
 
 #### GitBadgesView (New)
 
@@ -538,7 +538,7 @@ A struct (not a typealias) conforming to `Hashable` and `Sendable`. Contains a s
 | Field | Type | Description |
 |-------|------|-------------|
 | `repoID` | `GitRepoID` | Canonical repo root path |
-| `displayName` | `String` | Last path component of `repoID.path` (e.g., "aterm") for future use |
+| `displayName` | `String` | Last path component of `repoID.path` (e.g., "tian") for future use |
 | `branchName` | `String?` | Short branch name or abbreviated SHA |
 | `isDetachedHead` | `Bool` | True when HEAD is a detached commit |
 | `diffSummary` | `GitDiffSummary` | Aggregate change counts |
@@ -600,7 +600,7 @@ This project does not have an analytics framework. No analytics events are defin
 | gh unavailable | `Log.git` | debug | `gh pr view` fails (not installed, not authenticated). Log error. |
 | git unavailable | `Log.git` | debug | `git rev-parse` fails in a way suggesting git is not installed. Log error. |
 
-**New logger category:** Add `static let git = Logger(subsystem: "com.aterm.app", category: "git")` to the `Log` enum in `aterm/Utilities/Logger.swift`.
+**New logger category:** Add `static let git = Logger(subsystem: "com.tian.app", category: "git")` to the `Log` enum in `tian/Utilities/Logger.swift`.
 
 ---
 
@@ -683,7 +683,7 @@ Claude session state and git status are NOT persisted across app restarts. On ap
 
 ### 11.4 XcodeGen
 
-After adding new source files, run `xcodegen generate` to regenerate `aterm.xcodeproj`. The new files are all within the existing `aterm/` source tree and will be auto-discovered by the `sources: - path: aterm` directive in `project.yml`.
+After adding new source files, run `xcodegen generate` to regenerate `tian.xcodeproj`. The new files are all within the existing `tian/` source tree and will be auto-discovered by the `sources: - path: tian` directive in `project.yml`.
 
 ### 11.5 Deployment Order
 
@@ -702,14 +702,14 @@ Since there are no persistent schema changes, rollback is simply reverting the c
 **Goal:** Implement the `ClaudeSessionState` enum, extend `PaneStatusManager` with session state tracking, and extend the `status.set` IPC command to accept the `--state` parameter. No UI changes yet.
 
 **Deliverables:**
-- `ClaudeSessionState` enum in `aterm/Models/ClaudeSessionState.swift`
+- `ClaudeSessionState` enum in `tian/Models/ClaudeSessionState.swift`
 - `PaneStatusManager` extended with `sessionStates: [UUID: ClaudeSessionState]` parallel dictionary and new methods: `setSessionState`, `clearSessionState`, `sessionState(for:)`, `sessionStates(in:)`. The existing `PaneStatus` struct is NOT modified -- `label` remains non-optional `String`.
 - `clearStatus(paneID:)` and `clearAll(for:)` updated to also clear `sessionStates` entries
 - `IPCCommandHandler.handleStatusSet` extended to accept `state` param
 - Unit tests for `PaneStatusManager` session state methods (all existing tests must pass unmodified)
 - Unit tests for `IPCCommandHandler` with `state` param (valid values, invalid values, label+state together, state-only, label-only, neither)
 
-**Independently testable:** Yes. Can be verified via `aterm-cli status set --state busy` and checking `PaneStatusManager` state.
+**Independently testable:** Yes. Can be verified via `tian-cli status set --state busy` and checking `PaneStatusManager` state.
 
 ### Phase 2: Claude Session Dots in Sidebar
 
@@ -718,7 +718,7 @@ Since there are no persistent schema changes, rollback is simply reverting the c
 **Deliverables:**
 - `ClaudeSessionDotsView` component
 - `BusyDotView` component with rainbow gradient spinning animation
-- Remove the `private` keyword from `let rainbowColors` in `aterm/View/Shared/RainbowGlowBorder.swift` (changing from `private let` to `let`, which gives internal access)
+- Remove the `private` keyword from `let rainbowColors` in `tian/View/Shared/RainbowGlowBorder.swift` (changing from `private let` to `let`, which gives internal access)
 - `SpaceStatusAreaView` component (initially only handles Claude dots, no git lines)
 - `SidebarSpaceRowView` modified to use `SpaceStatusAreaView` instead of inline status label
 - Accessibility labels for dots (FR-070)
@@ -743,7 +743,7 @@ Since there are no persistent schema changes, rollback is simply reverting the c
 - Unit tests for `SpaceGitContext` repo detection logic, including lazy vs. eager init behavior
 - Unit tests for in-flight task cancellation (verify that rapid sequential refreshes cancel the prior task)
 
-**Independently testable:** Yes. Open aterm with a pane in a git repo, verify branch name appears. For non-worktree Spaces, branch name appears after the shell reports its first working directory via OSC 7.
+**Independently testable:** Yes. Open tian with a pane in a git repo, verify branch name appears. For non-worktree Spaces, branch name appears after the shell reports its first working directory via OSC 7.
 
 ### Phase 4: Git Diff Summary & Badges
 
@@ -903,7 +903,7 @@ Since there are no persistent schema changes, rollback is simply reverting the c
 
 All tests use Swift Testing (`import Testing`, `@Test` macro, `#expect`), following the project's existing pattern (e.g., `PaneStatusManagerTests.swift`, `WorktreeServiceTests.swift`).
 
-**PaneStatusManager tests (extend existing `atermTests/PaneStatusManagerTests.swift`):**
+**PaneStatusManager tests (extend existing `tianTests/PaneStatusManagerTests.swift`):**
 - `setSessionState` stores state in `sessionStates` dictionary, does not create or affect entries in `statuses` dictionary
 - `setStatus` (label) does not affect `sessionStates` dictionary
 - `clearStatus` clears both the `statuses` entry and the `sessionStates` entry
@@ -914,7 +914,7 @@ All tests use Swift Testing (`import Testing`, `@Test` macro, `#expect`), follow
 - `sessionStates(in:)` spans all tabs and panes in the space
 - All existing `PaneStatusManager` tests pass without modification (label remains non-optional `String`, `latestStatus` unchanged)
 
-**IPCCommandHandler tests (extend existing `atermTests/IPCCommandHandlerTests.swift`):**
+**IPCCommandHandler tests (extend existing `tianTests/IPCCommandHandlerTests.swift`):**
 - `status.set` with `state` only (valid values)
 - `status.set` with invalid `state` returns error with valid values list
 - `status.set` with both `label` and `state`
@@ -991,8 +991,8 @@ Critical user flows mapped to PRD user stories:
 | Diff badges | Modify files in repo | Badge counts match actual changes | US-2 |
 | Hover popover | Hover over badges | Popover shows correct file list | US-3 |
 | PR status | Checkout branch with PR | PR indicator appears with correct state | US-4 |
-| Claude session dots | Run `aterm-cli status set --state busy` | Blue spinning dot appears | US-5 |
-| Needs attention | Run `aterm-cli status set --state needs_attention` | Orange dot appears | US-6 |
+| Claude session dots | Run `tian-cli status set --state busy` | Blue spinning dot appears | US-5 |
+| Needs attention | Run `tian-cli status set --state needs_attention` | Orange dot appears | US-6 |
 | Auto-refresh | Save file in repo | Badges update within ~3s | US-7 |
 | Non-worktree git | Open Space in regular git clone (no worktree), wait for OSC 7 | Branch name shown after pane reports working directory | US-8 |
 | Multi-repo | Split pane, cd to different repo | Two status lines appear | US-9 |

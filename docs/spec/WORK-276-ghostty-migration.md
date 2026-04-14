@@ -10,7 +10,7 @@
 
 ## 1. Overview
 
-This spec defines the migration of aterm from the low-level `libghostty-vt` library (VT-only parsing) plus custom Metal rendering to the full ghostty embedding API (`ghostty_app_t` / `ghostty_surface_t`). The full API handles PTY management, VT parsing, Metal rendering (font atlas, cursor, selection, scrollback, color themes), and scrollback internally. Aterm's role simplifies to: providing an NSView with a CAMetalLayer for ghostty to render into, forwarding keyboard/mouse events to the surface, implementing clipboard callbacks, and handling the surface lifecycle.
+This spec defines the migration of tian from the low-level `libghostty-vt` library (VT-only parsing) plus custom Metal rendering to the full ghostty embedding API (`ghostty_app_t` / `ghostty_surface_t`). The full API handles PTY management, VT parsing, Metal rendering (font atlas, cursor, selection, scrollback, color themes), and scrollback internally. Tian's role simplifies to: providing an NSView with a CAMetalLayer for ghostty to render into, forwarding keyboard/mouse events to the surface, implementing clipboard callbacks, and handling the surface lifecycle.
 
 This is a major architectural simplification. Approximately 11 source files (plus 5 renderer files and a C implementation) totaling 2,600+ lines of custom rendering, PTY, and bridge code are replaced by a thin wrapper around ghostty's surface API. The reference implementation is cmux (at `/tmp/cmux`), which demonstrates the integration pattern.
 
@@ -24,7 +24,7 @@ This is a major architectural simplification. Approximately 11 source files (plu
 
 | Directory | File | Lines | Purpose |
 |-----------|------|-------|---------|
-| App/ | AtermApp.swift | 12 | SwiftUI app entry point |
+| App/ | TianApp.swift | 12 | SwiftUI app entry point |
 | App/ | TerminalWindow.swift | 39 | Window with TerminalCore lifecycle |
 | Core/ | TerminalCore.swift | 221 | Orchestrates PTY, VT bridge, snapshot handoff (includes TerminalBridge facade) |
 | Core/ | PTYProcess.swift | 174 | POSIX PTY fork/exec, resize, terminate |
@@ -50,7 +50,7 @@ This is a major architectural simplification. Approximately 11 source files (plu
 | Vendor/ | ghostty/lib/libghostty-vt.a | -- | Static library (VT-only) |
 | Vendor/ | ghostty/include/ghostty/vt.h + subdirs | -- | C headers for VT API |
 
-**Test Files (atermTests/):**
+**Test Files (tianTests/):**
 
 | File | Purpose |
 |------|---------|
@@ -103,7 +103,7 @@ The host application's responsibilities reduce to:
 
 | Directory | File | Status | Purpose |
 |-----------|------|--------|---------|
-| App/ | AtermApp.swift | MODIFY | Initialize GhosttyApp singleton in `.task` |
+| App/ | TianApp.swift | MODIFY | Initialize GhosttyApp singleton in `.task` |
 | App/ | TerminalWindow.swift | REWRITE | Simplified: create GhosttyTerminalSurface, host view |
 | Core/ | GhosttyApp.swift | NEW | Singleton wrapping ghostty_app_t, runtime callbacks, tick |
 | Core/ | GhosttyTerminalSurface.swift | NEW | Wraps ghostty_surface_t, lifecycle, focus, resize |
@@ -275,9 +275,9 @@ These files are entirely replaced by ghostty internals:
 
 | File | Reason |
 |------|--------|
-| atermTests/PTYProcessTests.swift | PTYProcess is being deleted |
-| atermTests/PTYIntegrationTests.swift | PTY integration layer is being deleted |
-| atermTests/GhosttyBridgeTests.swift | GhosttyBridge is being deleted |
+| tianTests/PTYProcessTests.swift | PTYProcess is being deleted |
+| tianTests/PTYIntegrationTests.swift | PTY integration layer is being deleted |
+| tianTests/GhosttyBridgeTests.swift | GhosttyBridge is being deleted |
 
 ### 5.2 Files to CREATE (3 files)
 
@@ -308,7 +308,7 @@ Singleton class managing the ghostty application lifecycle.
 - The tick function must be called on the main thread. The wakeup callback dispatches to main.
 
 **Error Handling:**
-- If `ghostty_init()` fails (returns non-zero), log error and set app to nil state. AtermApp shows error UI.
+- If `ghostty_init()` fails (returns non-zero), log error and set app to nil state. TianApp shows error UI.
 - If `ghostty_config_new()` fails, attempt fallback with empty config (matching cmux pattern).
 - If `ghostty_app_new()` fails with primary config, free primary config, create a fallback config (new + finalize only, no load_default_files), retry `ghostty_app_new()` with fallback.
 
@@ -374,7 +374,7 @@ NSView subclass that hosts the ghostty surface's Metal rendering.
 
 ### 5.3 Files to MODIFY
 
-#### 5.3.1 App/AtermApp.swift
+#### 5.3.1 App/TianApp.swift
 
 **Changes:**
 - Add `.task` block to initialize `GhosttyApp.shared` before window appears
@@ -408,7 +408,7 @@ NSView subclass that hosts the ghostty surface's Metal rendering.
 - Remove `bridge` category or rename to `ghostty`
 - Keep `core` and `view` categories
 
-#### 5.3.6 aterm-Bridging-Header.h
+#### 5.3.6 tian-Bridging-Header.h
 
 **Changes:**
 - Replace `#import <ghostty/vt.h>` with `#import "ghostty.h"`
@@ -421,7 +421,7 @@ NSView subclass that hosts the ghostty surface's Metal rendering.
 | File | Reason |
 |------|--------|
 | Core/ANSIStripper.swift | General utility, not related to rendering |
-| atermTests/ANSIStripperTests.swift | Tests remain valid, utility not changed |
+| tianTests/ANSIStripperTests.swift | Tests remain valid, utility not changed |
 
 ---
 
@@ -430,30 +430,30 @@ NSView subclass that hosts the ghostty surface's Metal rendering.
 ### 6.1 Vendor Library Replacement
 
 **Current state:**
-- `aterm/Vendor/ghostty/lib/libghostty-vt.a` -- static library
-- `aterm/Vendor/ghostty/include/ghostty/vt.h` + sub-headers -- C API
-- Xcode: HEADER_SEARCH_PATHS includes `$(SRCROOT)/aterm/Vendor/ghostty/include`
-- Xcode: LIBRARY_SEARCH_PATHS includes `$(SRCROOT)/aterm/Vendor/ghostty/lib`
+- `tian/Vendor/ghostty/lib/libghostty-vt.a` -- static library
+- `tian/Vendor/ghostty/include/ghostty/vt.h` + sub-headers -- C API
+- Xcode: HEADER_SEARCH_PATHS includes `$(SRCROOT)/tian/Vendor/ghostty/include`
+- Xcode: LIBRARY_SEARCH_PATHS includes `$(SRCROOT)/tian/Vendor/ghostty/lib`
 - Xcode: OTHER_LDFLAGS includes `-lghostty-vt`
 
 **Target state (Option A -- xcframework, recommended):**
-- `aterm/Vendor/GhosttyKit.xcframework` -- pre-built xcframework (matching cmux's approach)
-- `aterm/Vendor/ghostty.h` -- single header file (copied from the full ghostty API header)
+- `tian/Vendor/GhosttyKit.xcframework` -- pre-built xcframework (matching cmux's approach)
+- `tian/Vendor/ghostty.h` -- single header file (copied from the full ghostty API header)
 - Xcode: Add `GhosttyKit.xcframework` to "Frameworks, Libraries, and Embedded Content" (link and embed)
-- Xcode: HEADER_SEARCH_PATHS includes `$(SRCROOT)/aterm/Vendor` (for ghostty.h)
+- Xcode: HEADER_SEARCH_PATHS includes `$(SRCROOT)/tian/Vendor` (for ghostty.h)
 - Remove old LIBRARY_SEARCH_PATHS and `-lghostty-vt` from OTHER_LDFLAGS
 
 **Target state (Option B -- static library):**
-- `aterm/Vendor/ghostty/lib/libghostty.a` -- static library (full API)
-- `aterm/Vendor/ghostty.h` -- single header
+- `tian/Vendor/ghostty/lib/libghostty.a` -- static library (full API)
+- `tian/Vendor/ghostty.h` -- single header
 - Xcode: Update LIBRARY_SEARCH_PATHS, change `-lghostty-vt` to `-lghostty`
 - Additional link flags may be needed for Metal framework, IOSurface
 
-**Recommendation:** Option A (xcframework) because it encapsulates framework dependencies and matches the cmux reference. The `.ghostty-src` directory already present in the aterm repo (a shallow clone of the Ghostty source) can be used to build the xcframework.
+**Recommendation:** Option A (xcframework) because it encapsulates framework dependencies and matches the cmux reference. The `.ghostty-src` directory already present in the tian repo (a shallow clone of the Ghostty source) can be used to build the xcframework.
 
 ### 6.2 Bridging Header
 
-The bridging header (`aterm/aterm-Bridging-Header.h`) must be updated:
+The bridging header (`tian/tian-Bridging-Header.h`) must be updated:
 
 | Current Import | Target Import |
 |----------------|---------------|
@@ -468,7 +468,7 @@ Currently the Xcode project compiles `Shaders.metal` and creates a default Metal
 
 ### 6.4 Xcode Project File Changes
 
-The `aterm.xcodeproj/project.pbxproj` requires:
+The `tian.xcodeproj/project.pbxproj` requires:
 - Remove all deleted source files from PBXBuildFile, PBXFileReference, and PBXGroup sections (including pty_helpers.c)
 - Remove deleted test files from PBXBuildFile, PBXFileReference, and test target groups
 - Add new source files (GhosttyApp.swift, GhosttyTerminalSurface.swift, TerminalSurfaceView.swift)
@@ -614,7 +614,7 @@ However, the modifier mapping (NSEvent.ModifierFlags to ghostty_input_mods_e) is
 - `.option` -> `GHOSTTY_MODS_ALT`
 - `.command` -> `GHOSTTY_MODS_SUPER`
 
-Note: `.capsLock` is NOT mapped in cmux's `modsFromEvent`, unlike the current aterm code which maps it to `GHOSTTY_MODS_CAPS_LOCK` (which should be `GHOSTTY_MODS_CAPS`).
+Note: `.capsLock` is NOT mapped in cmux's `modsFromEvent`, unlike the current tian code which maps it to `GHOSTTY_MODS_CAPS_LOCK` (which should be `GHOSTTY_MODS_CAPS`).
 
 ---
 
@@ -662,7 +662,7 @@ Ghostty has its own config system. The host loads config via:
 3. `ghostty_config_finalize(config)` -- validate and resolve
 4. Pass to `ghostty_app_new()`
 
-For M1, the default ghostty config file controls font, colors, theme, and keybindings. No aterm-specific config layer is needed.
+For M1, the default ghostty config file controls font, colors, theme, and keybindings. No tian-specific config layer is needed.
 
 ### 10.2 Reading Config Values
 
@@ -689,7 +689,7 @@ The hardcoded `DefaultTheme` (Tokyo Night Storm) is removed. Users configure the
 ### 11.2 Considerations
 
 - **Library size:** The full ghostty library is significantly larger than libghostty-vt (includes Metal shaders, font subsystem, PTY management). Expect 5-15MB increase in binary size.
-- **Startup time:** `ghostty_init()` initializes the rendering subsystem and may take 50-100ms. Ensure this happens before the first window appears (in AtermApp's .task block).
+- **Startup time:** `ghostty_init()` initializes the rendering subsystem and may take 50-100ms. Ensure this happens before the first window appears (in TianApp's .task block).
 - **Memory baseline:** Each surface allocates its own font atlas, scrollback buffer, and Metal resources. Baseline per-surface memory is higher than the current shared-renderer approach.
 
 ---
@@ -698,12 +698,12 @@ The hardcoded `DefaultTheme` (Tokyo Night Storm) is removed. Users configure the
 
 ### 12.1 Build the GhosttyKit Library
 
-The `.ghostty-src` directory in the aterm repo contains a shallow clone of the Ghostty source. To build the full library:
+The `.ghostty-src` directory in the tian repo contains a shallow clone of the Ghostty source. To build the full library:
 
 1. Navigate to `.ghostty-src`
 2. Build libghostty for macOS arm64 using the Ghostty build system (Zig)
 3. Package as an xcframework or copy the static library and header
-4. Place in `aterm/Vendor/`
+4. Place in `tian/Vendor/`
 
 Alternatively, use a pre-built GhosttyKit.xcframework from the Ghostty releases or build it from source using the Ghostty macOS Xcode project.
 
@@ -716,7 +716,7 @@ The migration must be atomic -- the old and new systems cannot coexist because t
 3. **Create GhosttyTerminalSurface.swift** with surface lifecycle
 4. **Create TerminalSurfaceView.swift** with input forwarding
 5. **Rewrite TerminalContentView.swift** and TerminalWindow.swift
-6. **Update AtermApp.swift** to initialize GhosttyApp
+6. **Update TianApp.swift** to initialize GhosttyApp
 7. **Update the bridging header**
 8. **Delete all obsoleted files** (including pty_helpers.c and test files)
 9. **Remove old vendor library**
@@ -745,7 +745,7 @@ Since this is a complete replacement of the core layer:
 4. Implement TerminalSurfaceView.swift (CAMetalLayer with correct properties, keyboard forwarding via ghostty_surface_key, NSScreen.displayID extension)
 5. Rewrite TerminalContentView.swift (simplified NSViewRepresentable)
 6. Rewrite TerminalWindow.swift (use GhosttyTerminalSurface)
-7. Update AtermApp.swift (initialize GhosttyApp)
+7. Update TianApp.swift (initialize GhosttyApp)
 8. Delete all obsoleted files (16 source files + 3 test files)
 9. Update bridging header and build settings
 
@@ -806,13 +806,13 @@ Since this is a complete replacement of the core layer:
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| GhosttyKit.xcframework not available for aterm's macOS 26 target | Blocking | Low | Build from source using `.ghostty-src`. The Ghostty build system supports macOS targets. |
+| GhosttyKit.xcframework not available for tian's macOS 26 target | Blocking | Low | Build from source using `.ghostty-src`. The Ghostty build system supports macOS targets. |
 | ghostty.h API differences between Ghostty versions | High | Medium | Pin to a specific Ghostty commit/tag. The `.ghostty-src` provides version control. Verify header matches built library. |
 | Metal layer configuration mismatch (ghostty expects specific layer properties) | Medium | Medium | Match cmux's GhosttyNSView.makeBackingLayer() exactly: bgra8Unorm, framebufferOnly=false, isOpaque=false. |
 | Display link / vsync issues on first frame | Medium | Medium | Set display ID immediately after surface creation (before resize). Call `ghostty_surface_refresh()` after setup. Match cmux's pattern of falling back to NSScreen.main if window screen is nil. |
 | Callback lifetime issues (use-after-free on surface teardown) | High | Medium | Use the SurfaceCallbackContext pattern with weak references. Release the retained context on surface free. Guard all callback context access with nil checks. Verify surface pointer matches request surface in clipboard callbacks. |
 | Large binary size increase from full ghostty library | Low | High | Expected and acceptable for M1. Optimize later if needed. |
-| Config file format unfamiliar to users | Low | Low | Document ghostty config location (~/.config/ghostty/config) and key settings. Ship a default config for aterm. |
+| Config file format unfamiliar to users | Low | Low | Document ghostty config location (~/.config/ghostty/config) and key settings. Ship a default config for tian. |
 | ghostty_surface_key() returns false for keys it doesn't handle | Medium | Low | Fall through to interpretKeyEvents for IME processing, matching cmux's pattern. |
 | NSScreen.displayID not a standard property | Low | Low | Implement as extension reading from `deviceDescription["NSScreenNumber"]` with type coercion fallbacks, matching cmux pattern. |
 | Scroll mods packed struct misuse | Medium | Medium | Use `ghostty_input_scroll_mods_t` (packed Int32) with precision bit 0 and momentum phase bits 1+. Do NOT pass `ghostty_input_mods_e`. |
@@ -849,7 +849,7 @@ Since this is a complete replacement of the core layer:
 ### 15.3 Regression Testing
 
 Compare rendering quality and behavior against:
-1. The current aterm (pre-migration)
+1. The current tian (pre-migration)
 2. The standalone Ghostty terminal app
 3. The cmux terminal
 
@@ -859,19 +859,19 @@ Compare rendering quality and behavior against:
 
 | Question | Context | Impact if Unresolved |
 |----------|---------|---------------------|
-| Should aterm build GhosttyKit from .ghostty-src or use a pre-built artifact? | The .ghostty-src directory exists but building requires Zig toolchain. Pre-built xcframeworks are available from Ghostty releases. | Build system complexity vs. reproducibility. Recommend building from source for version control. |
-| What GHOSTTY_RESOURCES_DIR should aterm set? | Ghostty uses this env var for shell integration scripts, terminfo, etc. cmux bundles these in its app bundle. | Shell integration (ghostty shell features) won't work without correct resources. Copy resources from .ghostty-src to app bundle. |
-| Should aterm ship a default ghostty config or rely on user's existing config? | Users who already use Ghostty will have a config. New users won't. | New users get Ghostty defaults (which may differ from the Tokyo Night Storm theme currently hardcoded). Consider shipping a default aterm config. |
+| Should tian build GhosttyKit from .ghostty-src or use a pre-built artifact? | The .ghostty-src directory exists but building requires Zig toolchain. Pre-built xcframeworks are available from Ghostty releases. | Build system complexity vs. reproducibility. Recommend building from source for version control. |
+| What GHOSTTY_RESOURCES_DIR should tian set? | Ghostty uses this env var for shell integration scripts, terminfo, etc. cmux bundles these in its app bundle. | Shell integration (ghostty shell features) won't work without correct resources. Copy resources from .ghostty-src to app bundle. |
+| Should tian ship a default ghostty config or rely on user's existing config? | Users who already use Ghostty will have a config. New users won't. | New users get Ghostty defaults (which may differ from the Tokyo Night Storm theme currently hardcoded). Consider shipping a default tian config. |
 | How to handle GHOSTTY_ACTION_NEW_TAB and GHOSTTY_ACTION_NEW_SPLIT before M2/M3? | Ghostty may fire these actions based on keybindings in the user's config. | Return false (unhandled) so ghostty falls back. Or return true to silently consume. |
-| Should env vars like TERM_PROGRAM be set to "aterm" or "ghostty"? | Ghostty sets TERM_PROGRAM=ghostty internally. aterm may want its own identity. | Shell scripts checking TERM_PROGRAM may behave unexpectedly. Can be overridden via surface config env_vars. |
-| Should capsLock be mapped to GHOSTTY_MODS_CAPS? | Current aterm code maps `.capsLock` to modifier flags but cmux's `modsFromEvent` does NOT map capsLock. The ghostty header defines `GHOSTTY_MODS_CAPS`. | Minor input handling difference. Follow cmux's pattern (omit capsLock) unless there's a reason to include it. |
+| Should env vars like TERM_PROGRAM be set to "tian" or "ghostty"? | Ghostty sets TERM_PROGRAM=ghostty internally. tian may want its own identity. | Shell scripts checking TERM_PROGRAM may behave unexpectedly. Can be overridden via surface config env_vars. |
+| Should capsLock be mapped to GHOSTTY_MODS_CAPS? | Current tian code maps `.capsLock` to modifier flags but cmux's `modsFromEvent` does NOT map capsLock. The ghostty header defines `GHOSTTY_MODS_CAPS`. | Minor input handling difference. Follow cmux's pattern (omit capsLock) unless there's a reason to include it. |
 
 ---
 
 ## 17. Validation Notes
 
 **Validation performed on:** 2026-03-26
-**Validated against:** aterm codebase at `/Users/psycoder/00_Code/00_Personal_Project/aterm` and cmux reference at `/tmp/cmux`
+**Validated against:** tian codebase at `/Users/psycoder/00_Code/00_Personal_Project/tian` and cmux reference at `/tmp/cmux`
 
 ### Corrections Made
 
@@ -881,7 +881,7 @@ Compare rendering quality and behavior against:
 
 3. **Line counts** -- Systematically corrected all line counts. The original spec was off by one for most files (likely not counting trailing newlines). Each count now matches the actual file as read via `cat -n`.
 
-4. **Missing test files** -- Added `atermTests/PTYProcessTests.swift`, `atermTests/PTYIntegrationTests.swift`, and `atermTests/GhosttyBridgeTests.swift` to the deletion list. These test files test code being removed and need cleanup.
+4. **Missing test files** -- Added `tianTests/PTYProcessTests.swift`, `tianTests/PTYIntegrationTests.swift`, and `tianTests/GhosttyBridgeTests.swift` to the deletion list. These test files test code being removed and need cleanup.
 
 5. **ghostty_surface_mouse_scroll parameter type** -- Section 4.5 and 8.3 originally described the scroll mods parameter as `mods` (suggesting `ghostty_input_mods_e`). Corrected to `ghostty_input_scroll_mods_t` which is a packed `Int32` containing a precision flag (bit 0) and momentum phase (bits 1+). Added detailed documentation of the packing format.
 
@@ -905,7 +905,7 @@ Compare rendering quality and behavior against:
 
 15. **Action dispatch target checking** -- Added guidance to check `target.tag` before resolving surface, handling app-level vs surface-level actions differently.
 
-16. **makeBackingLayer properties** -- Corrected: `framebufferOnly` must be `false` (not `true` as in current aterm). Current aterm sets `framebufferOnly = true` but the ghostty API requires `false` for background opacity/blur compositing.
+16. **makeBackingLayer properties** -- Corrected: `framebufferOnly` must be `false` (not `true` as in current tian). Current tian sets `framebufferOnly = true` but the ghostty API requires `false` for background opacity/blur compositing.
 
 17. **TerminalCore.swift description** -- Corrected to note that it's 221 lines and includes the TerminalBridge facade class, not just the TerminalCore class.
 

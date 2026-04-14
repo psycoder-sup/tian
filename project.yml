@@ -1,6 +1,6 @@
-name: aterm
+name: tian
 options:
-  bundleIdPrefix: com.aterm
+  bundleIdPrefix: com.tian
   deploymentTarget:
     macOS: "26.0"
   xcodeVersion: "26.3"
@@ -22,41 +22,41 @@ settings:
     ARCHS: arm64
 
 schemes:
-  aterm:
+  tian:
     build:
       targets:
-        aterm: all
-        aterm-cli: all
-        atermTests: [test]
-        atermUITests: [test]
+        tian: all
+        tian-cli: all
+        tianTests: [test]
+        tianUITests: [test]
     test:
       targets:
-        - atermTests
-        - atermUITests
+        - tianTests
+        - tianUITests
 
 targets:
-  aterm:
+  tian:
     type: application
     platform: macOS
     sources:
-      - path: aterm
+      - path: tian
         excludes:
           - "Vendor/**"
           - "Resources/claude"
-          - "Resources/aterm-hook-log.sh"
-          - "Resources/aterm-claude-settings.json"
+          - "Resources/tian-hook-log.sh"
+          - "Resources/tian-claude-settings.json"
           - "Resources/shell-integration/**"
     dependencies:
-      - target: aterm-cli
+      - target: tian-cli
       - package: TOMLKit
         product: TOMLKit
     postCompileScripts:
-      - script: cp -f "$BUILT_PRODUCTS_DIR/aterm-cli" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/MacOS/aterm-cli"
-        name: Bundle aterm-cli
+      - script: cp -f "$BUILT_PRODUCTS_DIR/tian-cli" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/MacOS/tian-cli"
+        name: Bundle tian-cli
         inputFiles:
-          - $(BUILT_PRODUCTS_DIR)/aterm-cli
+          - $(BUILT_PRODUCTS_DIR)/tian-cli
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/MacOS/aterm-cli
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/MacOS/tian-cli
       - script: |
           SHARE="$SRCROOT/.ghostty-src/zig-out/share"
           RESOURCES="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources"
@@ -70,29 +70,29 @@ targets:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/ghostty/
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/terminfo/
       - script: |
-          cp -f "$SRCROOT/aterm/Resources/claude" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/claude"
+          cp -f "$SRCROOT/tian/Resources/claude" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/claude"
           chmod +x "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/claude"
         name: Bundle Claude Wrapper
         inputFiles:
-          - $(SRCROOT)/aterm/Resources/claude
+          - $(SRCROOT)/tian/Resources/claude
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/claude
-      - script: cp -f "$SRCROOT/aterm/Resources/aterm-claude-settings.json" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/aterm-claude-settings.json"
+      - script: cp -f "$SRCROOT/tian/Resources/tian-claude-settings.json" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-claude-settings.json"
         name: Bundle Claude Settings
         inputFiles:
-          - $(SRCROOT)/aterm/Resources/aterm-claude-settings.json
+          - $(SRCROOT)/tian/Resources/tian-claude-settings.json
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/aterm-claude-settings.json
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-claude-settings.json
       - script: |
-          cp -f "$SRCROOT/aterm/Resources/aterm-hook-log.sh" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/aterm-hook-log.sh"
-          chmod +x "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/aterm-hook-log.sh"
+          cp -f "$SRCROOT/tian/Resources/tian-hook-log.sh" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-log.sh"
+          chmod +x "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-log.sh"
         name: Bundle Claude Hook Logger
         inputFiles:
-          - $(SRCROOT)/aterm/Resources/aterm-hook-log.sh
+          - $(SRCROOT)/tian/Resources/tian-hook-log.sh
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/aterm-hook-log.sh
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-hook-log.sh
       - script: |
-          SI_SRC="$SRCROOT/aterm/Resources/shell-integration"
+          SI_SRC="$SRCROOT/tian/Resources/shell-integration"
           SI_DST="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/shell-integration"
           mkdir -p "$SI_DST/zsh"
           # Copy zsh dotfiles (renamed from non-dot source to dotfile in bundle)
@@ -100,57 +100,57 @@ targets:
             cp -f "$SI_SRC/zsh/$f" "$SI_DST/zsh/.$f"
           done
           # Copy integration scripts
-          cp -f "$SI_SRC/aterm-zsh-integration.zsh" "$SI_DST/aterm-zsh-integration.zsh"
-          cp -f "$SI_SRC/aterm-bash-integration.bash" "$SI_DST/aterm-bash-integration.bash"
+          cp -f "$SI_SRC/tian-zsh-integration.zsh" "$SI_DST/tian-zsh-integration.zsh"
+          cp -f "$SI_SRC/tian-bash-integration.bash" "$SI_DST/tian-bash-integration.bash"
         name: Bundle Shell Integration
         inputFiles:
-          - $(SRCROOT)/aterm/Resources/shell-integration/zsh/zshenv
-          - $(SRCROOT)/aterm/Resources/shell-integration/zsh/zprofile
-          - $(SRCROOT)/aterm/Resources/shell-integration/zsh/zshrc
-          - $(SRCROOT)/aterm/Resources/shell-integration/zsh/zlogin
-          - $(SRCROOT)/aterm/Resources/shell-integration/aterm-zsh-integration.zsh
-          - $(SRCROOT)/aterm/Resources/shell-integration/aterm-bash-integration.bash
+          - $(SRCROOT)/tian/Resources/shell-integration/zsh/zshenv
+          - $(SRCROOT)/tian/Resources/shell-integration/zsh/zprofile
+          - $(SRCROOT)/tian/Resources/shell-integration/zsh/zshrc
+          - $(SRCROOT)/tian/Resources/shell-integration/zsh/zlogin
+          - $(SRCROOT)/tian/Resources/shell-integration/tian-zsh-integration.zsh
+          - $(SRCROOT)/tian/Resources/shell-integration/tian-bash-integration.bash
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/zsh/.zshenv
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/aterm-zsh-integration.zsh
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/aterm-bash-integration.bash
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/tian-zsh-integration.zsh
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/tian-bash-integration.bash
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.app
-        PRODUCT_NAME: aterm
+        PRODUCT_BUNDLE_IDENTIFIER: com.tian.app
+        PRODUCT_NAME: tian
         INFOPLIST_FILE: ""
         GENERATE_INFOPLIST_FILE: true
-        INFOPLIST_KEY_CFBundleDisplayName: aterm
+        INFOPLIST_KEY_CFBundleDisplayName: tian
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_UTExportedTypeDeclarations: |
           (
             {
-              UTTypeIdentifier = "com.aterm.tab-drag-item";
+              UTTypeIdentifier = "com.tian.tab-drag-item";
               UTTypeConformsTo = ("public.data");
-              UTTypeDescription = "aterm Tab";
+              UTTypeDescription = "tian Tab";
               UTTypeTagSpecification = {};
             },
             {
-              UTTypeIdentifier = "com.aterm.space-drag-item";
+              UTTypeIdentifier = "com.tian.space-drag-item";
               UTTypeConformsTo = ("public.data");
-              UTTypeDescription = "aterm Space";
+              UTTypeDescription = "tian Space";
               UTTypeTagSpecification = {};
             },
             {
-              UTTypeIdentifier = "com.aterm.workspace-drag-item";
+              UTTypeIdentifier = "com.tian.workspace-drag-item";
               UTTypeConformsTo = ("public.data");
-              UTTypeDescription = "aterm Workspace";
+              UTTypeDescription = "tian Workspace";
               UTTypeTagSpecification = {};
             }
           )
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_ENTITLEMENTS: aterm/aterm.entitlements
+        CODE_SIGN_ENTITLEMENTS: tian/tian.entitlements
         ENABLE_APP_SANDBOX: false
-        SWIFT_OBJC_BRIDGING_HEADER: aterm/aterm-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: tian/tian-Bridging-Header.h
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
+          - $(SRCROOT)/tian/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
         LIBRARY_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64
+          - $(SRCROOT)/tian/Vendor/GhosttyKit.xcframework/macos-arm64
         OTHER_LDFLAGS:
           - -lghostty-fat
           - -lc
@@ -158,53 +158,53 @@ targets:
           - -framework Carbon
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: com.aterm.app.debug
-          PRODUCT_NAME: aterm-debug
-          PRODUCT_MODULE_NAME: aterm
-          INFOPLIST_KEY_CFBundleName: Aterm (debug)
-          INFOPLIST_KEY_CFBundleDisplayName: Aterm (debug)
+          PRODUCT_BUNDLE_IDENTIFIER: com.tian.app.debug
+          PRODUCT_NAME: tian-debug
+          PRODUCT_MODULE_NAME: tian
+          INFOPLIST_KEY_CFBundleName: Tian (debug)
+          INFOPLIST_KEY_CFBundleDisplayName: Tian (debug)
 
-  atermTests:
+  tianTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: atermTests
-      - path: aterm-cli/CommandLogger.swift
+      - path: tianTests
+      - path: tian-cli/CommandLogger.swift
     dependencies:
-      - target: aterm
+      - target: tian
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tian.tests
         GENERATE_INFOPLIST_FILE: true
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/aterm.app/Contents/MacOS/aterm
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/tian.app/Contents/MacOS/tian
         BUNDLE_LOADER: $(TEST_HOST)
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/aterm/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
+          - $(SRCROOT)/tian/Vendor/GhosttyKit.xcframework/macos-arm64/Headers
       configs:
         Debug:
-          TEST_HOST: $(BUILT_PRODUCTS_DIR)/aterm-debug.app/Contents/MacOS/aterm-debug
+          TEST_HOST: $(BUILT_PRODUCTS_DIR)/tian-debug.app/Contents/MacOS/tian-debug
 
-  aterm-cli:
+  tian-cli:
     type: tool
     platform: macOS
     sources:
-      - path: aterm-cli
+      - path: tian-cli
     dependencies:
       - package: swift-argument-parser
         product: ArgumentParser
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.cli
-        PRODUCT_NAME: aterm-cli
+        PRODUCT_BUNDLE_IDENTIFIER: com.tian.cli
+        PRODUCT_NAME: tian-cli
 
-  atermUITests:
+  tianUITests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - path: atermUITests
+      - path: tianUITests
     dependencies:
-      - target: aterm
+      - target: tian
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.aterm.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tian.uitests
         GENERATE_INFOPLIST_FILE: true

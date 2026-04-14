@@ -1,4 +1,0 @@
-# aterm passthrough: source user's .zlogin
-builtin typeset _aterm_file="${ZDOTDIR-$HOME}/.zlogin"
-[[ ! -r "$_aterm_file" ]] || builtin source -- "$_aterm_file"
-builtin unset _aterm_file

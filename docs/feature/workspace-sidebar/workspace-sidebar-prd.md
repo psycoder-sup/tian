@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-Replace aterm's current horizontal navigation chrome (WorkspaceIndicatorView + SpaceBarView + WorkspaceSwitcherOverlay) with a glassmorphism sidebar that displays the current window's workspace and its spaces in a hierarchical tree. The tab bar remains horizontal at the top of the content area. The sidebar uses macOS material effects to show desktop wallpaper behind it, and supports a collapsed icon-rail mode for maximum terminal real estate.
+Replace tian's current horizontal navigation chrome (WorkspaceIndicatorView + SpaceBarView + WorkspaceSwitcherOverlay) with a glassmorphism sidebar that displays the current window's workspace and its spaces in a hierarchical tree. The tab bar remains horizontal at the top of the content area. The sidebar uses macOS material effects to show desktop wallpaper behind it, and supports a collapsed icon-rail mode for maximum terminal real estate.
 
 **Target user:** The developer (sole user) who works across multiple project workspaces and git worktree spaces, navigating primarily via keyboard but wanting clear visual hierarchy at a glance.
 
@@ -530,19 +530,19 @@ Legend:
 
 ## 9. Permissions & Privacy
 
-No new permissions required. aterm is not sandboxed. The sidebar reads from existing in-memory data structures (WorkspaceManager, SpaceCollection). No additional data is collected, stored, or shared.
+No new permissions required. tian is not sandboxed. The sidebar reads from existing in-memory data structures (WorkspaceManager, SpaceCollection). No additional data is collected, stored, or shared.
 
 ---
 
 ## 10. Analytics & Instrumentation
 
-No analytics instrumentation. aterm is a personal tool; success is evaluated by qualitative daily-driver feel, not telemetry.
+No analytics instrumentation. tian is a personal tool; success is evaluated by qualitative daily-driver feel, not telemetry.
 
 ---
 
 ## 11. Success Metrics
 
-Since aterm is a personal tool with a single user, success is qualitative:
+Since tian is a personal tool with a single user, success is qualitative:
 
 | Metric | Target |
 |--------|--------|

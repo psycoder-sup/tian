@@ -12,7 +12,7 @@
 
 This spec covers the remaining implementation work to bring the Claude Session Status feature to parity with the PRD v1.3. The feature tracks Claude Code session lifecycle state per-pane (active, busy, idle, needs_attention, inactive) and surfaces each active session as an individual color-coded dot on the sidebar Space row.
 
-Significant portions of this feature are already implemented. The `ClaudeSessionState` enum exists at `aterm/Core/ClaudeSessionState.swift` with the correct five cases and priority-based `Comparable` conformance. The `PaneStatusManager` at `aterm/Pane/PaneStatusManager.swift` already has `sessionStates` storage, `setSessionState`, `clearSessionState`, `sessionState(for:)`, `sessionStates(in:)`, and the `clearStatus`/`clearAll` methods already clear both label and session state. The `IPCCommandHandler.handleStatusSet` at `aterm/Core/IPCCommandHandler.swift` already accepts the optional `state` parameter, validates it against `ClaudeSessionState`, and calls the appropriate manager methods. The sidebar views `ClaudeSessionDotsView`, `BusyDotView`, `SpaceStatusAreaView`, and `SidebarSpaceRowView` already render per-session dots with priority sorting. Pane cleanup in `PaneViewModel.closePane` already calls `PaneStatusManager.shared.clearStatus(paneID:)`.
+Significant portions of this feature are already implemented. The `ClaudeSessionState` enum exists at `tian/Core/ClaudeSessionState.swift` with the correct five cases and priority-based `Comparable` conformance. The `PaneStatusManager` at `tian/Pane/PaneStatusManager.swift` already has `sessionStates` storage, `setSessionState`, `clearSessionState`, `sessionState(for:)`, `sessionStates(in:)`, and the `clearStatus`/`clearAll` methods already clear both label and session state. The `IPCCommandHandler.handleStatusSet` at `tian/Core/IPCCommandHandler.swift` already accepts the optional `state` parameter, validates it against `ClaudeSessionState`, and calls the appropriate manager methods. The sidebar views `ClaudeSessionDotsView`, `BusyDotView`, `SpaceStatusAreaView`, and `SidebarSpaceRowView` already render per-session dots with priority sorting. Pane cleanup in `PaneViewModel.closePane` already calls `PaneStatusManager.shared.clearStatus(paneID:)`.
 
 This spec addresses the **six remaining gaps** between the PRD and the current implementation:
 
@@ -32,9 +32,9 @@ Not applicable. Claude session state is ephemeral, in-memory only, stored in `Pa
 ### Data Flow
 
 1. Claude Code hook fires (e.g., `SessionStart`)
-2. Hook command executes: `aterm-cli status set --state active`
+2. Hook command executes: `tian-cli status set --state active`
 3. CLI parses `--state active`, constructs IPC request with `params: ["state": "active"]`
-4. IPC request sent over Unix domain socket to aterm app
+4. IPC request sent over Unix domain socket to tian app
 5. `IPCCommandHandler.handleStatusSet` validates the state string, calls `statusManager.setSessionState(paneID:state:)`
 6. `PaneStatusManager.sessionStates` dictionary updates (observed property)
 7. `SidebarSpaceRowView` re-evaluates `PaneStatusManager.shared.sessionStates(in: space)`
@@ -47,7 +47,7 @@ Not applicable. Claude session state is ephemeral, in-memory only, stored in `Pa
 
 ### Existing IPC Commands (Already Implemented)
 
-The `status.set` and `status.clear` IPC commands at `aterm/Core/IPCCommandHandler.swift` lines 437-485 already handle the `state` parameter correctly. No changes needed to the IPC layer.
+The `status.set` and `status.clear` IPC commands at `tian/Core/IPCCommandHandler.swift` lines 437-485 already handle the `state` parameter correctly. No changes needed to the IPC layer.
 
 | Command | Parameters | Behavior | Status |
 |---------|-----------|----------|--------|
@@ -94,17 +94,17 @@ State changes in `PaneStatusManager` are observed by SwiftUI via `@Observable`. 
 No new directories or files are created. All changes are modifications to existing files:
 
 ```
-aterm/
+tian/
   View/Sidebar/
     BusyDotView.swift          -- MODIFY: replace spinning rainbow with opacity pulse + Reduce Motion
     SpaceStatusAreaView.swift   -- MODIFY: show status label alongside sessions
-  aterm-cli/
+  tian-cli/
     CommandRouter.swift         -- MODIFY: add --state flag to StatusSet, make --label optional
 ```
 
 ### 5.2 CLI `StatusSet` Command Changes
 
-**File:** `aterm-cli/CommandRouter.swift`, lines 541-554 (the `StatusSet` struct)
+**File:** `tian-cli/CommandRouter.swift`, lines 541-554 (the `StatusSet` struct)
 
 **Current behavior:** `StatusSet` has a single required `@Option` named `--label`. It sends `params: ["label": .string(label)]`.
 
@@ -120,7 +120,7 @@ aterm/
 
 ### 5.3 `BusyDotView` Animation Changes
 
-**File:** `aterm/View/Sidebar/BusyDotView.swift`
+**File:** `tian/View/Sidebar/BusyDotView.swift`
 
 **Current behavior:** An 8pt circle filled with a spinning `AngularGradient` of rainbow colors, rotating 360 degrees over 1.5s forever. Explicitly ignores Reduce Motion.
 
@@ -136,7 +136,7 @@ The removal of the rainbow spinning gradient also removes the dependency on `rai
 
 ### 5.4 `SpaceStatusAreaView` Label Coexistence Changes
 
-**File:** `aterm/View/Sidebar/SpaceStatusAreaView.swift`
+**File:** `tian/View/Sidebar/SpaceStatusAreaView.swift`
 
 **Current behavior (lines 73-84):** The free-form status label is only rendered when there are no repo lines AND no sessions. Specifically:
 
@@ -175,7 +175,7 @@ If none of these conditions are true, the VStack is empty (no second line). This
 
 ### 5.5 Accessibility
 
-**SidebarSpaceRowView** at `aterm/View/Sidebar/SidebarSpaceRowView.swift` already has an `accessibilityDescription(sessions:)` method (lines 15-66) that includes session counts and `needs_attention` counts in the accessibility value. This satisfies FR-025. No changes needed.
+**SidebarSpaceRowView** at `tian/View/Sidebar/SidebarSpaceRowView.swift` already has an `accessibilityDescription(sessions:)` method (lines 15-66) that includes session counts and `needs_attention` counts in the accessibility value. This satisfies FR-025. No changes needed.
 
 ---
 
@@ -191,8 +191,8 @@ No new routes or navigation changes. The feature is entirely within the existing
 
 | Type | File | Fields | Description |
 |------|------|--------|-------------|
-| `ClaudeSessionState` | `aterm/Core/ClaudeSessionState.swift` | `needsAttention`, `busy`, `active`, `idle`, `inactive` (raw strings: `needs_attention`, `busy`, `active`, `idle`, `inactive`) | Enum with `Comparable` by priority. Already `CaseIterable`, `Sendable`, `Equatable`. |
-| `PaneStatus` | `aterm/Pane/PaneStatusManager.swift` | `label: String`, `updatedAt: Date` | Free-form status label. Unchanged. |
+| `ClaudeSessionState` | `tian/Core/ClaudeSessionState.swift` | `needsAttention`, `busy`, `active`, `idle`, `inactive` (raw strings: `needs_attention`, `busy`, `active`, `idle`, `inactive`) | Enum with `Comparable` by priority. Already `CaseIterable`, `Sendable`, `Equatable`. |
+| `PaneStatus` | `tian/Pane/PaneStatusManager.swift` | `label: String`, `updatedAt: Date` | Free-form status label. Unchanged. |
 
 No new types are introduced by this spec.
 
@@ -210,14 +210,14 @@ Not applicable. The PRD does not define any analytics events. State transitions 
 
 | Operation | Who | Condition |
 |-----------|-----|-----------|
-| Set session state | Any process with `ATERM_SOCKET` and `ATERM_PANE_ID` env vars | Pane must exist in the split tree |
+| Set session state | Any process with `TIAN_SOCKET` and `TIAN_PANE_ID` env vars | Pane must exist in the split tree |
 | Clear session state | Same as above | Pane must exist |
 
-The IPC system has no authentication -- any process that knows the socket path and pane UUID can send commands. This is acceptable because the socket is at `$TMPDIR/aterm-<uid>.sock` (user-scoped) and pane UUIDs are injected only into child shell processes. This is consistent with the existing security model for all IPC commands.
+The IPC system has no authentication -- any process that knows the socket path and pane UUID can send commands. This is acceptable because the socket is at `$TMPDIR/tian-<uid>.sock` (user-scoped) and pane UUIDs are injected only into child shell processes. This is consistent with the existing security model for all IPC commands.
 
 ### Client-Side Guards
 
-- `aterm-cli` checks for `ATERM_SOCKET` in `AtermEnvironment.fromEnvironment()`. If absent, the CLI exits with an error. This prevents the CLI from being used outside aterm.
+- `tian-cli` checks for `TIAN_SOCKET` in `TianEnvironment.fromEnvironment()`. If absent, the CLI exits with an error. This prevents the CLI from being used outside tian.
 - The `--state` value is NOT validated client-side (FR-011). Server-side validation in `IPCCommandHandler` returns a descriptive error with valid values.
 - No feature flags needed. The `--state` parameter is optional and backward-compatible.
 
@@ -246,7 +246,7 @@ The changes are purely additive:
 - `BusyDotView` changes its animation style
 - `SpaceStatusAreaView` shows the label in more cases
 
-**Backward compatibility:** Existing `aterm-cli status set --label "..."` calls continue to work because `--label` remains valid (it just becomes optional). The IPC protocol version does not change -- the `state` parameter was already accepted server-side.
+**Backward compatibility:** Existing `tian-cli status set --label "..."` calls continue to work because `--label` remains valid (it just becomes optional). The IPC protocol version does not change -- the `state` parameter was already accepted server-side.
 
 **Rollback:** If the CLI change needs to be reverted, the server-side `handleStatusSet` already handles `state: nil` gracefully (it only processes state if provided). The view changes are visual only and can be reverted independently.
 
@@ -256,17 +256,17 @@ The changes are purely additive:
 
 ### Phase 1: CLI Extension (FR-009, FR-010, FR-011)
 
-**Scope:** Modify `StatusSet` in `aterm-cli/CommandRouter.swift` to add `--state` optional flag and make `--label` optional with at-least-one validation. Update `StatusGroup` abstract text.
+**Scope:** Modify `StatusSet` in `tian-cli/CommandRouter.swift` to add `--state` optional flag and make `--label` optional with at-least-one validation. Update `StatusGroup` abstract text.
 
-**Files modified:** `aterm-cli/CommandRouter.swift`
+**Files modified:** `tian-cli/CommandRouter.swift`
 
-**Independently testable:** Yes. After this phase, `aterm-cli status set --state active` works end-to-end (the server already handles it). Manual test: run `aterm-cli status set --state busy` in an aterm pane and verify the dot appears in the sidebar. Also test `aterm-cli status set` with no flags returns an error. Test `aterm-cli status set --label "test"` still works (backward compat). Test `aterm-cli status set --state active --label "test"` sets both.
+**Independently testable:** Yes. After this phase, `tian-cli status set --state active` works end-to-end (the server already handles it). Manual test: run `tian-cli status set --state busy` in an tian pane and verify the dot appears in the sidebar. Also test `tian-cli status set` with no flags returns an error. Test `tian-cli status set --label "test"` still works (backward compat). Test `tian-cli status set --state active --label "test"` sets both.
 
 ### Phase 2: Busy Dot Animation + Reduce Motion (FR-023)
 
 **Scope:** Replace `BusyDotView`'s spinning rainbow gradient with a blue opacity pulse. Add `@Environment(\.accessibilityReduceMotion)` support.
 
-**Files modified:** `aterm/View/Sidebar/BusyDotView.swift`
+**Files modified:** `tian/View/Sidebar/BusyDotView.swift`
 
 **Independently testable:** Yes. Set a pane's state to `busy` and verify the dot pulses blue. Enable Reduce Motion in System Settings > Accessibility > Display and verify the dot is static blue. Verify no rainbow gradient appears.
 
@@ -274,7 +274,7 @@ The changes are purely additive:
 
 **Scope:** Modify `SpaceStatusAreaView` to render the free-form status label independently of session presence. The label appears below repo lines and/or session dots whenever it exists.
 
-**Files modified:** `aterm/View/Sidebar/SpaceStatusAreaView.swift`
+**Files modified:** `tian/View/Sidebar/SpaceStatusAreaView.swift`
 
 **Independently testable:** Yes. Set both `--state busy --label "Testing coexistence"` on a pane. Verify the sidebar shows both the blue dot AND the label text. Verify that clearing just the label (by setting a new label or clearing) does not affect the dot, and vice versa.
 
@@ -294,7 +294,7 @@ The PRD does not define explicit success metrics (no Section 8 with numeric targ
 
 | NFR | Target | Verification Method | Phase |
 |-----|--------|---------------------|-------|
-| NFR-001: IPC-to-sidebar latency | Under 100ms | Manual QA with `aterm-cli` timing. Instruments profiling if needed. | Phase 4 |
+| NFR-001: IPC-to-sidebar latency | Under 100ms | Manual QA with `tian-cli` timing. Instruments profiling if needed. | Phase 4 |
 | NFR-002: Animation CPU usage | No excessive CPU | Activity Monitor during busy state. Compare CPU with old rainbow vs new opacity pulse. | Phase 2 |
 | NFR-003: Aggregation complexity | O(n) | Code review of `sessionStates(in:)` -- already O(n). | Already satisfied |
 | NFR-004: No new IPC commands | Zero new commands | Code review -- `status.set` extended, not new. | Already satisfied |
@@ -312,9 +312,9 @@ The PRD does not define explicit success metrics (no Section 8 with numeric targ
 | FR-006 | Verify invalid `--state` value returns error with valid values list | Integration | IPC server running | Already satisfied (server-side) |
 | FR-007 | Verify setting `state` does not affect `label` and vice versa | Integration | Pane with both set | Already satisfied (server-side) |
 | FR-008 | Verify `status.clear` clears both label and session state | Integration | Pane with both set | Already satisfied |
-| FR-009 | CLI `status set --state active` sends correct IPC request | Integration | aterm running | Phase 1 |
+| FR-009 | CLI `status set --state active` sends correct IPC request | Integration | tian running | Phase 1 |
 | FR-010 | CLI `status set` with no flags prints error and exits non-zero | Unit (CLI) | None | Phase 1 |
-| FR-011 | CLI passes `--state` value through without validation | Integration | aterm running, invalid state value | Phase 1 |
+| FR-011 | CLI passes `--state` value through without validation | Integration | tian running, invalid state value | Phase 1 |
 | FR-012 | Session state tracked per-pane in `PaneStatusManager.sessionStates` | Unit | Manager instance | Already satisfied |
 | FR-013 | Pane with no session state returns nil | Unit | Manager instance | Already satisfied |
 | FR-014 | Pane close removes both label and session state | Unit | Manager instance | Already satisfied |
@@ -330,8 +330,8 @@ The PRD does not define explicit success metrics (no Section 8 with numeric targ
 | FR-024 | Status label and session dots coexist | Visual QA | `--state busy --label "text"` | Phase 3 |
 | FR-025 | Accessibility value includes session counts and needs_attention count | VoiceOver QA or accessibility audit | Space with sessions | Already satisfied |
 | FR-026 | Hook configuration documented in PRD Appendix A | Code review | N/A | Already satisfied (PRD has it) |
-| FR-027 | Hooks use `$ATERM_CLI_PATH` | Code review of hook config | N/A | Already satisfied |
-| FR-028 | Hooks are no-ops outside aterm | Manual test | Run hook command outside aterm | Already satisfied |
+| FR-027 | Hooks use `$TIAN_CLI_PATH` | Code review of hook config | N/A | Already satisfied |
+| FR-028 | Hooks are no-ops outside tian | Manual test | Run hook command outside tian | Already satisfied |
 
 ### Unit Tests
 
@@ -349,7 +349,7 @@ The PRD does not define explicit success metrics (no Section 8 with numeric targ
 **CLI StatusSet validation (new, Phase 1):**
 - If the test harness supports it: verify `StatusSet` parsing accepts `--state` alone, `--label` alone, and both together
 - Verify `StatusSet` with neither flag produces a validation error
-- Note: CLI tests may not exist in the current test suite (no CLI test files found in `atermTests/`). If CLI-level unit tests are impractical, rely on integration testing.
+- Note: CLI tests may not exist in the current test suite (no CLI test files found in `tianTests/`). If CLI-level unit tests are impractical, rely on integration testing.
 
 ### Integration Tests
 

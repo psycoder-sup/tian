@@ -1,14 +1,14 @@
 # Pane Restore Command
 
-Persist an optional restore command per pane so that processes like Claude Code sessions can be automatically resumed when aterm restores a saved session.
+Persist an optional restore command per pane so that processes like Claude Code sessions can be automatically resumed when tian restores a saved session.
 
 ## Problem
 
-When aterm closes and reopens, it restores pane layout and working directories but spawns fresh shells. Interactive sessions (e.g., Claude Code) running in those panes are lost. Users must manually re-launch `claude --resume <session-id>` to pick up where they left off.
+When tian closes and reopens, it restores pane layout and working directories but spawns fresh shells. Interactive sessions (e.g., Claude Code) running in those panes are lost. Users must manually re-launch `claude --resume <session-id>` to pick up where they left off.
 
 ## Solution
 
-Allow processes to register a "restore command" on their pane via IPC. When aterm restores the session, panes with a restore command use ghostty's `initial_input` to replay the command into the freshly spawned shell, automatically resuming the session.
+Allow processes to register a "restore command" on their pane via IPC. When tian restores the session, panes with a restore command use ghostty's `initial_input` to replay the command into the freshly spawned shell, automatically resuming the session.
 
 ## Design
 
@@ -42,7 +42,7 @@ Add a `restoreCommands: [UUID: String]` dictionary to `PaneViewModel`. Populated
 |-------|------|----------|-------------|
 | `command` | string | yes | Full command to replay on restore |
 
-Pane ID is resolved from `ATERM_PANE_ID` in the IPC env, consistent with other pane commands.
+Pane ID is resolved from `TIAN_PANE_ID` in the IPC env, consistent with other pane commands.
 
 No `pane.clear-restore-command` is needed. The restore command is only meaningful during session restore. If no hook re-registers it in a subsequent session, it simply won't be serialized.
 
@@ -58,13 +58,13 @@ Claude Code's SessionStart hook registers the restore command:
 {
   "hooks": {
     "SessionStart": [{
-      "command": "aterm pane set-restore-command --command=\"claude --resume $CLAUDE_SESSION_ID\""
+      "command": "tian pane set-restore-command --command=\"claude --resume $CLAUDE_SESSION_ID\""
     }]
   }
 }
 ```
 
-This fires every time a Claude session starts in any aterm pane.
+This fires every time a Claude session starts in any tian pane.
 
 ### Restore Flow
 
@@ -74,7 +74,7 @@ This fires every time a Claude session starts in any aterm pane.
 4. When `initialInput` is non-nil, sets `config.initial_input` to the command string (with trailing `\n`) via `withCString`, matching the existing `working_directory` pattern for C string lifetime safety
 5. Ghostty spawns the default shell, then sends the initial input as if the user typed it
 
-**Fallback:** If the restore command fails (session expired, `claude` not installed, etc.), the error prints in the shell and the user is left at a working prompt. No special error handling in aterm.
+**Fallback:** If the restore command fails (session expired, `claude` not installed, etc.), the error prints in the shell and the user is left at a working prompt. No special error handling in tian.
 
 ### Serialization Flow
 
@@ -98,6 +98,6 @@ No new files. No UI changes. No version bump.
 
 ### Out of Scope
 
-- The Claude Code hook configuration lives in `~/.claude/settings.json`, not in aterm's codebase
+- The Claude Code hook configuration lives in `~/.claude/settings.json`, not in tian's codebase
 - Restore commands for other tools (tmux, ssh, etc.) — this design supports them generically but they are not targeted
 - Visual indicator showing a pane is "resuming" vs. a fresh shell

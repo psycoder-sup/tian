@@ -1,4 +1,0 @@
-# aterm passthrough: source user's .zshrc
-builtin typeset _aterm_file="${ZDOTDIR-$HOME}/.zshrc"
-[[ ! -r "$_aterm_file" ]] || builtin source -- "$_aterm_file"
-builtin unset _aterm_file

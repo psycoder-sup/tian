@@ -25,8 +25,8 @@ Package.resolved
 
 # Ghostty build artifacts (run scripts/build-ghostty.sh to generate)
 .ghostty-src
-aterm/Vendor
-aterm/Vendor/ghostty/lib/
-aterm/Vendor/GhosttyKit.xcframework/
-aterm/Vendor/ghostty.h
-aterm/Vendor/resources/
+tian/Vendor
+tian/Vendor/ghostty/lib/
+tian/Vendor/GhosttyKit.xcframework/
+tian/Vendor/ghostty.h
+tian/Vendor/resources/

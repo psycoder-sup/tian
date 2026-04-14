@@ -1,0 +1,4 @@
+# tian passthrough: source user's .zlogin
+builtin typeset _tian_file="${ZDOTDIR-$HOME}/.zlogin"
+[[ ! -r "$_tian_file" ]] || builtin source -- "$_tian_file"
+builtin unset _tian_file
