@@ -309,8 +309,7 @@ struct BranchListViewModelTests {
         ]))
         await viewModel.load(repoRoot: "/tmp/fake-repo")
         viewModel.query = "fea"
-        #expect(viewModel.highlightedID != nil)
-        #expect(viewModel.rows.first?.displayName == "feature/auth")
+        #expect(viewModel.highlightedID == "local:feature/auth")
     }
 }
 
