@@ -30,6 +30,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.backgroundColor = .terminalBackground
         window.collectionBehavior = [.fullScreenPrimary]
+        window.tabbingMode = .disallowed
         window.center()
 
         let contentView = WorkspaceWindowContent(
