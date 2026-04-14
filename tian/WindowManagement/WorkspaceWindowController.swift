@@ -134,8 +134,17 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                     object: self.workspaceCollection
                 )
                 return nil
-            case .newWorktreeSpace:
-                self.handleNewWorktreeSpace()
+            case .newSpace:
+                let workspaceID = self.workspaceCollection.activeWorkspaceID
+                var userInfo: [AnyHashable: Any] = [:]
+                if let id = workspaceID {
+                    userInfo[Notification.createSpaceWorkspaceIDKey] = id
+                }
+                NotificationCenter.default.post(
+                    name: .showCreateSpaceInput,
+                    object: self.workspaceCollection,
+                    userInfo: userInfo
+                )
                 return nil
             default:
                 break
@@ -154,9 +163,6 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 collection.activeSpace?.previousTab()
             case .goToTab(let index):
                 collection.activeSpace?.goToTab(index: index)
-            case .newSpace:
-                let wd = collection.resolveWorkingDirectory()
-                collection.createSpace(workingDirectory: wd)
             default:
                 return event
             }
@@ -171,21 +177,6 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         NotificationCenter.default.post(
             name: .toggleSidebar,
             object: self.workspaceCollection
-        )
-    }
-
-    // MARK: - Worktree
-
-    private func handleNewWorktreeSpace() {
-        let workspaceID = workspaceCollection.activeWorkspaceID
-        var userInfo: [AnyHashable: Any] = [:]
-        if let id = workspaceID {
-            userInfo[Notification.createSpaceWorkspaceIDKey] = id
-        }
-        NotificationCenter.default.post(
-            name: .showCreateSpaceInput,
-            object: workspaceCollection,
-            userInfo: userInfo
         )
     }
 
