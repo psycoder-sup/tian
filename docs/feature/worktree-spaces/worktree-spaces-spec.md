@@ -10,7 +10,7 @@
 
 ## 1. Overview
 
-This spec covers the implementation of the Worktree Spaces feature, which automates the creation of git worktree-backed Spaces within aterm. The feature spans nine implementation surfaces: a TOML configuration parser for `.aterm/config.toml`, a `WorktreeService` that orchestrates git operations and file copying, a `WorktreeOrchestrator` that coordinates the end-to-end creation flow (config parsing, git worktree creation, Space creation, setup command execution, layout application), extensions to `SpaceModel` and `SpaceState` for worktree association tracking, new IPC commands (`worktree.create` and `worktree.remove`), new CLI subcommands (`aterm-cli worktree create/remove`), UI components (branch name input popover, floating cancel button, sidebar worktree indicator), and a schema migration for session persistence.
+This spec covers the implementation of the Worktree Spaces feature, which automates the creation of git worktree-backed Spaces within tian. The feature spans nine implementation surfaces: a TOML configuration parser for `.tian/config.toml`, a `WorktreeService` that orchestrates git operations and file copying, a `WorktreeOrchestrator` that coordinates the end-to-end creation flow (config parsing, git worktree creation, Space creation, setup command execution, layout application), extensions to `SpaceModel` and `SpaceState` for worktree association tracking, new IPC commands (`worktree.create` and `worktree.remove`), new CLI subcommands (`tian-cli worktree create/remove`), UI components (branch name input popover, floating cancel button, sidebar worktree indicator), and a schema migration for session persistence.
 
 The existing model layer provides everything needed for Space creation, pane splitting, and focus management. The feature builds on top of `SpaceCollection.createSpace()`, `PaneViewModel.splitPane()`, `PaneViewModel.fromState()`, the `SplitTree`/`PaneNode` value types, the `GhosttyApp.surfacePwdNotification` (OSC 7 signal for shell readiness), and `ghostty_surface_text()` for typing commands into terminals. The IPC system (`IPCServer`, `IPCCommandHandler`, `IPCClient`) provides the CLI communication channel. Session persistence (`SessionSerializer`, `SessionRestorer`, `SessionStateMigrator`) handles worktree path survival across app restarts.
 
@@ -20,7 +20,7 @@ The existing model layer provides everything needed for Space creation, pane spl
 
 ### 2.1 Parser Dependency
 
-A Swift TOML parsing library must be added to `project.yml`. The recommended library is **TOMLKit** (https://github.com/LebJe/TOMLKit), which is a pure Swift package with no platform restrictions. It is added as a Swift Package dependency in `project.yml` and linked to the `aterm` target only (not `aterm-cli`).
+A Swift TOML parsing library must be added to `project.yml`. The recommended library is **TOMLKit** (https://github.com/LebJe/TOMLKit), which is a pure Swift package with no platform restrictions. It is added as a Swift Package dependency in `project.yml` and linked to the `tian` target only (not `tian-cli`).
 
 The dependency entry in `project.yml` under `packages`:
 
@@ -30,11 +30,11 @@ The dependency entry in `project.yml` under `packages`:
 | URL | `https://github.com/LebJe/TOMLKit` |
 | Version | `from: "0.6.0"` |
 
-The `aterm` target's `dependencies` array gains an entry for the TOMLKit package product.
+The `tian` target's `dependencies` array gains an entry for the TOMLKit package product.
 
 ### 2.2 Configuration Data Model
 
-A new file `aterm/Worktree/WorktreeConfig.swift` defines the parsed configuration. All fields are value types (`Sendable`).
+A new file `tian/Worktree/WorktreeConfig.swift` defines the parsed configuration. All fields are value types (`Sendable`).
 
 **WorktreeConfig** -- top-level parsed configuration:
 
@@ -63,7 +63,7 @@ A new file `aterm/Worktree/WorktreeConfig.swift` defines the parsed configuratio
 
 ### 2.3 TOML Parsing Logic
 
-A new file `aterm/Worktree/WorktreeConfigParser.swift` contains the parsing logic.
+A new file `tian/Worktree/WorktreeConfigParser.swift` contains the parsing logic.
 
 **Entry point:** A static method `parse(fileURL: URL) throws -> WorktreeConfig` that reads the TOML file and produces a `WorktreeConfig`. A companion method `parse(tomlString: String) throws -> WorktreeConfig` accepts raw string content for testing.
 
@@ -80,7 +80,7 @@ A new file `aterm/Worktree/WorktreeConfigParser.swift` contains the parsing logi
 
 ### 2.4 Config File Resolution
 
-The config file path is resolved by `WorktreeService.resolveConfigFile(repoRoot: URL) -> URL?`. It checks for the existence of `<repoRoot>/.aterm/config.toml` and returns the URL if it exists, nil otherwise.
+The config file path is resolved by `WorktreeService.resolveConfigFile(repoRoot: URL) -> URL?`. It checks for the existence of `<repoRoot>/.tian/config.toml` and returns the URL if it exists, nil otherwise.
 
 ---
 
@@ -88,7 +88,7 @@ The config file path is resolved by `WorktreeService.resolveConfigFile(repoRoot:
 
 ### 3.1 WorktreeService
 
-A new file `aterm/Worktree/WorktreeService.swift` contains all git and filesystem operations. This is a non-UI, non-MainActor type with async methods that run subprocess commands and file I/O on background threads.
+A new file `tian/Worktree/WorktreeService.swift` contains all git and filesystem operations. This is a non-UI, non-MainActor type with async methods that run subprocess commands and file I/O on background threads.
 
 **All methods are `static` and return `async throws`. Errors are modeled as `WorktreeError` (see section 3.2).**
 
@@ -102,7 +102,7 @@ A new file `aterm/Worktree/WorktreeService.swift` contains all git and filesyste
 | `removeWorktree(repoRoot:worktreePath:force:)` | `repoRoot: URL`, `worktreePath: URL`, `force: Bool` | `Void` | Runs `git -C <repoRoot> worktree remove <path>` (or with `--force`). Throws on failure with git stderr. |
 | `pruneEmptyParents(worktreePath:worktreeDir:repoRoot:)` | `worktreePath: URL`, `worktreeDir: String`, `repoRoot: URL` | `Void` | After worktree removal, walks parent directories upward from `worktreePath` to `<repoRoot>/<worktreeDir>` (exclusive). Removes each directory if it is empty. Stops at the first non-empty directory. |
 | `copyFiles(copyRules:mainWorktreePath:newWorktreePath:)` | `copyRules: [CopyRule]`, `mainWorktreePath: URL`, `newWorktreePath: URL` | `Void` | For each copy rule, resolves glob patterns against the main worktree path using POSIX `glob()`. Copies matching files to the new worktree, preserving relative paths. Logs a warning per failed file (permission error, missing source) but does not throw (NFR-002). |
-| `ensureGitignore(repoRoot:worktreeDir:)` | `repoRoot: URL`, `worktreeDir: String` | `Void` | Checks `<repoRoot>/.gitignore` for the `worktreeDir` value. If not present, appends `\n# aterm worktree directory\n<worktreeDir>\n`. If `.gitignore` does not exist, creates it with that content. |
+| `ensureGitignore(repoRoot:worktreeDir:)` | `repoRoot: URL`, `worktreeDir: String` | `Void` | Checks `<repoRoot>/.gitignore` for the `worktreeDir` value. If not present, appends `\n# tian worktree directory\n<worktreeDir>\n`. If `.gitignore` does not exist, creates it with that content. |
 | `branchExists(repoRoot:branchName:)` | `repoRoot: URL`, `branchName: String` | `Bool` | Runs `git -C <repoRoot> rev-parse --verify refs/heads/<branchName>`. Returns `true` if exit code is 0. |
 | `worktreePathExists(repoRoot:worktreeDir:branchName:)` | `repoRoot: URL`, `worktreeDir: String`, `branchName: String` | `Bool` | Checks if the directory `<repoRoot>/<worktreeDir>/<branchName>` exists on disk. |
 
@@ -112,7 +112,7 @@ A new file `aterm/Worktree/WorktreeService.swift` contains all git and filesyste
 
 ### 3.2 WorktreeError
 
-A new enum `WorktreeError` in `aterm/Worktree/WorktreeError.swift`:
+A new enum `WorktreeError` in `tian/Worktree/WorktreeError.swift`:
 
 | Case | Associated Values | Description |
 |------|-------------------|-------------|
@@ -133,7 +133,7 @@ All cases conform to `Error` and `LocalizedError` with descriptive messages incl
 
 ### 4.1 WorktreeOrchestrator
 
-A new file `aterm/Worktree/WorktreeOrchestrator.swift` contains the `WorktreeOrchestrator` class. This is the central coordinator that drives the end-to-end worktree creation and cleanup flows. It is `@MainActor` because it interacts with the model layer (`SpaceCollection`, `SpaceModel`, `PaneViewModel`).
+A new file `tian/Worktree/WorktreeOrchestrator.swift` contains the `WorktreeOrchestrator` class. This is the central coordinator that drives the end-to-end worktree creation and cleanup flows. It is `@MainActor` because it interacts with the model layer (`SpaceCollection`, `SpaceModel`, `PaneViewModel`).
 
 **Properties:**
 
@@ -149,7 +149,7 @@ This method implements the full flow from FR-006 through FR-033:
 
 1. **Resolve git repo root** -- Call `WorktreeService.resolveRepoRoot(from: repoPath)`. If `repoPath` is nil, derive it from the active Space's working directory via the SpaceCollection. Fail with `.notAGitRepo` if not in a git repo.
 
-2. **Parse config** -- Call `WorktreeConfigParser.parse(fileURL:)` for `<repoRoot>/.aterm/config.toml`. If the file does not exist or parsing fails, use default `WorktreeConfig()`.
+2. **Parse config** -- Call `WorktreeConfigParser.parse(fileURL:)` for `<repoRoot>/.tian/config.toml`. If the file does not exist or parsing fails, use default `WorktreeConfig()`.
 
 3. **Duplicate detection (FR-027)** -- Compute the expected worktree path: `<repoRoot>/<config.worktreeDir>/<branchName>`. Scan all Spaces across all WorkspaceCollections via `windowCoordinator.allWorkspaceCollections`. If any Space has `worktreePath` equal to this URL, focus that Space and return `WorktreeCreateResult(spaceID: existingSpace.id, existed: true)`.
 
@@ -219,7 +219,7 @@ A simple value type returned by the creation flow:
 
 ### 4.3 Shell Readiness Detection
 
-A new utility `ShellReadinessWaiter` in `aterm/Worktree/ShellReadinessWaiter.swift` encapsulates the OSC 7 detection logic.
+A new utility `ShellReadinessWaiter` in `tian/Worktree/ShellReadinessWaiter.swift` encapsulates the OSC 7 detection logic.
 
 **Method:** `waitForReady(surface: GhosttyTerminalSurface, timeout: TimeInterval) async`
 
@@ -255,7 +255,7 @@ When cancelled, the orchestrator logs the cancellation and proceeds directly to 
 
 ### 5.1 SpaceModel Extension
 
-In `aterm/Tab/SpaceModel.swift`, add:
+In `tian/Tab/SpaceModel.swift`, add:
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -265,7 +265,7 @@ This is a simple stored `var` property, initialized to `nil` in both existing in
 
 ### 5.2 SpaceState Extension
 
-In `aterm/Persistence/SessionState.swift`, modify `SpaceState`:
+In `tian/Persistence/SessionState.swift`, modify `SpaceState`:
 
 | New Property | Type | Description |
 |--------------|------|-------------|
@@ -339,7 +339,7 @@ Error responses:
 
 ### 6.2 IPCCommandHandler Integration
 
-In `aterm/Core/IPCCommandHandler.swift`:
+In `tian/Core/IPCCommandHandler.swift`:
 
 1. Add a stored property `worktreeOrchestrator: WorktreeOrchestrator` initialized in `init()` with the same `windowCoordinator`.
 2. Add two new cases to the `handle()` switch: `"worktree.create"` mapping to `handleWorktreeCreate()` and `"worktree.remove"` mapping to `handleWorktreeRemove()`.
@@ -351,9 +351,9 @@ In `aterm/Core/IPCCommandHandler.swift`:
 
 ### 7.1 New CLI Subcommands
 
-A new command group `WorktreeGroup` in `aterm-cli/CommandRouter.swift`:
+A new command group `WorktreeGroup` in `tian-cli/CommandRouter.swift`:
 
-**WorktreeGroup** -- registered in `AtermCLI.configuration.subcommands`:
+**WorktreeGroup** -- registered in `TianCLI.configuration.subcommands`:
 
 | Subcommand | Definition |
 |------------|------------|
@@ -382,7 +382,7 @@ Sends IPC command `worktree.remove` with params `spaceId`, `force`.
 
 ### 7.2 Entry Point Registration
 
-In `aterm-cli/main.swift`, add `WorktreeGroup.self` to `AtermCLI.configuration.subcommands`.
+In `tian-cli/main.swift`, add `WorktreeGroup.self` to `TianCLI.configuration.subcommands`.
 
 ---
 
@@ -390,7 +390,7 @@ In `aterm-cli/main.swift`, add `WorktreeGroup.self` to `AtermCLI.configuration.s
 
 ### 8.1 Branch Name Input Popover
 
-A new SwiftUI view `aterm/View/Worktree/BranchNameInputView.swift`:
+A new SwiftUI view `tian/View/Worktree/BranchNameInputView.swift`:
 
 **Props:**
 
@@ -411,7 +411,7 @@ A new SwiftUI view `aterm/View/Worktree/BranchNameInputView.swift`:
 
 ### 8.2 Floating Cancel Button
 
-A new SwiftUI view `aterm/View/Worktree/SetupCancelButton.swift`:
+A new SwiftUI view `tian/View/Worktree/SetupCancelButton.swift`:
 
 **Props:**
 
@@ -425,13 +425,13 @@ A new SwiftUI view `aterm/View/Worktree/SetupCancelButton.swift`:
 
 ### 8.3 Sidebar Worktree Indicator
 
-In `aterm/View/Sidebar/SidebarSpaceRowView.swift`:
+In `tian/View/Sidebar/SidebarSpaceRowView.swift`:
 
 When `space.worktreePath != nil`, display a small SF Symbol icon (e.g., `"arrow.triangle.branch"`) next to the Space name, before the tab count badge. The icon uses `.secondary` foreground style and a size of 10pt to remain subtle (matching the existing visual weight).
 
 ### 8.4 Sidebar Progress Indicator
 
-In `aterm/View/Sidebar/SidebarWorkspaceHeaderView.swift`:
+In `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift`:
 
 When `WorktreeOrchestrator.isCreating` is true, display a small `ProgressView()` (indeterminate spinner) next to the workspace header's "+" button, with a label "Creating worktree...". The `isCreating` state is accessed via an environment object or a published property on a model accessible from the sidebar.
 
@@ -439,7 +439,7 @@ When `WorktreeOrchestrator.isCreating` is true, display a small `ProgressView()`
 
 A new dialog presented when closing a worktree-backed Space. Follows the pattern established by `CloseConfirmationDialog`.
 
-**New enum `WorktreeCloseDialog`** in `aterm/View/Worktree/WorktreeCloseDialog.swift`:
+**New enum `WorktreeCloseDialog`** in `tian/View/Worktree/WorktreeCloseDialog.swift`:
 
 **Static method:** `confirmClose(worktreePath: URL, branchName: String, onRemoveAndClose:, onCloseOnly:, onCancel:)`
 
@@ -460,19 +460,19 @@ For the CLI path (`worktree.remove` IPC command), the confirmation is handled by
 
 ### 9.1 KeyAction Extension
 
-In `aterm/Input/KeyAction.swift`, add a new case:
+In `tian/Input/KeyAction.swift`, add a new case:
 
 `case newWorktreeSpace`
 
 ### 9.2 KeyBindingRegistry Extension
 
-In `aterm/Input/KeyBindingRegistry.swift`, in the `defaults()` method, register:
+In `tian/Input/KeyBindingRegistry.swift`, in the `defaults()` method, register:
 
 `newWorktreeSpace` mapped to Cmd+Shift+B (characters `"b"`, modifiers `[.command, .shift]`).
 
 ### 9.3 WorkspaceWindowController Handler
 
-In `aterm/WindowManagement/WorkspaceWindowController.swift`, in the `installKeyboardMonitor()` method's switch statement, add a case for `.newWorktreeSpace`:
+In `tian/WindowManagement/WorkspaceWindowController.swift`, in the `installKeyboardMonitor()` method's switch statement, add a case for `.newWorktreeSpace`:
 
 1. Resolve the active Space's working directory.
 2. Present the `BranchNameInputView` popover/sheet on the current window.
@@ -480,7 +480,7 @@ In `aterm/WindowManagement/WorkspaceWindowController.swift`, in the `installKeyb
 
 ### 9.4 Context Menu Entry
 
-In `aterm/View/Sidebar/SidebarWorkspaceHeaderView.swift`, add a new item to the `.contextMenu`:
+In `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift`, add a new item to the `.contextMenu`:
 
 `Button("New Worktree Space...") { ... }`
 
@@ -492,9 +492,9 @@ This triggers the same flow as the keyboard shortcut: present the branch name in
 
 ### 10.1 New Logger Category
 
-In `aterm/Utilities/Logger.swift`, add:
+In `tian/Utilities/Logger.swift`, add:
 
-`static let worktree = Logger(subsystem: "com.aterm.app", category: "worktree")`
+`static let worktree = Logger(subsystem: "com.tian.app", category: "worktree")`
 
 ### 10.2 Logging Points
 
@@ -502,9 +502,9 @@ All log entries include the branch name and worktree path where applicable.
 
 | Stage | Level | Message Pattern |
 |-------|-------|-----------------|
-| Config parse success | info | "Parsed .aterm/config.toml: N copy rules, M setup commands, layout=yes/no" |
-| Config parse failure | warning | "Failed to parse .aterm/config.toml: <error>. Proceeding without config." |
-| Config not found | info | "No .aterm/config.toml found at <path>. Using defaults." |
+| Config parse success | info | "Parsed .tian/config.toml: N copy rules, M setup commands, layout=yes/no" |
+| Config parse failure | warning | "Failed to parse .tian/config.toml: <error>. Proceeding without config." |
+| Config not found | info | "No .tian/config.toml found at <path>. Using defaults." |
 | Repo root resolved | info | "Resolved git repo root: <path>" |
 | Duplicate Space found | info | "Worktree Space already exists for <path>, focusing existing Space <id>" |
 | Git worktree create | info | "Creating git worktree: <full-command>" |
@@ -533,38 +533,38 @@ All log entries include the branch name and worktree path where applicable.
 
 | File Path | Type | Description |
 |-----------|------|-------------|
-| `aterm/Worktree/WorktreeConfig.swift` | Structs/Enums | `WorktreeConfig`, `CopyRule`, `LayoutNode` |
-| `aterm/Worktree/WorktreeConfigParser.swift` | Enum (static methods) | TOML parsing logic |
-| `aterm/Worktree/WorktreeService.swift` | Enum (static async methods) | Git and filesystem operations |
-| `aterm/Worktree/WorktreeError.swift` | Enum | Error types for worktree operations |
-| `aterm/Worktree/WorktreeOrchestrator.swift` | Class (@MainActor) | End-to-end creation and cleanup coordinator |
-| `aterm/Worktree/WorktreeCreateResult.swift` | Struct | Return type from creation flow |
-| `aterm/Worktree/ShellReadinessWaiter.swift` | Enum (static methods) | OSC 7 + fallback delay shell readiness detection |
-| `aterm/View/Worktree/BranchNameInputView.swift` | SwiftUI View | Branch name input popover |
-| `aterm/View/Worktree/SetupCancelButton.swift` | SwiftUI View | Floating cancel button overlay |
-| `aterm/View/Worktree/WorktreeCloseDialog.swift` | Enum (static methods) | Worktree cleanup confirmation dialog |
+| `tian/Worktree/WorktreeConfig.swift` | Structs/Enums | `WorktreeConfig`, `CopyRule`, `LayoutNode` |
+| `tian/Worktree/WorktreeConfigParser.swift` | Enum (static methods) | TOML parsing logic |
+| `tian/Worktree/WorktreeService.swift` | Enum (static async methods) | Git and filesystem operations |
+| `tian/Worktree/WorktreeError.swift` | Enum | Error types for worktree operations |
+| `tian/Worktree/WorktreeOrchestrator.swift` | Class (@MainActor) | End-to-end creation and cleanup coordinator |
+| `tian/Worktree/WorktreeCreateResult.swift` | Struct | Return type from creation flow |
+| `tian/Worktree/ShellReadinessWaiter.swift` | Enum (static methods) | OSC 7 + fallback delay shell readiness detection |
+| `tian/View/Worktree/BranchNameInputView.swift` | SwiftUI View | Branch name input popover |
+| `tian/View/Worktree/SetupCancelButton.swift` | SwiftUI View | Floating cancel button overlay |
+| `tian/View/Worktree/WorktreeCloseDialog.swift` | Enum (static methods) | Worktree cleanup confirmation dialog |
 
 ### Modified Files
 
 | File Path | Changes |
 |-----------|---------|
-| `aterm/Tab/SpaceModel.swift` | Add `worktreePath: URL?` property |
-| `aterm/Persistence/SessionState.swift` | Add `worktreePath: String?` to `SpaceState` |
-| `aterm/Persistence/SessionSerializer.swift` | Include `worktreePath` in snapshot; bump `currentVersion` to 2 |
-| `aterm/Persistence/SessionStateMigrator.swift` | Add migration `[1]` (passthrough for version bump) |
-| `aterm/Persistence/SessionRestorer.swift` | Set `worktreePath` on restored SpaceModels; validate directory exists |
-| `aterm/Core/IPCCommandHandler.swift` | Add `worktreeOrchestrator` property; add `worktree.create` and `worktree.remove` handlers |
-| `aterm/Core/GhosttyTerminalSurface.swift` | Add `sendText(_ text: String)` method |
-| `aterm/Input/KeyAction.swift` | Add `newWorktreeSpace` case |
-| `aterm/Input/KeyBindingRegistry.swift` | Register Cmd+Shift+B for `newWorktreeSpace` |
-| `aterm/WindowManagement/WorkspaceWindowController.swift` | Handle `.newWorktreeSpace` action |
-| `aterm/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Add "New Worktree Space..." context menu item; add progress indicator |
-| `aterm/View/Sidebar/SidebarSpaceRowView.swift` | Add worktree branch icon indicator |
-| `aterm/View/PaneView.swift` | Add setup cancel button overlay |
-| `aterm/Utilities/Logger.swift` | Add `Log.worktree` category |
-| `aterm-cli/CommandRouter.swift` | Add `WorktreeGroup`, `WorktreeCreate`, `WorktreeRemove` |
-| `aterm-cli/main.swift` | Register `WorktreeGroup.self` in subcommands |
-| `project.yml` | Add TOMLKit package dependency; add `aterm/Worktree/` to sources |
+| `tian/Tab/SpaceModel.swift` | Add `worktreePath: URL?` property |
+| `tian/Persistence/SessionState.swift` | Add `worktreePath: String?` to `SpaceState` |
+| `tian/Persistence/SessionSerializer.swift` | Include `worktreePath` in snapshot; bump `currentVersion` to 2 |
+| `tian/Persistence/SessionStateMigrator.swift` | Add migration `[1]` (passthrough for version bump) |
+| `tian/Persistence/SessionRestorer.swift` | Set `worktreePath` on restored SpaceModels; validate directory exists |
+| `tian/Core/IPCCommandHandler.swift` | Add `worktreeOrchestrator` property; add `worktree.create` and `worktree.remove` handlers |
+| `tian/Core/GhosttyTerminalSurface.swift` | Add `sendText(_ text: String)` method |
+| `tian/Input/KeyAction.swift` | Add `newWorktreeSpace` case |
+| `tian/Input/KeyBindingRegistry.swift` | Register Cmd+Shift+B for `newWorktreeSpace` |
+| `tian/WindowManagement/WorkspaceWindowController.swift` | Handle `.newWorktreeSpace` action |
+| `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Add "New Worktree Space..." context menu item; add progress indicator |
+| `tian/View/Sidebar/SidebarSpaceRowView.swift` | Add worktree branch icon indicator |
+| `tian/View/PaneView.swift` | Add setup cancel button overlay |
+| `tian/Utilities/Logger.swift` | Add `Log.worktree` category |
+| `tian-cli/CommandRouter.swift` | Add `WorktreeGroup`, `WorktreeCreate`, `WorktreeRemove` |
+| `tian-cli/main.swift` | Register `WorktreeGroup.self` in subcommands |
+| `project.yml` | Add TOMLKit package dependency; add `tian/Worktree/` to sources |
 
 ---
 
@@ -592,9 +592,9 @@ The migration function receives a v1 JSON dictionary and returns it unchanged. T
 
 ### 13.2 XcodeGen
 
-After adding new source files, run `xcodegen generate` to regenerate the Xcode project. The new `aterm/Worktree/` and `aterm/View/Worktree/` directories are automatically picked up because `project.yml` sources from the `aterm` directory recursively.
+After adding new source files, run `xcodegen generate` to regenerate the Xcode project. The new `tian/Worktree/` and `tian/View/Worktree/` directories are automatically picked up because `project.yml` sources from the `tian` directory recursively.
 
-The TOMLKit package dependency must be added to `project.yml` under `packages` and referenced in the `aterm` target's `dependencies`.
+The TOMLKit package dependency must be added to `project.yml` under `packages` and referenced in the `tian` target's `dependencies`.
 
 ### 13.3 Rollback
 
@@ -639,7 +639,7 @@ If the feature needs to be rolled back:
 ### Phase 6: IPC and CLI
 **Files:** Modified `IPCCommandHandler.swift`, new CLI commands in `CommandRouter.swift`, modified `main.swift`
 **Dependencies:** Phase 5
-**Testable:** End-to-end test: run `aterm-cli worktree create <branch>` from within an aterm terminal, verify Space created.
+**Testable:** End-to-end test: run `tian-cli worktree create <branch>` from within an tian terminal, verify Space created.
 **Deliverable:** CLI-driven worktree creation and removal works.
 
 ### Phase 7: UI Components
@@ -670,7 +670,7 @@ If the feature needs to be rolled back:
 | OSC 7 not emitted by some shells (fish pre-3.1, custom PS1 without `\e]7;...`) | Medium -- setup commands may be sent before shell is ready | Medium -- depends on user's shell configuration | Fallback delay (configurable, default 0.5s) handles this. Document shell requirements in config file comments. |
 | TOML parsing library (TOMLKit) introduces unexpected issues or compile-time overhead | Low -- affects build time, not runtime | Low -- TOMLKit is mature and widely used | Pin to a specific version. If issues arise, TOML parsing can be replaced with a simple hand-written parser for the limited syntax used. |
 | Long-running setup commands (e.g., `npm install` for large projects) block the orchestrator | Medium -- user waits for setup, but UI is not blocked since setup runs visibly | Medium | Per-command timeout (configurable, default 300s). Setup runs visibly so user can diagnose hangs. Cancel button and Ctrl+C provide escape hatch. |
-| `git worktree add` fails on repos with complex submodule or sparse-checkout configurations | Low -- worktree is created with unexpected state | Low | aterm passes through the git error verbatim. User can debug and retry. Out of scope for v1 to handle these edge cases. |
+| `git worktree add` fails on repos with complex submodule or sparse-checkout configurations | Low -- worktree is created with unexpected state | Low | tian passes through the git error verbatim. User can debug and retry. Out of scope for v1 to handle these edge cases. |
 | Race condition between Space close (removing surface) and async worktree removal | Medium -- orphaned worktree directory if removal fails after Space is gone | Low | Remove worktree FIRST (step 4 in cleanup flow), then remove the Space (step 7). If worktree removal fails, the Space remains open so the user can intervene. |
 | Ctrl+C interception during setup conflicts with terminal's own Ctrl+C handling | Medium -- could cause unexpected behavior if interception is not clean | Medium | The interception monitor runs at the `NSEvent.addLocalMonitorForEvents` level, which fires before the event reaches the terminal's NSView. The monitor consumes the event (returns nil) and calls `cancelSetup()`. After setup ends, the monitor is removed and Ctrl+C works normally. |
 | Concurrent worktree creation requests (user triggers twice rapidly) | Low -- could create duplicate worktrees or race on Space creation | Low | Duplicate detection (FR-027) catches this: the second request finds the Space created by the first and focuses it. Additionally, the `isCreating` flag prevents the UI from triggering a second creation while one is in progress. |

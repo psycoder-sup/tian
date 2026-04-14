@@ -46,7 +46,7 @@ Two new units plus edits to three existing files. Each unit has one purpose, com
 
 ### 5.1 `BranchListService` — git/filesystem layer
 
-**File:** `aterm/Worktree/BranchListService.swift`
+**File:** `tian/Worktree/BranchListService.swift`
 
 Pure, stateless, no UI dependencies. Runs off the main actor. Static methods following the `WorktreeService` pattern.
 
@@ -66,7 +66,7 @@ enum BranchListService {
 
 ### 5.2 `BranchEntry` — model
 
-**File:** same as service (`aterm/Worktree/BranchListService.swift`).
+**File:** same as service (`tian/Worktree/BranchListService.swift`).
 
 ```swift
 struct BranchEntry: Identifiable, Hashable, Sendable {
@@ -88,7 +88,7 @@ Dedup is *not* done here — the service returns raw entries. Dedup is a view-la
 
 ### 5.3 `BranchListViewModel` — presentation state
 
-**File:** `aterm/View/Worktree/BranchListViewModel.swift`
+**File:** `tian/View/Worktree/BranchListViewModel.swift`
 
 `@MainActor @Observable`. Holds the filtered, sorted, deduped view of branches that the SwiftUI view renders.
 
@@ -161,7 +161,7 @@ func load(repoRoot: String) async {
 
 ### 5.4 Edits — `BranchNameInputView`
 
-**File:** `aterm/View/Worktree/BranchNameInputView.swift`
+**File:** `tian/View/Worktree/BranchNameInputView.swift`
 
 New state: `@State private var viewModel = BranchListViewModel()`.
 
@@ -217,7 +217,7 @@ Loads branches when the view appears, tied to the repo root from the `repoRoot` 
 
 ### 5.5 Edits — `WorkspaceWindowContent`
 
-**File:** `aterm/View/Workspace/WorkspaceWindowContent.swift`
+**File:** `tian/View/Workspace/WorkspaceWindowContent.swift`
 
 Two changes:
 
@@ -257,7 +257,7 @@ Two changes:
 
 ### 5.6 Edits — `WorktreeOrchestrator`
 
-**File:** `aterm/Worktree/WorktreeOrchestrator.swift`
+**File:** `tian/Worktree/WorktreeOrchestrator.swift`
 
 Add:
 
@@ -291,7 +291,7 @@ Behavior:
 
 ### 5.7 Edits — `WorktreeService.createWorktree`
 
-**File:** `aterm/Worktree/WorktreeService.swift`
+**File:** `tian/Worktree/WorktreeService.swift`
 
 Accept an optional `remoteRef`:
 
@@ -359,7 +359,7 @@ WorkspaceWindowContent.onSubmit
 
 ## 8. Testing
 
-All under `atermTests/`. No UI tests (per project policy — manual verification only).
+All under `tianTests/`. No UI tests (per project policy — manual verification only).
 
 ### 8.1 `BranchListServiceTests.swift`
 
@@ -418,16 +418,16 @@ protocol BranchListProviding {
 
 | File | Change |
 |---|---|
-| `aterm/Worktree/BranchListService.swift` | **New** — `BranchEntry` + `BranchListService` |
-| `aterm/View/Worktree/BranchListViewModel.swift` | **New** — presentation model |
-| `aterm/View/Worktree/BranchNameInputView.swift` | Edit — integrate combobox, update `onSubmit` signature |
-| `aterm/View/Workspace/WorkspaceWindowContent.swift` | Edit — forward `remoteRef`, bind error alert |
-| `aterm/Worktree/WorktreeOrchestrator.swift` | Edit — `remoteRef` param, `lastError`, `presentError` |
-| `aterm/Worktree/WorktreeService.swift` | Edit — `remoteRef` param in `createWorktree` |
-| `atermTests/BranchListServiceTests.swift` | **New** |
-| `atermTests/BranchListViewModelTests.swift` | **New** |
-| `atermTests/Support/GitRepoFixture.swift` | **New** (if not already present) |
-| `atermTests/WorktreeServiceTests.swift` | Edit — add 2 tests |
-| `atermTests/WorktreeOrchestratorTests.swift` | Edit — add 2 tests |
+| `tian/Worktree/BranchListService.swift` | **New** — `BranchEntry` + `BranchListService` |
+| `tian/View/Worktree/BranchListViewModel.swift` | **New** — presentation model |
+| `tian/View/Worktree/BranchNameInputView.swift` | Edit — integrate combobox, update `onSubmit` signature |
+| `tian/View/Workspace/WorkspaceWindowContent.swift` | Edit — forward `remoteRef`, bind error alert |
+| `tian/Worktree/WorktreeOrchestrator.swift` | Edit — `remoteRef` param, `lastError`, `presentError` |
+| `tian/Worktree/WorktreeService.swift` | Edit — `remoteRef` param in `createWorktree` |
+| `tianTests/BranchListServiceTests.swift` | **New** |
+| `tianTests/BranchListViewModelTests.swift` | **New** |
+| `tianTests/Support/GitRepoFixture.swift` | **New** (if not already present) |
+| `tianTests/WorktreeServiceTests.swift` | Edit — add 2 tests |
+| `tianTests/WorktreeOrchestratorTests.swift` | Edit — add 2 tests |
 
 Remember to run `xcodegen generate` after adding new source files.

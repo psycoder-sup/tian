@@ -23,7 +23,7 @@ Both issues share a root: workspace identity isn't propagated cleanly through th
 ## Non-goals
 
 - Migrating existing workspaces that currently have `defaultWorkingDirectory = nil`. They continue to fall back to `$HOME` via `WorkingDirectoryResolver`.
-- Changing the IPC path (`aterm` CLI). It already accepts an explicit path.
+- Changing the IPC path (`tian` CLI). It already accepts an explicit path.
 - Changing the "Set Directory" UI for editing a workspace's base directory after creation.
 - Changing session restoration. Restored workspaces use their persisted directory.
 
@@ -43,7 +43,7 @@ Both issues share a root: workspace identity isn't propagated cleanly through th
 
 ## Architecture
 
-### New file: `aterm/WindowManagement/WorkspaceCreationFlow.swift`
+### New file: `tian/WindowManagement/WorkspaceCreationFlow.swift`
 
 Stateless `@MainActor enum` coordinator.
 
@@ -62,7 +62,7 @@ enum WorkspaceCreationFlow {
 }
 ```
 
-### New file: `aterm/View/Workspace/WorkspaceEmptyStateView.swift`
+### New file: `tian/View/Workspace/WorkspaceEmptyStateView.swift`
 
 Apple-style empty state rendered when `workspaceCollection.workspaces.isEmpty`. Contains:
 - 56pt `folder.badge.plus` SF Symbol, tertiary foreground.
@@ -76,22 +76,22 @@ Wired into `SidebarContainerView.terminalZStack`'s `else if workspaceCollection.
 
 | File | Change |
 |---|---|
-| `aterm/Workspace/WorkspaceCollection.swift` | New `init(startingEmpty: Bool)` that skips default-workspace creation. Original `init(workingDirectory:)` unchanged. |
-| `aterm/WindowManagement/WindowCoordinator.swift` | `openWindow` gains `empty: Bool = false`. When true, creates a `WorkspaceCollection(startingEmpty: true)`; otherwise preserves existing behavior. |
-| `aterm/WindowManagement/AtermAppDelegate.swift` | Fresh launch calls `openWindow(empty: true)`. UI-testing path still uses `openWindow()` with defaults. Session-restore path unchanged. |
-| `aterm/WindowManagement/WorkspaceWindowController.swift` | Removed `workspaceCollection.onEmpty = { window.close() }` wiring so the window stays open in empty state when the last workspace is removed. |
-| `aterm/App/WorkspaceCommands.swift` | Menu `File → New Workspace` calls `WorkspaceCreationFlow.createWorkspace(in:)`. |
-| `aterm/View/Sidebar/SidebarPanelView.swift` | Sidebar `+ New Workspace` button calls `WorkspaceCreationFlow.createWorkspace(in:)`. |
-| `aterm/View/Sidebar/SidebarContainerView.swift` | `terminalZStack` shows `WorkspaceEmptyStateView` when no workspaces exist. |
+| `tian/Workspace/WorkspaceCollection.swift` | New `init(startingEmpty: Bool)` that skips default-workspace creation. Original `init(workingDirectory:)` unchanged. |
+| `tian/WindowManagement/WindowCoordinator.swift` | `openWindow` gains `empty: Bool = false`. When true, creates a `WorkspaceCollection(startingEmpty: true)`; otherwise preserves existing behavior. |
+| `tian/WindowManagement/TianAppDelegate.swift` | Fresh launch calls `openWindow(empty: true)`. UI-testing path still uses `openWindow()` with defaults. Session-restore path unchanged. |
+| `tian/WindowManagement/WorkspaceWindowController.swift` | Removed `workspaceCollection.onEmpty = { window.close() }` wiring so the window stays open in empty state when the last workspace is removed. |
+| `tian/App/WorkspaceCommands.swift` | Menu `File → New Workspace` calls `WorkspaceCreationFlow.createWorkspace(in:)`. |
+| `tian/View/Sidebar/SidebarPanelView.swift` | Sidebar `+ New Workspace` button calls `WorkspaceCreationFlow.createWorkspace(in:)`. |
+| `tian/View/Sidebar/SidebarContainerView.swift` | `terminalZStack` shows `WorkspaceEmptyStateView` when no workspaces exist. |
 
 ### Bug fix: workspace-identity propagation
 
 | File | Change |
 |---|---|
-| `aterm/View/Sidebar/SidebarContainerView.swift` | Adds `worktreeWorkspaceIDKey = "worktreeWorkspaceID"` userInfo key. |
-| `aterm/View/Sidebar/SidebarExpandedContentView.swift` | `showWorktreeBranchInput` notification now includes `workspace.id` under `worktreeWorkspaceIDKey`. |
-| `aterm/View/Workspace/WorkspaceWindowContent.swift` | `BranchInputContext` gains `workspaceID: UUID?`. Receiver extracts the ID; submit passes `repoPath: ctx.repoRoot.path` and `workspaceID: ctx.workspaceID` to `createWorktreeSpace`. Captures `ctx` into `let captured = ctx` before clearing `branchInputContext` to avoid losing state across the async Task. |
-| `aterm/Worktree/WorktreeOrchestrator.swift` | No code change — `createWorktreeSpace(branchName:existingBranch:repoPath:workspaceID:)` already supported the arguments. |
+| `tian/View/Sidebar/SidebarContainerView.swift` | Adds `worktreeWorkspaceIDKey = "worktreeWorkspaceID"` userInfo key. |
+| `tian/View/Sidebar/SidebarExpandedContentView.swift` | `showWorktreeBranchInput` notification now includes `workspace.id` under `worktreeWorkspaceIDKey`. |
+| `tian/View/Workspace/WorkspaceWindowContent.swift` | `BranchInputContext` gains `workspaceID: UUID?`. Receiver extracts the ID; submit passes `repoPath: ctx.repoRoot.path` and `workspaceID: ctx.workspaceID` to `createWorktreeSpace`. Captures `ctx` into `let captured = ctx` before clearing `branchInputContext` to avoid losing state across the async Task. |
+| `tian/Worktree/WorktreeOrchestrator.swift` | No code change — `createWorktreeSpace(branchName:existingBranch:repoPath:workspaceID:)` already supported the arguments. |
 
 `WorkspaceWindowController.handleNewWorktreeSpace` (the keyboard-shortcut path) is unchanged; it implicitly targets the active workspace, which is correct for that entry point.
 
@@ -114,7 +114,7 @@ User triggers creation (Cmd+Shift+N, sidebar +, or empty-state + button)
 ### Flow B — Fresh launch
 
 ```
-AtermAppDelegate.applicationDidFinishLaunching
+TianAppDelegate.applicationDidFinishLaunching
   → session restorable? → yes: existing restore path (unchanged)
   → UI-testing mode?     → yes: windowCoordinator.openWindow()  // $HOME default
   → otherwise:

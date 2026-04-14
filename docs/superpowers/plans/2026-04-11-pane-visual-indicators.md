@@ -15,7 +15,7 @@
 ### Task 1: Add `SessionStateBorder` view for needsAttention state
 
 **Files:**
-- Modify: `aterm/View/Shared/RainbowGlowBorder.swift`
+- Modify: `tian/View/Shared/RainbowGlowBorder.swift`
 
 - [ ] **Step 1: Add `SessionStateBorder` view**
 
@@ -37,13 +37,13 @@ struct SessionStateBorder: View {
 
 - [ ] **Step 2: Build to verify it compiles**
 
-Run: `xcodebuild -project aterm.xcodeproj -scheme aterm -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
+Run: `xcodebuild -project tian.xcodeproj -scheme tian -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add aterm/View/Shared/RainbowGlowBorder.swift
+git add tian/View/Shared/RainbowGlowBorder.swift
 git commit -m "feat(pane): add SessionStateBorder view for colored pane borders"
 ```
 
@@ -52,7 +52,7 @@ git commit -m "feat(pane): add SessionStateBorder view for colored pane borders"
 ### Task 2: Replace focus rainbow border with unfocused dimming in PaneView
 
 **Files:**
-- Modify: `aterm/View/PaneView.swift`
+- Modify: `tian/View/PaneView.swift`
 
 - [ ] **Step 1: Replace `showFocusBorder` with `showDimOverlay`**
 
@@ -143,13 +143,13 @@ Key changes from the original:
 
 - [ ] **Step 2: Build to verify it compiles**
 
-Run: `xcodebuild -project aterm.xcodeproj -scheme aterm -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
+Run: `xcodebuild -project tian.xcodeproj -scheme tian -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add aterm/View/PaneView.swift
+git add tian/View/PaneView.swift
 git commit -m "feat(pane): replace focus rainbow border with unfocused dimming and session state borders"
 ```
 
@@ -158,7 +158,7 @@ git commit -m "feat(pane): replace focus rainbow border with unfocused dimming a
 ### Task 3: Add reduce-motion support for busy rainbow border
 
 **Files:**
-- Modify: `aterm/View/Shared/RainbowGlowBorder.swift`
+- Modify: `tian/View/Shared/RainbowGlowBorder.swift`
 
 - [ ] **Step 1: Add reduce-motion support to `RainbowBorder`**
 
@@ -203,13 +203,13 @@ struct RainbowBorder: View {
 
 - [ ] **Step 2: Build to verify it compiles**
 
-Run: `xcodebuild -project aterm.xcodeproj -scheme aterm -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
+Run: `xcodebuild -project tian.xcodeproj -scheme tian -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
 Expected: `** BUILD SUCCEEDED **`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add aterm/View/Shared/RainbowGlowBorder.swift
+git add tian/View/Shared/RainbowGlowBorder.swift
 git commit -m "feat(a11y): respect reduce-motion for busy rainbow border"
 ```
 
@@ -219,7 +219,7 @@ git commit -m "feat(a11y): respect reduce-motion for busy rainbow border"
 
 - [ ] **Step 1: Build and run the app**
 
-Run: `xcodebuild -project aterm.xcodeproj -scheme aterm -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
+Run: `xcodebuild -project tian.xcodeproj -scheme tian -configuration Debug -derivedDataPath .build build 2>&1 | tail -5`
 
 - [ ] **Step 2: Verify unfocused pane dimming**
 

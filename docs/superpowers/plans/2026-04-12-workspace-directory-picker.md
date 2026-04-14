@@ -17,8 +17,8 @@
 ### Task 1: Pass clicked workspace's ID in the branch-input notification
 
 **Files:**
-- Modify: `aterm/View/Sidebar/SidebarContainerView.swift`
-- Modify: `aterm/View/Sidebar/SidebarExpandedContentView.swift`
+- Modify: `tian/View/Sidebar/SidebarContainerView.swift`
+- Modify: `tian/View/Sidebar/SidebarExpandedContentView.swift`
 
 Add `worktreeWorkspaceIDKey = "worktreeWorkspaceID"` to the `Notification` extension in `SidebarContainerView.swift`. Update the sidebar `onNewWorktreeSpace` closure in `SidebarExpandedContentView.swift` to include `Notification.worktreeWorkspaceIDKey: workspace.id` in the userInfo dictionary.
 
@@ -27,7 +27,7 @@ Commit message line 1: `🐛 fix(sidebar): include clicked workspace ID in workt
 ### Task 2: Thread workspace ID through `BranchInputContext` to `createWorktreeSpace`
 
 **Files:**
-- Modify: `aterm/View/Workspace/WorkspaceWindowContent.swift`
+- Modify: `tian/View/Workspace/WorkspaceWindowContent.swift`
 
 Add `workspaceID: UUID?` field to `BranchInputContext`. Extract the ID from userInfo in the `.showWorktreeBranchInput` receiver. In `onSubmit`, copy `ctx` to `let captured = ctx` before clearing `branchInputContext`, then pass `repoPath: captured.repoRoot.path` and `workspaceID: captured.workspaceID` to `createWorktreeSpace`.
 
@@ -36,7 +36,7 @@ Commit message line 1: `🐛 fix(worktree): pass clicked workspace ID and repo p
 ### Task 3: Regression test — `createWorktreeSpace(workspaceID:)` targets the specified workspace
 
 **Files:**
-- Modify: `atermTests/WorktreeOrchestratorTests.swift`
+- Modify: `tianTests/WorktreeOrchestratorTests.swift`
 
 Extend `MockWorkspaceProvider` with `var keyWindowWorkspace: Workspace?`; change `activeWorkspaceForKeyWindow()` to return it (default nil preserves existing tests). Append `createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow` test: two repos, set mock's key-window to A, call `createWorktreeSpace(repoPath: repoC, workspaceID: workspaceC.id)`, assert space lands in C not A. `defer` cleanup for both repos and the central `.worktrees/<repoCName>` base.
 
@@ -49,8 +49,8 @@ Commit message line 1: `✅ test(worktree): regression for workspace ID targetin
 ### Task 4: Add `WorkspaceCreationFlow` skeleton + `deriveWorkspaceName` (TDD)
 
 **Files:**
-- Create: `aterm/WindowManagement/WorkspaceCreationFlow.swift`
-- Create: `atermTests/WorkspaceCreationFlowTests.swift`
+- Create: `tian/WindowManagement/WorkspaceCreationFlow.swift`
+- Create: `tianTests/WorkspaceCreationFlowTests.swift`
 
 Create `@MainActor enum WorkspaceCreationFlow` with a single helper:
 
@@ -71,7 +71,7 @@ Commit message line 1: `✨ feat(workspace): add WorkspaceCreationFlow with name
 ### Task 5: Add picker-based `createWorkspace(in:)` to `WorkspaceCreationFlow`
 
 **Files:**
-- Modify: `aterm/WindowManagement/WorkspaceCreationFlow.swift`
+- Modify: `tian/WindowManagement/WorkspaceCreationFlow.swift`
 
 Add two methods to the enum:
 
@@ -106,7 +106,7 @@ Commit message line 1: `✨ feat(workspace): add NSOpenPanel-backed createWorksp
 ### Task 6: Wire the menu "New Workspace" button through `WorkspaceCreationFlow`
 
 **Files:**
-- Modify: `aterm/App/WorkspaceCommands.swift`
+- Modify: `tian/App/WorkspaceCommands.swift`
 
 Replace `controller.workspaceCollection.createWorkspace()` in the "New Workspace" menu action with `WorkspaceCreationFlow.createWorkspace(in: controller.workspaceCollection)`. Cmd+Shift+N shortcut unchanged.
 
@@ -115,7 +115,7 @@ Commit message line 1: `✨ feat(workspace): route File → New Workspace throug
 ### Task 7: Wire the sidebar "+ New Workspace" button through `WorkspaceCreationFlow`
 
 **Files:**
-- Modify: `aterm/View/Sidebar/SidebarPanelView.swift`
+- Modify: `tian/View/Sidebar/SidebarPanelView.swift`
 
 Replace `workspaceCollection.createWorkspace()` inside `newWorkspaceButton`'s Button action with `WorkspaceCreationFlow.createWorkspace(in: workspaceCollection)`. Label/frame/accessibility unchanged.
 
@@ -128,14 +128,14 @@ Commit message line 1: `✨ feat(sidebar): route New Workspace button through di
 ### Task 8: Add empty-collection support + stop auto-closing the window when empty
 
 **Files:**
-- Modify: `aterm/Workspace/WorkspaceCollection.swift`
-- Modify: `aterm/WindowManagement/WindowCoordinator.swift`
-- Modify: `aterm/WindowManagement/AtermAppDelegate.swift`
-- Modify: `aterm/WindowManagement/WorkspaceWindowController.swift`
+- Modify: `tian/Workspace/WorkspaceCollection.swift`
+- Modify: `tian/WindowManagement/WindowCoordinator.swift`
+- Modify: `tian/WindowManagement/TianAppDelegate.swift`
+- Modify: `tian/WindowManagement/WorkspaceWindowController.swift`
 
 1. Add `init(startingEmpty: Bool)` to `WorkspaceCollection` that initializes `workspaces = []` with a sentinel `activeWorkspaceID = UUID()`. Original `init(workingDirectory:)` unchanged.
 2. Add `empty: Bool = false` parameter to `WindowCoordinator.openWindow`. When true, create `WorkspaceCollection(startingEmpty: true)`; otherwise `WorkspaceCollection(workingDirectory: initialWorkingDirectory)`.
-3. In `AtermAppDelegate.applicationDidFinishLaunching`, add a `else if isUITesting { openWindow() }` branch and a final `else { openWindow(empty: true) }` branch.
+3. In `TianAppDelegate.applicationDidFinishLaunching`, add a `else if isUITesting { openWindow() }` branch and a final `else { openWindow(empty: true) }` branch.
 4. Remove the `workspaceCollection.onEmpty = { self?.window?.close() }` wiring in `WorkspaceWindowController.init`. Closing the last workspace now leaves the window open; the view layer renders the empty state.
 
 Commit message line 1: `✨ feat(workspace): support empty WorkspaceCollection and keep window open when empty`.
@@ -143,8 +143,8 @@ Commit message line 1: `✨ feat(workspace): support empty WorkspaceCollection a
 ### Task 9: Add `WorkspaceEmptyStateView` + show it when no workspaces exist
 
 **Files:**
-- Create: `aterm/View/Workspace/WorkspaceEmptyStateView.swift`
-- Modify: `aterm/View/Sidebar/SidebarContainerView.swift`
+- Create: `tian/View/Workspace/WorkspaceEmptyStateView.swift`
+- Modify: `tian/View/Sidebar/SidebarContainerView.swift`
 
 Create `WorkspaceEmptyStateView` with an Apple-native layout:
 - 56pt `folder.badge.plus` SF Symbol, tertiary foreground.
@@ -162,9 +162,9 @@ Commit message line 1: `✨ feat(workspace): add Apple-style empty-state view wh
 
 ## Verification
 
-- **Unit tests:** `xcodebuild test -project aterm.xcodeproj -scheme aterm -derivedDataPath .build -only-testing:atermTests`. Expected 486/488 pass (the 2 pre-existing `NotificationManagerTests` failures are unrelated environmental issues — macOS notification permissions in the test host).
+- **Unit tests:** `xcodebuild test -project tian.xcodeproj -scheme tian -derivedDataPath .build -only-testing:tianTests`. Expected 486/488 pass (the 2 pre-existing `NotificationManagerTests` failures are unrelated environmental issues — macOS notification permissions in the test host).
 - **Manual acceptance:** see spec § Testing.
 
 ## Implementation History
 
-This plan was iterated during implementation. An intermediate design explored a blocking modal first-launch picker with a "Quit aterm" accessory button; it was reverted in favor of the empty-state design documented here. The reverted commits remain in the branch history for traceability.
+This plan was iterated during implementation. An intermediate design explored a blocking modal first-launch picker with a "Quit tian" accessory button; it was reverted in favor of the empty-state design documented here. The reverted commits remain in the branch history for traceability.

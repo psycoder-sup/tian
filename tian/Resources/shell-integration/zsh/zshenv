@@ -1,0 +1,23 @@
+# tian ZDOTDIR bootstrap for zsh.
+# Restores the user's real ZDOTDIR, sources their .zshenv,
+# then loads tian's zsh integration for interactive shells.
+
+if [[ -n "${TIAN_ORIGINAL_ZDOTDIR+X}" ]]; then
+    builtin export ZDOTDIR="$TIAN_ORIGINAL_ZDOTDIR"
+    builtin unset TIAN_ORIGINAL_ZDOTDIR
+else
+    builtin unset ZDOTDIR
+fi
+
+{
+    builtin typeset _tian_file="${ZDOTDIR-$HOME}/.zshenv"
+    [[ ! -r "$_tian_file" ]] || builtin source -- "$_tian_file"
+
+    if [[ -o interactive \
+       && -n "${TIAN_SHELL_INTEGRATION_DIR:-}" \
+       && -r "${TIAN_SHELL_INTEGRATION_DIR}/tian-zsh-integration.zsh" ]]; then
+        builtin source -- "${TIAN_SHELL_INTEGRATION_DIR}/tian-zsh-integration.zsh"
+    fi
+} always {
+    builtin unset _tian_file
+}

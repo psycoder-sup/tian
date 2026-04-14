@@ -21,8 +21,8 @@ xcodegen generate
 
 echo "==> xcodebuild -configuration $CONFIG"
 xcodebuild \
-  -project aterm.xcodeproj \
-  -scheme aterm \
+  -project tian.xcodeproj \
+  -scheme tian \
   -configuration "$CONFIG" \
   -derivedDataPath .build \
   build

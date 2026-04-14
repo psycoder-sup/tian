@@ -10,7 +10,7 @@
 
 ## 1. Overview
 
-This spec covers the replacement of aterm's three horizontal navigation components (WorkspaceIndicatorView, SpaceBarView, WorkspaceSwitcherOverlay) with a single glassmorphism sidebar that provides full workspace and space management. The sidebar displays **all workspaces** belonging to the current window as top-level disclosure groups, each containing its spaces as child rows. Workspaces are owned per-window via a new `WorkspaceCollection` type, and switching between workspaces happens **in-place** within the same window (no window-per-workspace mapping).
+This spec covers the replacement of tian's three horizontal navigation components (WorkspaceIndicatorView, SpaceBarView, WorkspaceSwitcherOverlay) with a single glassmorphism sidebar that provides full workspace and space management. The sidebar displays **all workspaces** belonging to the current window as top-level disclosure groups, each containing its spaces as child rows. Workspaces are owned per-window via a new `WorkspaceCollection` type, and switching between workspaces happens **in-place** within the same window (no window-per-workspace mapping).
 
 The sidebar uses a ZStack overlay layout where the sidebar panel sits behind the content layer, with the content offset via leading padding. It supports expanded (284pt) and collapsed (0pt, fully hidden) modes. The tab bar (`TabBarView`) spans the full window width in a top-level row alongside the sidebar toggle button and traffic light clearance. The terminal surface freeze-and-reflow strategy ensures clean animations without visual artifacts.
 
@@ -134,42 +134,42 @@ The following existing types are read by the sidebar but not modified:
 
 | Type | Kind | Location | Status | Description |
 |------|------|----------|--------|-------------|
-| SidebarMode | enum | `aterm/View/Sidebar/SidebarState.swift` | Done | Two cases: `.expanded` (284pt), `.collapsed` (0pt). Computed `width: CGFloat` property. |
-| SidebarFocusTarget | enum | `aterm/View/Sidebar/SidebarState.swift` | Done | Two cases: `.terminal`, `.sidebar`. |
-| SidebarState | @Observable class | `aterm/View/Sidebar/SidebarState.swift` | Done | Per-window sidebar state as described in section 2.1. |
-| WorkspaceCollection | @Observable class | `aterm/Models/WorkspaceCollection.swift` | Phase 2 | Per-window workspace ownership as described in section 2.2. Follows `SpaceCollection` pattern. |
-| SidebarContainerView | SwiftUI View | `aterm/View/Sidebar/SidebarContainerView.swift` | Done (needs Phase 2 update) | Top-level ZStack wrapping the sidebar panel and content layer. |
-| SidebarPanelView | SwiftUI View | `aterm/View/Sidebar/SidebarPanelView.swift` | Done (needs Phase 2 update) | The sidebar glass panel with workspace content and new workspace button. |
-| SidebarToggleButton | SwiftUI View | `aterm/View/Sidebar/SidebarToggleButton.swift` | Done | Standalone toggle button using `sidebar.left` SF Symbol. |
-| SidebarExpandedContentView | SwiftUI View | `aterm/View/Sidebar/SidebarExpandedContentView.swift` | Done (needs Phase 2 update) | Workspace tree with disclosure groups, space rows, keyboard navigation. |
-| SidebarSpaceRowView | SwiftUI View | `aterm/View/Sidebar/SidebarSpaceRowView.swift` | Done | A single space row. Handles selection, hover, keyboard highlight. |
-| SidebarWorkspaceHeaderView | SwiftUI View | `aterm/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Done (needs Phase 3 update) | Workspace disclosure header. Needs context menu for rename/close. |
+| SidebarMode | enum | `tian/View/Sidebar/SidebarState.swift` | Done | Two cases: `.expanded` (284pt), `.collapsed` (0pt). Computed `width: CGFloat` property. |
+| SidebarFocusTarget | enum | `tian/View/Sidebar/SidebarState.swift` | Done | Two cases: `.terminal`, `.sidebar`. |
+| SidebarState | @Observable class | `tian/View/Sidebar/SidebarState.swift` | Done | Per-window sidebar state as described in section 2.1. |
+| WorkspaceCollection | @Observable class | `tian/Models/WorkspaceCollection.swift` | Phase 2 | Per-window workspace ownership as described in section 2.2. Follows `SpaceCollection` pattern. |
+| SidebarContainerView | SwiftUI View | `tian/View/Sidebar/SidebarContainerView.swift` | Done (needs Phase 2 update) | Top-level ZStack wrapping the sidebar panel and content layer. |
+| SidebarPanelView | SwiftUI View | `tian/View/Sidebar/SidebarPanelView.swift` | Done (needs Phase 2 update) | The sidebar glass panel with workspace content and new workspace button. |
+| SidebarToggleButton | SwiftUI View | `tian/View/Sidebar/SidebarToggleButton.swift` | Done | Standalone toggle button using `sidebar.left` SF Symbol. |
+| SidebarExpandedContentView | SwiftUI View | `tian/View/Sidebar/SidebarExpandedContentView.swift` | Done (needs Phase 2 update) | Workspace tree with disclosure groups, space rows, keyboard navigation. |
+| SidebarSpaceRowView | SwiftUI View | `tian/View/Sidebar/SidebarSpaceRowView.swift` | Done | A single space row. Handles selection, hover, keyboard highlight. |
+| SidebarWorkspaceHeaderView | SwiftUI View | `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift` | Done (needs Phase 3 update) | Workspace disclosure header. Needs context menu for rename/close. |
 
 ### 3.2 Modified Types
 
 | Type | Location | Modification | Status |
 |------|----------|-------------|--------|
-| WorkspaceManager | `aterm/Models/WorkspaceManager.swift` | Simplified to app-level coordinator. Remove workspace ownership, CRUD methods, `shouldQuit`, `windowCoordinator`. Retain `activeWorkspaceID`. | Phase 2 |
-| WindowCoordinator | `aterm/WindowManagement/WindowCoordinator.swift` | Key by window identity instead of workspace ID. `openWindow()` creates window with `WorkspaceCollection`. `closeWindow()` cleans up all workspaces. | Phase 2 |
-| WorkspaceWindowController | `aterm/WindowManagement/WorkspaceWindowController.swift` | Owns `WorkspaceCollection` instead of single workspace reference. Keyboard monitor delegates workspace ops to collection. Displays active workspace. | Phase 2 |
-| WorkspaceWindowContent | `aterm/View/Workspace/WorkspaceWindowContent.swift` | Receives `WorkspaceCollection` instead of single `workspaceID`. Passes collection to sidebar. Displays active workspace's space collection. | Phase 2 |
-| SidebarContainerView | `aterm/View/Sidebar/SidebarContainerView.swift` | Receives `WorkspaceCollection`. Tab bar and terminal area display active workspace's space collection. | Phase 2 |
-| SidebarExpandedContentView | `aterm/View/Sidebar/SidebarExpandedContentView.swift` | Reads from `WorkspaceCollection` instead of `WorkspaceManager`. Workspace activation calls `workspaceCollection.activateWorkspace(id:)`. | Phase 2 |
-| SidebarPanelView | `aterm/View/Sidebar/SidebarPanelView.swift` | Passes `WorkspaceCollection` to content. New workspace button delegates to collection. | Phase 2 |
-| KeyAction | `aterm/Input/KeyAction.swift` | `.newWorkspace` now means "create in current window". Legacy `.toggleWorkspaceSwitcher` kept for compilation (Phase 5 removes). | Phase 2 |
-| KeyBindingRegistry | `aterm/Input/KeyBindingRegistry.swift` | Changed to `[KeyAction: [KeyBinding]]`. `.toggleSidebar` multi-binding (Cmd+Shift+S, Cmd+Shift+W). Cmd+0 special case for `.focusSidebar`. | Done |
+| WorkspaceManager | `tian/Models/WorkspaceManager.swift` | Simplified to app-level coordinator. Remove workspace ownership, CRUD methods, `shouldQuit`, `windowCoordinator`. Retain `activeWorkspaceID`. | Phase 2 |
+| WindowCoordinator | `tian/WindowManagement/WindowCoordinator.swift` | Key by window identity instead of workspace ID. `openWindow()` creates window with `WorkspaceCollection`. `closeWindow()` cleans up all workspaces. | Phase 2 |
+| WorkspaceWindowController | `tian/WindowManagement/WorkspaceWindowController.swift` | Owns `WorkspaceCollection` instead of single workspace reference. Keyboard monitor delegates workspace ops to collection. Displays active workspace. | Phase 2 |
+| WorkspaceWindowContent | `tian/View/Workspace/WorkspaceWindowContent.swift` | Receives `WorkspaceCollection` instead of single `workspaceID`. Passes collection to sidebar. Displays active workspace's space collection. | Phase 2 |
+| SidebarContainerView | `tian/View/Sidebar/SidebarContainerView.swift` | Receives `WorkspaceCollection`. Tab bar and terminal area display active workspace's space collection. | Phase 2 |
+| SidebarExpandedContentView | `tian/View/Sidebar/SidebarExpandedContentView.swift` | Reads from `WorkspaceCollection` instead of `WorkspaceManager`. Workspace activation calls `workspaceCollection.activateWorkspace(id:)`. | Phase 2 |
+| SidebarPanelView | `tian/View/Sidebar/SidebarPanelView.swift` | Passes `WorkspaceCollection` to content. New workspace button delegates to collection. | Phase 2 |
+| KeyAction | `tian/Input/KeyAction.swift` | `.newWorkspace` now means "create in current window". Legacy `.toggleWorkspaceSwitcher` kept for compilation (Phase 5 removes). | Phase 2 |
+| KeyBindingRegistry | `tian/Input/KeyBindingRegistry.swift` | Changed to `[KeyAction: [KeyBinding]]`. `.toggleSidebar` multi-binding (Cmd+Shift+S, Cmd+Shift+W). Cmd+0 special case for `.focusSidebar`. | Done |
 
 ### 3.3 Removed Types (Phase 5)
 
 | Type | Location | Reason |
 |------|----------|--------|
-| WorkspaceIndicatorView | `aterm/View/Workspace/WorkspaceIndicatorView.swift` | Replaced by sidebar workspace header |
-| SpaceBarView | `aterm/View/SpaceBar/SpaceBarView.swift` | Replaced by sidebar space list |
-| SpaceBarItemView | `aterm/View/SpaceBar/SpaceBarItemView.swift` | Replaced by SidebarSpaceRowView |
-| WorkspaceSwitcherOverlay | `aterm/View/Workspace/WorkspaceSwitcherOverlay.swift` | Replaced by sidebar workspace management |
-| SwitcherSearchField | `aterm/View/Workspace/WorkspaceSwitcherOverlay.swift` (private) | Removed with overlay |
-| WorkspaceSwitcherRow | `aterm/View/Workspace/WorkspaceSwitcherOverlay.swift` (private) | Removed with overlay |
-| Notification.Name.toggleWorkspaceSwitcher | `aterm/View/Workspace/WorkspaceWindowContent.swift` | Replaced by sidebar toggle notification |
+| WorkspaceIndicatorView | `tian/View/Workspace/WorkspaceIndicatorView.swift` | Replaced by sidebar workspace header |
+| SpaceBarView | `tian/View/SpaceBar/SpaceBarView.swift` | Replaced by sidebar space list |
+| SpaceBarItemView | `tian/View/SpaceBar/SpaceBarItemView.swift` | Replaced by SidebarSpaceRowView |
+| WorkspaceSwitcherOverlay | `tian/View/Workspace/WorkspaceSwitcherOverlay.swift` | Replaced by sidebar workspace management |
+| SwitcherSearchField | `tian/View/Workspace/WorkspaceSwitcherOverlay.swift` (private) | Removed with overlay |
+| WorkspaceSwitcherRow | `tian/View/Workspace/WorkspaceSwitcherOverlay.swift` (private) | Removed with overlay |
+| Notification.Name.toggleWorkspaceSwitcher | `tian/View/Workspace/WorkspaceWindowContent.swift` | Replaced by sidebar toggle notification |
 
 ---
 
@@ -271,7 +271,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.1 SidebarContainerView
 
-**File:** `aterm/View/Sidebar/SidebarContainerView.swift`
+**File:** `tian/View/Sidebar/SidebarContainerView.swift`
 
 **Inputs (Phase 2):**
 - `workspaceCollection: WorkspaceCollection`
@@ -311,7 +311,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.2 SidebarPanelView
 
-**File:** `aterm/View/Sidebar/SidebarPanelView.swift`
+**File:** `tian/View/Sidebar/SidebarPanelView.swift`
 
 **Inputs:**
 - `workspaceCollection: WorkspaceCollection`
@@ -339,7 +339,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.3 SidebarToggleButton
 
-**File:** `aterm/View/Sidebar/SidebarToggleButton.swift`
+**File:** `tian/View/Sidebar/SidebarToggleButton.swift`
 
 **Inputs:**
 - `workspaceID: UUID` (used to scope notifications — will change to window ID in Phase 2)
@@ -357,7 +357,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.4 SidebarExpandedContentView
 
-**File:** `aterm/View/Sidebar/SidebarExpandedContentView.swift`
+**File:** `tian/View/Sidebar/SidebarExpandedContentView.swift`
 
 **Inputs (Phase 2):**
 - `workspaceCollection: WorkspaceCollection`
@@ -402,7 +402,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.5 SidebarWorkspaceHeaderView
 
-**File:** `aterm/View/Sidebar/SidebarWorkspaceHeaderView.swift`
+**File:** `tian/View/Sidebar/SidebarWorkspaceHeaderView.swift`
 
 **Inputs:**
 - `workspace: Workspace`
@@ -437,7 +437,7 @@ WorkspaceWindowContent(workspaceCollection)
 
 ### 5.6 SidebarSpaceRowView
 
-**File:** `aterm/View/Sidebar/SidebarSpaceRowView.swift`
+**File:** `tian/View/Sidebar/SidebarSpaceRowView.swift`
 
 **Inputs:**
 - `space: SpaceModel`
@@ -806,14 +806,14 @@ The sidebar reads from `workspaceCollection.workspaces` and per-workspace `space
 ### 15.1 New Files
 
 ```
-aterm/Models/WorkspaceCollection.swift       -- Per-window workspace collection (Phase 2)
-aterm/DragAndDrop/WorkspaceDragItem.swift     -- Transferable for workspace drag-and-drop (Phase 3)
+tian/Models/WorkspaceCollection.swift       -- Per-window workspace collection (Phase 2)
+tian/DragAndDrop/WorkspaceDragItem.swift     -- Transferable for workspace drag-and-drop (Phase 3)
 ```
 
 ### 15.2 Sidebar Directory
 
 ```
-aterm/View/Sidebar/
+tian/View/Sidebar/
   SidebarState.swift                -- SidebarMode, SidebarFocusTarget, SidebarState (Done)
   SidebarContainerView.swift        -- ZStack layout, notification defs (Done, Phase 2 update)
   SidebarPanelView.swift            -- Glass panel, workspace content (Done, Phase 2 update)
@@ -826,21 +826,21 @@ aterm/View/Sidebar/
 ### 15.3 Modified Files
 
 ```
-aterm/Models/WorkspaceManager.swift                    -- Simplified to app-level coordinator (Phase 2)
-aterm/WindowManagement/WindowCoordinator.swift         -- Window-keyed, creates WorkspaceCollection (Phase 2)
-aterm/WindowManagement/WorkspaceWindowController.swift -- Owns WorkspaceCollection (Phase 2)
-aterm/View/Workspace/WorkspaceWindowContent.swift      -- Receives WorkspaceCollection (Phase 2)
-aterm/Input/KeyAction.swift                            -- .newWorkspace behavior change (Phase 2)
-aterm/Input/KeyBindingRegistry.swift                   -- Multi-binding support (Done)
+tian/Models/WorkspaceManager.swift                    -- Simplified to app-level coordinator (Phase 2)
+tian/WindowManagement/WindowCoordinator.swift         -- Window-keyed, creates WorkspaceCollection (Phase 2)
+tian/WindowManagement/WorkspaceWindowController.swift -- Owns WorkspaceCollection (Phase 2)
+tian/View/Workspace/WorkspaceWindowContent.swift      -- Receives WorkspaceCollection (Phase 2)
+tian/Input/KeyAction.swift                            -- .newWorkspace behavior change (Phase 2)
+tian/Input/KeyBindingRegistry.swift                   -- Multi-binding support (Done)
 ```
 
 ### 15.4 Deleted Files (Phase 5)
 
 ```
-aterm/View/Workspace/WorkspaceIndicatorView.swift
-aterm/View/SpaceBar/SpaceBarView.swift
-aterm/View/SpaceBar/SpaceBarItemView.swift
-aterm/View/Workspace/WorkspaceSwitcherOverlay.swift
+tian/View/Workspace/WorkspaceIndicatorView.swift
+tian/View/SpaceBar/SpaceBarView.swift
+tian/View/SpaceBar/SpaceBarItemView.swift
+tian/View/Workspace/WorkspaceSwitcherOverlay.swift
 ```
 
 ---
@@ -858,17 +858,17 @@ aterm/View/Workspace/WorkspaceSwitcherOverlay.swift
 **Goal:** Introduce per-window workspace ownership. Populate sidebar with workspace tree. In-place workspace switching.
 
 **Files to create:**
-1. `aterm/Models/WorkspaceCollection.swift` — `WorkspaceCollection` class following `SpaceCollection` pattern. Properties: `workspaces`, `activeWorkspaceID`, `shouldQuit`, `onEmpty`, `workspaceCounter`. Methods: `createWorkspace`, `removeWorkspace`, `activateWorkspace`, `nextWorkspace`, `previousWorkspace`, `reorderWorkspace`, `renameWorkspace`. Cascading close wiring.
+1. `tian/Models/WorkspaceCollection.swift` — `WorkspaceCollection` class following `SpaceCollection` pattern. Properties: `workspaces`, `activeWorkspaceID`, `shouldQuit`, `onEmpty`, `workspaceCounter`. Methods: `createWorkspace`, `removeWorkspace`, `activateWorkspace`, `nextWorkspace`, `previousWorkspace`, `reorderWorkspace`, `renameWorkspace`. Cascading close wiring.
 
 **Files to modify:**
-2. `aterm/Models/WorkspaceManager.swift` — Simplify: remove workspace ownership, CRUD, `shouldQuit`, `windowCoordinator`. Retain `activeWorkspaceID` for app-level tracking.
-3. `aterm/WindowManagement/WindowCoordinator.swift` — Rekey from `[UUID: Controller]` (workspace-keyed) to window-keyed. `openWindow()` creates `WorkspaceCollection` with one default workspace, passes to controller. `closeWindow()` cleans up all workspaces in collection.
-4. `aterm/WindowManagement/WorkspaceWindowController.swift` — Own `WorkspaceCollection` instead of single workspace. Keyboard monitor delegates `.newWorkspace` and `.closeWorkspace` to collection. Observe active workspace name for window title.
-5. `aterm/View/Workspace/WorkspaceWindowContent.swift` — Accept `WorkspaceCollection`. Pass to `SidebarContainerView`.
-6. `aterm/View/Sidebar/SidebarContainerView.swift` — Accept `WorkspaceCollection`. Tab bar and terminal ZStack bind to `workspaceCollection.activeWorkspace.spaceCollection`. Observe active workspace changes for container size propagation.
-7. `aterm/View/Sidebar/SidebarPanelView.swift` — Accept `WorkspaceCollection`. Pass to `SidebarExpandedContentView`. New workspace button calls `workspaceCollection.createWorkspace()`.
-8. `aterm/View/Sidebar/SidebarExpandedContentView.swift` — Read from `WorkspaceCollection` instead of `WorkspaceManager`. Workspace activation calls `workspaceCollection.activateWorkspace(id:)`.
-9. `aterm/WindowManagement/AtermAppDelegate.swift` — Update init flow: `WindowCoordinator.openWindow()` now creates `WorkspaceCollection` internally, not via `WorkspaceManager.createWorkspace()`.
+2. `tian/Models/WorkspaceManager.swift` — Simplify: remove workspace ownership, CRUD, `shouldQuit`, `windowCoordinator`. Retain `activeWorkspaceID` for app-level tracking.
+3. `tian/WindowManagement/WindowCoordinator.swift` — Rekey from `[UUID: Controller]` (workspace-keyed) to window-keyed. `openWindow()` creates `WorkspaceCollection` with one default workspace, passes to controller. `closeWindow()` cleans up all workspaces in collection.
+4. `tian/WindowManagement/WorkspaceWindowController.swift` — Own `WorkspaceCollection` instead of single workspace. Keyboard monitor delegates `.newWorkspace` and `.closeWorkspace` to collection. Observe active workspace name for window title.
+5. `tian/View/Workspace/WorkspaceWindowContent.swift` — Accept `WorkspaceCollection`. Pass to `SidebarContainerView`.
+6. `tian/View/Sidebar/SidebarContainerView.swift` — Accept `WorkspaceCollection`. Tab bar and terminal ZStack bind to `workspaceCollection.activeWorkspace.spaceCollection`. Observe active workspace changes for container size propagation.
+7. `tian/View/Sidebar/SidebarPanelView.swift` — Accept `WorkspaceCollection`. Pass to `SidebarExpandedContentView`. New workspace button calls `workspaceCollection.createWorkspace()`.
+8. `tian/View/Sidebar/SidebarExpandedContentView.swift` — Read from `WorkspaceCollection` instead of `WorkspaceManager`. Workspace activation calls `workspaceCollection.activateWorkspace(id:)`.
+9. `tian/WindowManagement/TianAppDelegate.swift` — Update init flow: `WindowCoordinator.openWindow()` now creates `WorkspaceCollection` internally, not via `WorkspaceManager.createWorkspace()`.
 
 **Validation:**
 - Sidebar shows all workspaces for current window.
@@ -884,7 +884,7 @@ aterm/View/Workspace/WorkspaceSwitcherOverlay.swift
 **Goal:** Full interaction support for workspaces and spaces.
 
 **Files to create:**
-1. `aterm/DragAndDrop/WorkspaceDragItem.swift` — `Transferable` struct with `workspaceID: UUID`.
+1. `tian/DragAndDrop/WorkspaceDragItem.swift` — `Transferable` struct with `workspaceID: UUID`.
 
 **Files to modify:**
 2. `SidebarWorkspaceHeaderView.swift` — Add `.contextMenu` with Rename and Close Workspace. Add `InlineRenameView` for workspace name. Add `isActive` prop for styling.
@@ -909,14 +909,14 @@ Collapsed mode is 0pt (fully hidden). No collapsed content view needed.
 **Goal:** Remove legacy components. Single commit for easy revert.
 
 **Files to delete:**
-1. `aterm/View/Workspace/WorkspaceIndicatorView.swift`
-2. `aterm/View/SpaceBar/SpaceBarView.swift`
-3. `aterm/View/SpaceBar/SpaceBarItemView.swift`
-4. `aterm/View/Workspace/WorkspaceSwitcherOverlay.swift`
+1. `tian/View/Workspace/WorkspaceIndicatorView.swift`
+2. `tian/View/SpaceBar/SpaceBarView.swift`
+3. `tian/View/SpaceBar/SpaceBarItemView.swift`
+4. `tian/View/Workspace/WorkspaceSwitcherOverlay.swift`
 
 **Files to modify:**
-5. `aterm/Input/KeyAction.swift` — Remove `.toggleWorkspaceSwitcher` case.
-6. `aterm/View/Workspace/WorkspaceWindowContent.swift` — Remove any remaining references.
+5. `tian/Input/KeyAction.swift` — Remove `.toggleWorkspaceSwitcher` case.
+6. `tian/View/Workspace/WorkspaceWindowContent.swift` — Remove any remaining references.
 
 **Validation:** Build succeeds. All navigation works through sidebar. Accessibility audit.
 

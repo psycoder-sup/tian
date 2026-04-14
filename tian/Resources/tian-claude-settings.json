@@ -1,0 +1,114 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r 'select(.source == \"startup\" or .source == \"resume\" or .source == \"clear\" or .source == \"compact\") | .session_id' | xargs -r -I{} tian-cli pane set-restore-command --command 'claude --resume {}' 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh SessionStart active"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh PreToolUse"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh PreToolUse.AskUserQuestion needs_attention"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh PostToolUse busy"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh UserPromptSubmit busy"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh Stop idle"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh PermissionRequest needs_attention"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh Notification"
+          }
+        ]
+      },
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh Notification.idle_prompt idle"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh SessionEnd inactive"
+          }
+        ]
+      }
+    ]
+  }
+}

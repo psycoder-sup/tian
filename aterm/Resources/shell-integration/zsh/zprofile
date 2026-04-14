@@ -1,4 +1,0 @@
-# aterm passthrough: source user's .zprofile
-builtin typeset _aterm_file="${ZDOTDIR-$HOME}/.zprofile"
-[[ ! -r "$_aterm_file" ]] || builtin source -- "$_aterm_file"
-builtin unset _aterm_file

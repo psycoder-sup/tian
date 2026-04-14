@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Build GhosttyKit.xcframework from source and vendor into the aterm project.
+# Build GhosttyKit.xcframework from source and vendor into the tian project.
 #
 # Prerequisites:
 #   brew install zig
@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENDOR_DIR="$PROJECT_ROOT/aterm/Vendor"
+VENDOR_DIR="$PROJECT_ROOT/tian/Vendor"
 GHOSTTY_DIR="$PROJECT_ROOT/.ghostty-src"
 
 # Parse args

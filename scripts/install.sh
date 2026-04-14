@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_NAME="aterm.app"
+APP_NAME="tian.app"
 SOURCE=".build/Build/Products/Release/$APP_NAME"
 DEST="/Applications/$APP_NAME"
 
 if [ ! -d "$SOURCE" ]; then
   echo "Error: Release build not found at $SOURCE"
-  echo "Run: xcodebuild -project aterm.xcodeproj -scheme aterm -configuration Release -derivedDataPath .build build"
+  echo "Run: xcodebuild -project tian.xcodeproj -scheme tian -configuration Release -derivedDataPath .build build"
   exit 1
 fi
 

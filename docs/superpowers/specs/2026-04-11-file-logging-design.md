@@ -2,7 +2,7 @@
 
 ## Problem
 
-aterm uses `os.Logger` (unified logging) for all log output. macOS does not persist `info`/`debug`/`warning` level messages, so when the IPC server silently died, there was zero forensic evidence. Post-mortem debugging requires logs that survive past the current Console.app session.
+tian uses `os.Logger` (unified logging) for all log output. macOS does not persist `info`/`debug`/`warning` level messages, so when the IPC server silently died, there was zero forensic evidence. Post-mortem debugging requires logs that survive past the current Console.app session.
 
 ## Design
 
@@ -10,15 +10,15 @@ Add a file logging layer that dual-writes to both `os.Logger` and a log file for
 
 ### Components
 
-**`FileLogWriter`** (new file: `aterm/Utilities/FileLogWriter.swift`)
-- Singleton (`@unchecked Sendable`) managing file I/O for `~/Library/Logs/aterm/aterm.log`
+**`FileLogWriter`** (new file: `tian/Utilities/FileLogWriter.swift`)
+- Singleton (`@unchecked Sendable`) managing file I/O for `~/Library/Logs/tian/tian.log`
 - Serial `DispatchQueue` for thread-safe writes
-- Rotates when file exceeds 5MB; keeps current + 1 backup (`aterm.1.log`)
+- Rotates when file exceeds 5MB; keeps current + 1 backup (`tian.1.log`)
 - Line format: `2026-04-11 20:03:10.123 [ERROR] [ipc] message`
 - Creates log directory on init if missing
 - Silent failure throughout — logging errors must never crash the app
 
-**`FileLogger`** (new file: `aterm/Utilities/FileLogger.swift`)
+**`FileLogger`** (new file: `tian/Utilities/FileLogger.swift`)
 - `Sendable` struct wrapping an `os.Logger` + reference to `FileLogWriter.shared`
 - Methods: `debug()`, `info()`, `warning()`, `error()` — all take `String`
 - Each call forwards to both `os.Logger` and `FileLogWriter`

@@ -5,9 +5,9 @@
       "Bash(xcodegen:*)",
       "Bash(xcrun swiftc -typecheck:*)",
       "Bash(zig build:*)",
-      "Bash(xcodebuild build -scheme aterm:*)",
-      "Bash(xcodebuild -project aterm.xcodeproj:*)",
-      "Bash(xcodebuild -project */aterm/aterm.xcodeproj *)"
+      "Bash(xcodebuild build -scheme tian:*)",
+      "Bash(xcodebuild -project tian.xcodeproj:*)",
+      "Bash(xcodebuild -project */tian/tian.xcodeproj *)"
     ]
   },
   "enabledPlugins": {

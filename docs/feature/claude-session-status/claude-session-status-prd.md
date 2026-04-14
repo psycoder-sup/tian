@@ -9,9 +9,9 @@
 
 ## 1. Overview
 
-Claude Session Status is an aterm feature that tracks the lifecycle state of Claude Code sessions running inside terminal panes and surfaces that state visually in the sidebar. Each pane can independently report its Claude Code session state (active, busy, idle, needs_attention, inactive) via the existing `status.set` IPC command, extended with an optional `--state` parameter. The sidebar displays each active session as an individual color-coded dot on the Space row, sorted by priority (highest-priority state leftmost). This gives the developer per-session visibility without collapsing multiple sessions into a single aggregated indicator.
+Claude Session Status is an tian feature that tracks the lifecycle state of Claude Code sessions running inside terminal panes and surfaces that state visually in the sidebar. Each pane can independently report its Claude Code session state (active, busy, idle, needs_attention, inactive) via the existing `status.set` IPC command, extended with an optional `--state` parameter. The sidebar displays each active session as an individual color-coded dot on the Space row, sorted by priority (highest-priority state leftmost). This gives the developer per-session visibility without collapsing multiple sessions into a single aggregated indicator.
 
-The feature bridges the gap between Claude Code's hook system and aterm's UI: Claude Code hooks invoke `aterm-cli status set --state <state>` at each lifecycle transition, and aterm renders the result in the sidebar so the developer can monitor multiple concurrent Claude sessions at a glance without switching between panes or watching terminal output.
+The feature bridges the gap between Claude Code's hook system and tian's UI: Claude Code hooks invoke `tian-cli status set --state <state>` at each lifecycle transition, and tian renders the result in the sidebar so the developer can monitor multiple concurrent Claude sessions at a glance without switching between panes or watching terminal output.
 
 ---
 
@@ -19,9 +19,9 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 
 **User Pain Point:** When running multiple Claude Code sessions across different panes (e.g., one per worktree Space), the developer has no way to see which sessions are actively working, which are waiting for input, and which need attention (permission prompts) without manually switching to each pane and reading the terminal. This is especially costly when Claude Code is blocked on a permission prompt in a backgrounded pane -- the developer doesn't notice until they happen to check, wasting time that Claude could be working.
 
-**Current Workaround:** The developer uses `aterm-cli status set --label "Thinking..."` via Claude Code hooks to display free-form text in the sidebar's Space row. This provides some visibility, but (a) the status is a plain text string with no semantic meaning -- aterm cannot distinguish "busy" from "needs attention," (b) all panes within a Space share a single "latest status" display so there is no per-pane tracking, (c) there is no visual priority system -- a permission prompt in a backgrounded pane looks the same as a "Thinking..." status, and (d) the free-form label has no color coding or icon, so scanning the sidebar for important states requires reading text.
+**Current Workaround:** The developer uses `tian-cli status set --label "Thinking..."` via Claude Code hooks to display free-form text in the sidebar's Space row. This provides some visibility, but (a) the status is a plain text string with no semantic meaning -- tian cannot distinguish "busy" from "needs attention," (b) all panes within a Space share a single "latest status" display so there is no per-pane tracking, (c) there is no visual priority system -- a permission prompt in a backgrounded pane looks the same as a "Thinking..." status, and (d) the free-form label has no color coding or icon, so scanning the sidebar for important states requires reading text.
 
-**Business Opportunity:** aterm's 4-level hierarchy is designed for managing multiple parallel workstreams. Claude Code is the primary tool running inside those workstreams. Making Claude session state a first-class concept in the sidebar transforms aterm from a passive terminal into an active AI session dashboard. The developer can run Claude Code in 3-5 Spaces simultaneously and instantly see which ones need attention, which are still working, and which are done -- enabling a multiplexed AI-assisted development workflow that is aterm's primary differentiator.
+**Business Opportunity:** tian's 4-level hierarchy is designed for managing multiple parallel workstreams. Claude Code is the primary tool running inside those workstreams. Making Claude session state a first-class concept in the sidebar transforms tian from a passive terminal into an active AI session dashboard. The developer can run Claude Code in 3-5 Spaces simultaneously and instantly see which ones need attention, which are still working, and which are done -- enabling a multiplexed AI-assisted development workflow that is tian's primary differentiator.
 
 ---
 
@@ -37,7 +37,7 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 
 ### Non-Goals
 
-- **NG1:** Persisting Claude session state across app restarts. Session state is ephemeral -- it resets when aterm restarts. (Tracked in Open Questions for future consideration.)
+- **NG1:** Persisting Claude session state across app restarts. Session state is ephemeral -- it resets when tian restarts. (Tracked in Open Questions for future consideration.)
 - **NG2:** Aggregating session state at the Workspace level. v1 shows per-session dots at the Space level only.
 - **NG3:** Auto-focus or auto-switch to a pane/Space when its state changes to `needs_attention`. This is a future enhancement.
 - **NG4:** Timeout or staleness detection (e.g., marking a "busy" session as "stale" after N minutes of no state change). State is only changed by explicit IPC calls.
@@ -51,10 +51,10 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 | # | As a... | I want to... | So that... |
 |---|---------|--------------|------------|
 | 1 | developer | see per-session colored dots on each Space in the sidebar, one dot per active Claude session | I can instantly tell which Spaces have active Claude Code sessions, how many, and what state each is in |
-| 2 | developer | have my Claude Code hooks automatically report session state to aterm without manual configuration beyond installing the hooks | the status tracking works out of the box with no ongoing maintenance |
+| 2 | developer | have my Claude Code hooks automatically report session state to tian without manual configuration beyond installing the hooks | the status tracking works out of the box with no ongoing maintenance |
 | 3 | developer | see an orange dot when any Claude Code session in a Space is blocked on a permission prompt | I notice immediately when a backgrounded Claude session needs my input, instead of discovering it minutes later |
 | 4 | developer | see individual dots for each Claude session in a Space, sorted by priority | I can tell at a glance how many sessions are running and which ones need attention without expanding individual panes |
-| 5 | developer | continue using `aterm-cli status set --label "..."` for free-form text alongside the new `--state` parameter | the existing label-based status and the new typed session state coexist without conflict |
+| 5 | developer | continue using `tian-cli status set --label "..."` for free-form text alongside the new `--state` parameter | the existing label-based status and the new typed session state coexist without conflict |
 | 6 | developer | see dots disappear when no Claude session is active in a Space | the sidebar is not cluttered with indicators for Spaces that are not running Claude Code |
 
 ---
@@ -96,7 +96,7 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 
 ### CLI Extension
 
-**FR-009:** The `aterm-cli status set` CLI command must accept an optional `--state <value>` flag alongside the existing `--label <text>` flag.
+**FR-009:** The `tian-cli status set` CLI command must accept an optional `--state <value>` flag alongside the existing `--label <text>` flag.
 
 **FR-010:** The CLI must validate that at least one of `--label` or `--state` is provided. If neither is given, the CLI must print an error and exit with a non-zero exit code without sending an IPC request.
 
@@ -126,7 +126,7 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 
 > **Rationale for `active` > `idle` ordering:** `active` means a session just started but no prompt has been submitted yet -- it signals a new session the developer may want to interact with. `idle` means Claude has already responded and is passively waiting. A newly started session is more noteworthy than a waiting one, so `active` takes priority.
 
-> **Rationale for per-session dots over single aggregated icon:** A Space can contain multiple tabs and panes, each running its own Claude Code session. A single aggregated icon collapses this information -- the developer cannot tell how many sessions are running or what mix of states exists. Per-session dots give at-a-glance visibility: two dots means two sessions, and each dot's color shows its individual state. This is more useful for the multiplexed AI workflow that is aterm's differentiator.
+> **Rationale for per-session dots over single aggregated icon:** A Space can contain multiple tabs and panes, each running its own Claude Code session. A single aggregated icon collapses this information -- the developer cannot tell how many sessions are running or what mix of states exists. Per-session dots give at-a-glance visibility: two dots means two sessions, and each dot's color shows its individual state. This is more useful for the multiplexed AI workflow that is tian's differentiator.
 
 **FR-017:** If no pane in the Space has any session state set (all `nil`), no dots are shown. The Space row looks identical to current behavior. If all panes have `inactive` state, no dots are shown either -- ended sessions do not produce dots.
 
@@ -158,11 +158,11 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 
 ### Hook Configuration
 
-**FR-026:** The complete set of Claude Code hook configurations required for this feature must be documented in the PRD. The developer installs these hooks in their Claude Code configuration. Each hook invocation is a single `aterm-cli status set --state <value>` call.
+**FR-026:** The complete set of Claude Code hook configurations required for this feature must be documented in the PRD. The developer installs these hooks in their Claude Code configuration. Each hook invocation is a single `tian-cli status set --state <value>` call.
 
-**FR-027:** The hook commands must use the `aterm-cli` binary path from the `ATERM_CLI_PATH` environment variable that aterm injects into every shell session. This ensures the hooks work regardless of where the CLI binary is located.
+**FR-027:** The hook commands must use the `tian-cli` binary path from the `TIAN_CLI_PATH` environment variable that tian injects into every shell session. This ensures the hooks work regardless of where the CLI binary is located.
 
-**FR-028:** The hooks must be no-ops (silent failure, non-blocking) when not running inside aterm. Since `aterm-cli` refuses to run outside of aterm (it checks for `ATERM_SOCKET`), and Claude Code hooks tolerate non-zero exit codes, no special guard logic is needed in the hook commands.
+**FR-028:** The hooks must be no-ops (silent failure, non-blocking) when not running inside tian. Since `tian-cli` refuses to run outside of tian (it checks for `TIAN_SOCKET`), and Claude Code hooks tolerate non-zero exit codes, no special guard logic is needed in the hook commands.
 
 ---
 
@@ -185,24 +185,24 @@ The feature bridges the gap between Claude Code's hook system and aterm's UI: Cl
 ### Happy Path: Developer Runs Claude Code in a Pane
 
 ```
-Precondition: Developer has aterm open with at least one Space. Claude Code hooks 
+Precondition: Developer has tian open with at least one Space. Claude Code hooks 
 are installed in ~/.claude/settings.json (or project-level .claude/settings.json).
 
 1. Developer opens a terminal pane and starts Claude Code (`claude`).
    -> Claude Code fires SessionStart hook.
-   -> Hook runs: aterm-cli status set --state active
+   -> Hook runs: tian-cli status set --state active
    -> Pane state: active.
    -> Sidebar: A green dot appears on the Space row's second line.
 
 2. Developer types a prompt and presses Enter.
    -> Claude Code fires UserPromptSubmit hook.
-   -> Hook runs: aterm-cli status set --state busy
+   -> Hook runs: tian-cli status set --state busy
    -> Pane state: busy.
    -> Sidebar: The dot changes to blue with a pulse animation.
 
 3. Claude finishes responding.
    -> Claude Code fires Stop hook.
-   -> Hook runs: aterm-cli status set --state idle
+   -> Hook runs: tian-cli status set --state idle
    -> Pane state: idle.
    -> Sidebar: The dot changes to gray (static).
 
@@ -210,14 +210,14 @@ are installed in ~/.claude/settings.json (or project-level .claude/settings.json
 
 5. Claude encounters a tool use requiring approval.
    -> Claude Code fires Notification hook with permission_prompt.
-   -> Hook runs: aterm-cli status set --state needs_attention
+   -> Hook runs: tian-cli status set --state needs_attention
    -> Pane state: needs_attention.
    -> Sidebar: The dot changes to orange.
 
 6. Developer approves the permission. Claude resumes. Developer submits more prompts 
    (cycles through busy -> idle). Eventually exits Claude Code.
    -> Claude Code fires SessionEnd hook.
-   -> Hook runs: aterm-cli status set --state inactive
+   -> Hook runs: tian-cli status set --state inactive
    -> Pane state: inactive.
    -> Sidebar: The dot disappears (inactive sessions are not shown).
 ```
@@ -247,7 +247,7 @@ Pane B's developer approves, Claude resumes and finishes:
 ```
 Precondition: A Claude Code hook sets both --state and --label.
 
-Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
+Hook runs: tian-cli status set --state busy --label "Implementing auth module"
 -> Pane has both: state=busy, label="Implementing auth module".
 -> Sidebar Space row shows: session dot (blue, pulsing) followed by status label 
    text "Implementing auth module" on the second line.
@@ -259,7 +259,7 @@ Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
 - Invalid --state value sent via CLI:
   -> IPC handler returns error: "Invalid state: 'thinking'. Valid values: active, 
      busy, idle, needs_attention, inactive."
-  -> aterm-cli prints error to stderr, exits with non-zero code.
+  -> tian-cli prints error to stderr, exits with non-zero code.
   -> Claude Code hook failure is non-blocking (Claude continues).
 
 - Pane closed while Claude session is active:
@@ -267,8 +267,8 @@ Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
   -> Its dot is removed from the Space row.
   -> If no other pane has a session state, all dots disappear from Space row.
 
-- aterm-cli invoked outside aterm (no ATERM_SOCKET):
-  -> CLI exits with error: "Not running inside aterm."
+- tian-cli invoked outside tian (no TIAN_SOCKET):
+  -> CLI exits with error: "Not running inside tian."
   -> Claude Code hook failure is non-blocking.
 
 - Multiple --state updates arrive in rapid succession (e.g., busy -> idle within ms):
@@ -308,7 +308,7 @@ Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
 | 7 | Space has one pane with `needs_attention` and another with `inactive` | Space shows one orange dot (needs_attention). The inactive pane does not produce a dot. |
 | 8 | All panes in a Space have `inactive` state | No dots shown. Space row appears clean. |
 | 9 | Pane with active Claude session is moved to another tab within the same Space (if tab drag is supported) | Session state follows the pane ID. Its dot remains on the same Space row. |
-| 10 | `aterm-cli status set --state active` called for a pane that no longer exists (stale env vars) | IPC handler returns error: "Pane not found: <UUID>". Non-blocking for the hook. |
+| 10 | `tian-cli status set --state active` called for a pane that no longer exists (stale env vars) | IPC handler returns error: "Pane not found: <UUID>". Non-blocking for the hook. |
 | 11 | Reduce Motion accessibility setting is enabled | The `busy` pulsing animation is replaced with a static indicator. |
 
 ---
@@ -320,13 +320,13 @@ Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
 - **Existing IPC system:** The `status.set` and `status.clear` commands already exist in `IPCCommandHandler`. This feature extends `status.set` with an optional `state` parameter.
 - **Existing PaneStatusManager:** Tracks per-pane status labels. This feature extends it (or adds a parallel manager) to also track session state.
 - **Existing SidebarSpaceRowView:** The sidebar Space row already renders the status label from `PaneStatusManager.latestStatus(in:)`. The per-session dots are additive elements in this view.
-- **Existing aterm-cli `StatusSet` command:** The CLI command currently accepts `--label`. This feature adds `--state`.
-- **Claude Code hooks system:** Claude Code must support the six hooks listed in FR-002. The hook configuration is external to aterm (managed in Claude Code's settings).
+- **Existing tian-cli `StatusSet` command:** The CLI command currently accepts `--label`. This feature adds `--state`.
+- **Claude Code hooks system:** Claude Code must support the six hooks listed in FR-002. The hook configuration is external to tian (managed in Claude Code's settings).
 
 ### Constraints
 
 - **No new IPC commands.** The feature must be implemented as an extension to the existing `status.set` command, not as new commands.
-- **Backward compatibility.** Existing `aterm-cli status set --label "..."` calls must continue to work unchanged. The `--state` parameter is optional.
+- **Backward compatibility.** Existing `tian-cli status set --label "..."` calls must continue to work unchanged. The `--state` parameter is optional.
 - **No special icon asset required.** Per-session dots are simple colored circles (~8pt), drawn programmatically. No external icon asset is needed.
 
 ---
@@ -358,7 +358,7 @@ Hook runs: aterm-cli status set --state busy --label "Implementing auth module"
 
 ## Appendix A: Claude Code Hook Configuration
 
-The following hook configuration must be added to Claude Code's settings (either `~/.claude/settings.json` for global or `.claude/settings.json` for per-project). The `$ATERM_CLI_PATH` variable is injected by aterm into every shell session.
+The following hook configuration must be added to Claude Code's settings (either `~/.claude/settings.json` for global or `.claude/settings.json` for per-project). The `$TIAN_CLI_PATH` variable is injected by tian into every shell session.
 
 ```json
 {
@@ -366,42 +366,42 @@ The following hook configuration must be added to Claude Code's settings (either
     "SessionStart": [
       {
         "matcher": "",
-        "command": "$ATERM_CLI_PATH status set --state active"
+        "command": "$TIAN_CLI_PATH status set --state active"
       }
     ],
     "UserPromptSubmit": [
       {
         "matcher": "",
-        "command": "$ATERM_CLI_PATH status set --state busy"
+        "command": "$TIAN_CLI_PATH status set --state busy"
       }
     ],
     "Stop": [
       {
         "matcher": "",
-        "command": "$ATERM_CLI_PATH status set --state idle"
+        "command": "$TIAN_CLI_PATH status set --state idle"
       }
     ],
     "Notification": [
       {
         "matcher": "idle_prompt",
-        "command": "$ATERM_CLI_PATH status set --state idle"
+        "command": "$TIAN_CLI_PATH status set --state idle"
       },
       {
         "matcher": "permission_prompt",
-        "command": "$ATERM_CLI_PATH status set --state needs_attention"
+        "command": "$TIAN_CLI_PATH status set --state needs_attention"
       }
     ],
     "SessionEnd": [
       {
         "matcher": "",
-        "command": "$ATERM_CLI_PATH status set --state inactive"
+        "command": "$TIAN_CLI_PATH status set --state inactive"
       }
     ]
   }
 }
 ```
 
-**Note:** The `$ATERM_CLI_PATH` environment variable is set by aterm's `EnvironmentBuilder` in every shell session. When running outside aterm, this variable is unset and the command fails gracefully. Claude Code hooks tolerate non-zero exit codes without interrupting the session.
+**Note:** The `$TIAN_CLI_PATH` environment variable is set by tian's `EnvironmentBuilder` in every shell session. When running outside tian, this variable is unset and the command fails gracefully. Claude Code hooks tolerate non-zero exit codes without interrupting the session.
 
 **Note:** Verified against Claude Code documentation: Notification hook matchers `idle_prompt` and `permission_prompt` are the correct strings.
 

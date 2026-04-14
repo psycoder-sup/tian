@@ -10,11 +10,11 @@
 
 ## 1. Overview
 
-This spec covers renaming the `aterm/Models/` source directory to `aterm/Workspace/` to better reflect its contents and align with the project's convention of naming directories after their domain concept (e.g., `Pane/`, `Tab/`, `Core/`). The directory currently holds five files: three workspace-domain types (`Workspace.swift`, `WorkspaceCollection.swift`, `WorkspaceManager.swift`) and two pane-domain types (`PaneHierarchyContext.swift`, `PaneStatusManager.swift`) that were placed in `Models/` as a catch-all.
+This spec covers renaming the `tian/Models/` source directory to `tian/Workspace/` to better reflect its contents and align with the project's convention of naming directories after their domain concept (e.g., `Pane/`, `Tab/`, `Core/`). The directory currently holds five files: three workspace-domain types (`Workspace.swift`, `WorkspaceCollection.swift`, `WorkspaceManager.swift`) and two pane-domain types (`PaneHierarchyContext.swift`, `PaneStatusManager.swift`) that were placed in `Models/` as a catch-all.
 
-Because Swift targets compile all sources in a flat namespace (no file-path-based imports), the rename is purely a file-system and documentation change. No Swift import statements, access modifiers, or runtime behavior are affected. The XcodeGen-based build discovers sources via a glob on `aterm/` with only `Vendor/**` excluded, so `project.yml` requires no path changes -- only a `xcodegen generate` run after the move.
+Because Swift targets compile all sources in a flat namespace (no file-path-based imports), the rename is purely a file-system and documentation change. No Swift import statements, access modifiers, or runtime behavior are affected. The XcodeGen-based build discovers sources via a glob on `tian/` with only `Vendor/**` excluded, so `project.yml` requires no path changes -- only a `xcodegen generate` run after the move.
 
-The key design decision is what to do with `PaneHierarchyContext.swift` and `PaneStatusManager.swift`. These are pane-related types that do not belong in a `Workspace/` directory. This spec recommends relocating them to `aterm/Pane/`, which already contains `PaneViewModel.swift`, `PaneNode.swift`, `PaneState.swift`, and related pane-domain files.
+The key design decision is what to do with `PaneHierarchyContext.swift` and `PaneStatusManager.swift`. These are pane-related types that do not belong in a `Workspace/` directory. This spec recommends relocating them to `tian/Pane/`, which already contains `PaneViewModel.swift`, `PaneNode.swift`, `PaneState.swift`, and related pane-domain files.
 
 ---
 
@@ -42,7 +42,7 @@ N/A -- no state management changes. All `@Observable` classes, `NotificationCent
 
 The entire operation consists of moving eight files across four directories.
 
-**Files moving from `aterm/Models/` to `aterm/Workspace/` (new directory):**
+**Files moving from `tian/Models/` to `tian/Workspace/` (new directory):**
 
 | File | Type | Rationale |
 |------|------|-----------|
@@ -50,32 +50,32 @@ The entire operation consists of moving eight files across four directories.
 | `WorkspaceCollection.swift` | `WorkspaceCollection` class | Per-window workspace ownership |
 | `WorkspaceManager.swift` | `WorkspaceManager` class | App-level workspace coordinator |
 
-**Files moving from `aterm/Models/` to `aterm/Pane/` (existing directory):**
+**Files moving from `tian/Models/` to `tian/Pane/` (existing directory):**
 
 | File | Type | Rationale |
 |------|------|-----------|
 | `PaneHierarchyContext.swift` | `PaneHierarchyContext` struct | Carries hierarchy IDs for pane environment injection; consumed primarily by `PaneViewModel` (already in `Pane/`) |
 | `PaneStatusManager.swift` | `PaneStatusManager` class, `PaneStatus` struct | Manages per-pane status labels; referenced by `PaneViewModel.closePane` and `SidebarSpaceRowView`; the `Pane` prefix makes its domain clear |
 
-**Files moving from `aterm/Models/` to `aterm/Core/` (existing directory):**
+**Files moving from `tian/Models/` to `tian/Core/` (existing directory):**
 
 | File | Type | Rationale |
 |------|------|-----------|
 | `ClaudeSessionState.swift` | `ClaudeSessionState` enum | Session state for Claude Code sessions; core infrastructure type |
 | `GitTypes.swift` | `GitBranch`, `GitFileChange`, etc. | Git-related value types; used by `GitStatusService` and `GitRepoWatcher` (both in `Core/`) |
 
-**Files moving from `aterm/Models/` to `aterm/Tab/` (existing directory):**
+**Files moving from `tian/Models/` to `tian/Tab/` (existing directory):**
 
 | File | Type | Rationale |
 |------|------|-----------|
 | `SpaceGitContext.swift` | `SpaceGitContext` class | Per-space git repository context; consumed by `SpaceModel` (already in `Tab/`) |
 
-**After the move, the `aterm/Models/` directory is deleted entirely.**
+**After the move, the `tian/Models/` directory is deleted entirely.**
 
 ### 5.2 Resulting Directory Structure (affected areas only)
 
 ```
-aterm/
+tian/
     Workspace/                          (NEW -- renamed from Models/)
         Workspace.swift
         WorkspaceCollection.swift
@@ -106,8 +106,8 @@ aterm/
 
 These types have "Pane" in their name and are consumed by pane-layer code:
 
-- `PaneHierarchyContext` is a stored property on `PaneViewModel` (`aterm/Pane/PaneViewModel.swift`, line 44) and is constructed in `SpaceModel` (`aterm/Tab/SpaceModel.swift`, line 182). It carries IDs from the workspace chain but its purpose is pane-level environment injection.
-- `PaneStatusManager` is called from `PaneViewModel.closePane` (`aterm/Pane/PaneViewModel.swift`, line 249) and from `SidebarSpaceRowView` (`aterm/View/Sidebar/SidebarSpaceRowView.swift`, line 49). It manages pane-scoped state.
+- `PaneHierarchyContext` is a stored property on `PaneViewModel` (`tian/Pane/PaneViewModel.swift`, line 44) and is constructed in `SpaceModel` (`tian/Tab/SpaceModel.swift`, line 182). It carries IDs from the workspace chain but its purpose is pane-level environment injection.
+- `PaneStatusManager` is called from `PaneViewModel.closePane` (`tian/Pane/PaneViewModel.swift`, line 249) and from `SidebarSpaceRowView` (`tian/View/Sidebar/SidebarSpaceRowView.swift`, line 49). It manages pane-scoped state.
 
 Placing pane-domain types in `Workspace/` would be as misleading as the current `Models/` catch-all. The `Pane/` directory is the natural home.
 
@@ -157,20 +157,20 @@ This must be updated to reflect the new directory name and the relocated pane ty
 
 ### 11.2 Historical Spec Documents (optional, low priority)
 
-Six documentation files contain references to `aterm/Models/` paths. These are historical specs describing what was built at the time of writing. Updating them is optional and low priority since they are reference documents, not living configuration. If updated, the changes are straightforward string replacements.
+Six documentation files contain references to `tian/Models/` paths. These are historical specs describing what was built at the time of writing. Updating them is optional and low priority since they are reference documents, not living configuration. If updated, the changes are straightforward string replacements.
 
 | File | Occurrences | Content |
 |------|-------------|---------|
-| `docs/feature/workspace-sidebar/workspace-sidebar-spec.md` | 6 | References to `aterm/Models/WorkspaceCollection.swift` and `aterm/Models/WorkspaceManager.swift` |
-| `docs/feature/cli-tool/cli-tool-spec.md` | 4 | References to `aterm/Models/PaneStatusManager.swift` and `aterm/Models/PaneHierarchyContext.swift` |
-| `docs/feature/cli-tool/cli-tool-design-guideline.md` | 3 | References to `aterm/Models/StatusModel.swift` (a design-time name that was never used) |
-| `docs/feature/aterm/specs/m4-workspaces-spec.md` | 1 | Directory tree showing `Models/` |
-| `docs/feature/aterm/specs/m3-tabs-and-spaces-spec.md` | 1 | Directory tree showing `Models/` |
-| `docs/feature/aterm/specs/validation-report.md` | 1 | Mentions `Models/` in a discussion of inconsistent directory layouts |
+| `docs/feature/workspace-sidebar/workspace-sidebar-spec.md` | 6 | References to `tian/Models/WorkspaceCollection.swift` and `tian/Models/WorkspaceManager.swift` |
+| `docs/feature/cli-tool/cli-tool-spec.md` | 4 | References to `tian/Models/PaneStatusManager.swift` and `tian/Models/PaneHierarchyContext.swift` |
+| `docs/feature/cli-tool/cli-tool-design-guideline.md` | 3 | References to `tian/Models/StatusModel.swift` (a design-time name that was never used) |
+| `docs/feature/tian/specs/m4-workspaces-spec.md` | 1 | Directory tree showing `Models/` |
+| `docs/feature/tian/specs/m3-tabs-and-spaces-spec.md` | 1 | Directory tree showing `Models/` |
+| `docs/feature/tian/specs/validation-report.md` | 1 | Mentions `Models/` in a discussion of inconsistent directory layouts |
 
 ### 11.3 Agent Memory (mandatory)
 
-The CTO agent memory file `project_aterm_state.md` lists `Models/` in the directory enumeration. This must be updated to reflect the rename.
+The CTO agent memory file `project_tian_state.md` lists `Models/` in the directory enumeration. This must be updated to reflect the rename.
 
 ---
 
@@ -180,31 +180,31 @@ The CTO agent memory file `project_aterm_state.md` lists `Models/` in the direct
 
 The following steps must be performed in order:
 
-1. **Create the `aterm/Workspace/` directory.**
+1. **Create the `tian/Workspace/` directory.**
 
-2. **Move the three workspace files** (using `git mv`) from `aterm/Models/` to `aterm/Workspace/`:
+2. **Move the three workspace files** (using `git mv`) from `tian/Models/` to `tian/Workspace/`:
    - `Workspace.swift`
    - `WorkspaceCollection.swift`
    - `WorkspaceManager.swift`
 
-3. **Move the two pane files** (using `git mv`) from `aterm/Models/` to `aterm/Pane/`:
+3. **Move the two pane files** (using `git mv`) from `tian/Models/` to `tian/Pane/`:
    - `PaneHierarchyContext.swift`
    - `PaneStatusManager.swift`
 
-4. **Move the two core files** (using `git mv`) from `aterm/Models/` to `aterm/Core/`:
+4. **Move the two core files** (using `git mv`) from `tian/Models/` to `tian/Core/`:
    - `ClaudeSessionState.swift`
    - `GitTypes.swift`
 
-5. **Move the space git context file** (using `git mv`) from `aterm/Models/` to `aterm/Tab/`:
+5. **Move the space git context file** (using `git mv`) from `tian/Models/` to `tian/Tab/`:
    - `SpaceGitContext.swift`
 
-6. **Delete the now-empty `aterm/Models/` directory.**
+6. **Delete the now-empty `tian/Models/` directory.**
 
 7. **Update `CLAUDE.md`** -- replace the `Models/` entry in the Source Layout section with `Workspace/` and update the `Pane/` entry to include the two relocated types.
 
-8. **Run `xcodegen generate`** to regenerate `aterm.xcodeproj` with the new file locations. The `project.yml` file itself requires no edits because the aterm target uses `path: aterm` with only `Vendor/**` excluded -- XcodeGen discovers all Swift files via glob.
+8. **Run `xcodegen generate`** to regenerate `tian.xcodeproj` with the new file locations. The `project.yml` file itself requires no edits because the tian target uses `path: tian` with only `Vendor/**` excluded -- XcodeGen discovers all Swift files via glob.
 
-9. **Build and run tests** to verify the project compiles and all tests pass. Use `xcodebuild -scheme aterm -derivedDataPath .build build` and `xcodebuild -scheme aterm -derivedDataPath .build test -skip-testing:atermUITests`.
+9. **Build and run tests** to verify the project compiles and all tests pass. Use `xcodebuild -scheme tian -derivedDataPath .build build` and `xcodebuild -scheme tian -derivedDataPath .build test -skip-testing:tianUITests`.
 
 ### 12.2 Rollback
 
@@ -224,11 +224,11 @@ This is a single-phase change. There is no meaningful way to split a directory r
 
 | Step | Description | Verification |
 |------|-------------|--------------|
-| 1 | Create `aterm/Workspace/`, move 3 workspace files there | Directory exists with 3 files |
-| 2 | Move 2 pane files to `aterm/Pane/` | `aterm/Pane/` contains `PaneHierarchyContext.swift` and `PaneStatusManager.swift` |
-| 3 | Delete `aterm/Models/` | Directory no longer exists |
+| 1 | Create `tian/Workspace/`, move 3 workspace files there | Directory exists with 3 files |
+| 2 | Move 2 pane files to `tian/Pane/` | `tian/Pane/` contains `PaneHierarchyContext.swift` and `PaneStatusManager.swift` |
+| 3 | Delete `tian/Models/` | Directory no longer exists |
 | 4 | Update `CLAUDE.md` Source Layout section | `Models/` reference removed, `Workspace/` and updated `Pane/` entries present |
-| 5 | Run `xcodegen generate` | `aterm.xcodeproj` regenerated with correct group structure |
+| 5 | Run `xcodegen generate` | `tian.xcodeproj` regenerated with correct group structure |
 | 6 | Build the project | `xcodebuild build` succeeds with zero errors |
 | 7 | Run unit tests | All existing tests pass (zero regressions) |
 
@@ -244,17 +244,17 @@ Since this is a refactoring task with no PRD, the functional requirement is a si
 |-------------|-----------------|------|---------------|
 | No compile errors after rename | Build the project with `xcodebuild build` | Build verification | Files moved, `xcodegen generate` run |
 | No test regressions | Run full unit test suite | Existing unit tests | Project builds successfully |
-| XcodeGen project reflects new paths | Inspect generated `aterm.xcodeproj` to confirm `Workspace/` group exists and `Models/` group does not | Manual inspection | `xcodegen generate` run |
+| XcodeGen project reflects new paths | Inspect generated `tian.xcodeproj` to confirm `Workspace/` group exists and `Models/` group does not | Manual inspection | `xcodegen generate` run |
 | CLAUDE.md is accurate | Verify Source Layout section lists `Workspace/` (not `Models/`) and `Pane/` includes the two relocated types | Manual review | CLAUDE.md updated |
 
 ### 14.2 Unit Tests
 
-No new unit tests are needed. The existing test suite (`atermTests/`) covers all the types being moved:
+No new unit tests are needed. The existing test suite (`tianTests/`) covers all the types being moved:
 
-- `atermTests/WorkspaceTests.swift` -- tests `Workspace` and `WorkspaceCollection`
-- `atermTests/PaneStatusManagerTests.swift` -- tests `PaneStatusManager`
-- `atermTests/EnvironmentBuilderTests.swift` -- tests `PaneHierarchyContext`
-- `atermTests/IPCCommandHandlerTests.swift` -- tests `IPCCommandHandler` which depends on `PaneStatusManager`
+- `tianTests/WorkspaceTests.swift` -- tests `Workspace` and `WorkspaceCollection`
+- `tianTests/PaneStatusManagerTests.swift` -- tests `PaneStatusManager`
+- `tianTests/EnvironmentBuilderTests.swift` -- tests `PaneHierarchyContext`
+- `tianTests/IPCCommandHandlerTests.swift` -- tests `IPCCommandHandler` which depends on `PaneStatusManager`
 
 All of these tests reference types by name, not by file path. They will pass without modification as long as the project compiles.
 
@@ -268,7 +268,7 @@ No e2e tests needed. The rename has no user-visible effect.
 
 ### 14.5 Edge Cases
 
-- **Empty directory cleanup:** After moving all 5 files, the `aterm/Models/` directory must be deleted. If it is left behind (even empty), it creates confusion and may cause XcodeGen to generate an empty group.
+- **Empty directory cleanup:** After moving all 5 files, the `tian/Models/` directory must be deleted. If it is left behind (even empty), it creates confusion and may cause XcodeGen to generate an empty group.
 - **Git history:** Using `git mv` (rather than delete + add) preserves file history and produces a cleaner diff. The implementation should use `git mv` for each file.
 
 ---
@@ -277,10 +277,10 @@ No e2e tests needed. The rename has no user-visible effect.
 
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
-| XcodeGen does not pick up the new file locations | Build fails -- files not found | Very low. XcodeGen uses a glob on `path: aterm` excluding only `Vendor/**`. | Run `xcodegen generate` and verify the generated project before committing. |
+| XcodeGen does not pick up the new file locations | Build fails -- files not found | Very low. XcodeGen uses a glob on `path: tian` excluding only `Vendor/**`. | Run `xcodegen generate` and verify the generated project before committing. |
 | Stale Xcode derived data causes phantom build errors | Confusing build failures referencing old paths | Low. Xcode may cache old module maps. | Clean derived data with `rm -rf .build` and rebuild if needed. |
 | Merge conflicts with in-flight branches | Other branches referencing `Models/` will conflict | Low to medium depending on active branches | Communicate the rename to collaborators. Resolve conflicts by applying the rename to conflicting files. |
-| Historical docs become misleading | Developers reading old specs may look for `aterm/Models/` | Very low. Old specs describe what was built at the time. | Optionally update the 6 affected doc files. The CLAUDE.md update (mandatory) is the authoritative reference. |
+| Historical docs become misleading | Developers reading old specs may look for `tian/Models/` | Very low. Old specs describe what was built at the time. | Optionally update the 6 affected doc files. The CLAUDE.md update (mandatory) is the authoritative reference. |
 
 ---
 

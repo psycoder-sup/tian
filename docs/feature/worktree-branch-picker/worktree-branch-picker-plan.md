@@ -15,13 +15,13 @@
 ## Task 1: Add `BranchEntry` model + `BranchListService.listBranches`
 
 **Files:**
-- Create: `aterm/Worktree/BranchListService.swift`
-- Create: `atermTests/BranchListServiceTests.swift`
+- Create: `tian/Worktree/BranchListService.swift`
+- Create: `tianTests/BranchListServiceTests.swift`
 
 - [ ] **Step 1.1: Write `BranchListService.swift` with model stub**
 
 ```swift
-// aterm/Worktree/BranchListService.swift
+// tian/Worktree/BranchListService.swift
 import Foundation
 import os
 
@@ -49,15 +49,15 @@ enum BranchListService {
 - [ ] **Step 1.2: Run `xcodegen generate` to register the new file**
 
 Run: `xcodegen generate`
-Expected: regenerates `aterm.xcodeproj` without errors.
+Expected: regenerates `tian.xcodeproj` without errors.
 
 - [ ] **Step 1.3: Write the failing tests**
 
 ```swift
-// atermTests/BranchListServiceTests.swift
+// tianTests/BranchListServiceTests.swift
 import Testing
 import Foundation
-@testable import aterm
+@testable import tian
 
 struct BranchListServiceTests {
 
@@ -82,7 +82,7 @@ struct BranchListServiceTests {
 
     private func makeTempGitRepo() throws -> String {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-branch-test-\(UUID().uuidString)")
+            .appendingPathComponent("tian-branch-test-\(UUID().uuidString)")
             .path
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try runGitSync(["init", "--initial-branch=main"], in: dir)
@@ -129,7 +129,7 @@ struct BranchListServiceTests {
     @Test
     func listBranches_handlesEmptyRepoWithoutCommits() async throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-branch-empty-\(UUID().uuidString)").path
+            .appendingPathComponent("tian-branch-empty-\(UUID().uuidString)").path
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { cleanup(dir) }
         try runGitSync(["init", "--initial-branch=main"], in: dir)
@@ -159,7 +159,7 @@ struct BranchListServiceTests {
         try runGitSync(["branch", "feat/remote-only"], in: remote)
 
         let clone = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-clone-\(UUID().uuidString)").path
+            .appendingPathComponent("tian-clone-\(UUID().uuidString)").path
         defer { cleanup(clone) }
         try runGitSync(["clone", remote, clone], in: FileManager.default.temporaryDirectory.path)
 
@@ -180,13 +180,13 @@ struct BranchListServiceTests {
 - [ ] **Step 1.4: Run the tests and confirm they fail**
 
 Dispatch the `test-runner-slim` agent:
-> Run `BranchListServiceTests` via `xcodebuild test -scheme aterm -derivedDataPath .build -only-testing:atermTests/BranchListServiceTests`. Report pass/fail counts and which tests failed with which error. They should fail with a `fatalError("not implemented")` trap.
+> Run `BranchListServiceTests` via `xcodebuild test -scheme tian -derivedDataPath .build -only-testing:tianTests/BranchListServiceTests`. Report pass/fail counts and which tests failed with which error. They should fail with a `fatalError("not implemented")` trap.
 
 Expected: all five tests fail (the service body is `fatalError`).
 
 - [ ] **Step 1.5: Implement `listBranches`**
 
-Replace the stub in `aterm/Worktree/BranchListService.swift` with:
+Replace the stub in `tian/Worktree/BranchListService.swift` with:
 
 ```swift
 enum BranchListService {
@@ -329,12 +329,12 @@ enum BranchListService {
 - [ ] **Step 1.6: Run the tests and confirm they pass**
 
 Dispatch `test-runner-slim`:
-> Run `BranchListServiceTests` via `xcodebuild test -scheme aterm -derivedDataPath .build -only-testing:atermTests/BranchListServiceTests`. All five tests should pass.
+> Run `BranchListServiceTests` via `xcodebuild test -scheme tian -derivedDataPath .build -only-testing:tianTests/BranchListServiceTests`. All five tests should pass.
 
 - [ ] **Step 1.7: Commit**
 
 ```bash
-git add aterm/Worktree/BranchListService.swift atermTests/BranchListServiceTests.swift aterm.xcodeproj
+git add tian/Worktree/BranchListService.swift tianTests/BranchListServiceTests.swift tian.xcodeproj
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): add BranchListService.listBranches
 
@@ -350,8 +350,8 @@ EOF
 ## Task 2: Add `BranchListService.fetchRemotes`
 
 **Files:**
-- Modify: `aterm/Worktree/BranchListService.swift`
-- Modify: `atermTests/BranchListServiceTests.swift`
+- Modify: `tian/Worktree/BranchListService.swift`
+- Modify: `tianTests/BranchListServiceTests.swift`
 
 - [ ] **Step 2.1: Write the failing tests**
 
@@ -364,7 +364,7 @@ Add to `BranchListServiceTests.swift`:
         defer { cleanup(remote) }
 
         let clone = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-fetch-\(UUID().uuidString)").path
+            .appendingPathComponent("tian-fetch-\(UUID().uuidString)").path
         defer { cleanup(clone) }
         try runGitSync(["clone", remote, clone], in: FileManager.default.temporaryDirectory.path)
 
@@ -384,7 +384,7 @@ Add to `BranchListServiceTests.swift`:
     @Test
     func fetchRemotes_throwsGitErrorOnFailure() async throws {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-bad-fetch-\(UUID().uuidString)").path
+            .appendingPathComponent("tian-bad-fetch-\(UUID().uuidString)").path
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { cleanup(dir) }
         try runGitSync(["init"], in: dir)
@@ -426,7 +426,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 2.5: Commit**
 
 ```bash
-git add aterm/Worktree/BranchListService.swift atermTests/BranchListServiceTests.swift
+git add tian/Worktree/BranchListService.swift tianTests/BranchListServiceTests.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): add BranchListService.fetchRemotes
 
@@ -443,11 +443,11 @@ EOF
 This indirection lets `BranchListViewModel` tests inject a fake without invoking git.
 
 **Files:**
-- Modify: `aterm/Worktree/BranchListService.swift`
+- Modify: `tian/Worktree/BranchListService.swift`
 
 - [ ] **Step 3.1: Add the protocol and a wrapper**
 
-Append to `aterm/Worktree/BranchListService.swift` (top level):
+Append to `tian/Worktree/BranchListService.swift` (top level):
 
 ```swift
 // MARK: - Protocol for injection
@@ -475,7 +475,7 @@ Expected: build succeeds.
 - [ ] **Step 3.3: Commit**
 
 ```bash
-git add aterm/Worktree/BranchListService.swift
+git add tian/Worktree/BranchListService.swift
 git commit -m "$(cat <<'EOF'
 ♻️ refactor(worktree): extract BranchListProviding protocol
 
@@ -490,13 +490,13 @@ EOF
 ## Task 4: `BranchListViewModel` — model + dedup logic
 
 **Files:**
-- Create: `aterm/View/Worktree/BranchListViewModel.swift`
-- Create: `atermTests/BranchListViewModelTests.swift`
+- Create: `tian/View/Worktree/BranchListViewModel.swift`
+- Create: `tianTests/BranchListViewModelTests.swift`
 
 - [ ] **Step 4.1: Create the view model stub**
 
 ```swift
-// aterm/View/Worktree/BranchListViewModel.swift
+// tian/View/Worktree/BranchListViewModel.swift
 import Foundation
 import Observation
 
@@ -569,10 +569,10 @@ Run: `xcodegen generate`
 - [ ] **Step 4.3: Write the failing dedup tests**
 
 ```swift
-// atermTests/BranchListViewModelTests.swift
+// tianTests/BranchListViewModelTests.swift
 import Testing
 import Foundation
-@testable import aterm
+@testable import tian
 
 @MainActor
 struct BranchListViewModelTests {
@@ -675,7 +675,7 @@ struct BranchListViewModelTests {
 - [ ] **Step 4.4: Run tests and confirm they fail**
 
 Dispatch `test-runner-slim`:
-> Run `BranchListViewModelTests` via `xcodebuild test -scheme aterm -derivedDataPath .build -only-testing:atermTests/BranchListViewModelTests`. All dedup tests should fail with `fatalError("not implemented")`.
+> Run `BranchListViewModelTests` via `xcodebuild test -scheme tian -derivedDataPath .build -only-testing:tianTests/BranchListViewModelTests`. All dedup tests should fail with `fatalError("not implemented")`.
 
 - [ ] **Step 4.5: Implement dedup + relative-date helper**
 
@@ -772,7 +772,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 4.7: Commit**
 
 ```bash
-git add aterm/View/Worktree/BranchListViewModel.swift atermTests/BranchListViewModelTests.swift aterm.xcodeproj
+git add tian/View/Worktree/BranchListViewModel.swift tianTests/BranchListViewModelTests.swift tian.xcodeproj
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): add BranchListViewModel dedup + BranchRow
 
@@ -788,8 +788,8 @@ EOF
 ## Task 5: `BranchListViewModel` — filter + highlight + collision
 
 **Files:**
-- Modify: `aterm/View/Worktree/BranchListViewModel.swift`
-- Modify: `atermTests/BranchListViewModelTests.swift`
+- Modify: `tian/View/Worktree/BranchListViewModel.swift`
+- Modify: `tianTests/BranchListViewModelTests.swift`
 
 - [ ] **Step 5.1: Write the failing tests**
 
@@ -976,7 +976,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 5.5: Commit**
 
 ```bash
-git add aterm/View/Worktree/BranchListViewModel.swift atermTests/BranchListViewModelTests.swift
+git add tian/View/Worktree/BranchListViewModel.swift tianTests/BranchListViewModelTests.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): add filter/highlight/collision to BranchListViewModel
 
@@ -991,8 +991,8 @@ EOF
 ## Task 6: `BranchListViewModel.load` — cache-then-fetch flow
 
 **Files:**
-- Modify: `aterm/View/Worktree/BranchListViewModel.swift`
-- Modify: `atermTests/BranchListViewModelTests.swift`
+- Modify: `tian/View/Worktree/BranchListViewModel.swift`
+- Modify: `tianTests/BranchListViewModelTests.swift`
 
 - [ ] **Step 6.1: Write the failing tests**
 
@@ -1069,7 +1069,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 6.5: Commit**
 
 ```bash
-git add aterm/View/Worktree/BranchListViewModel.swift atermTests/BranchListViewModelTests.swift
+git add tian/View/Worktree/BranchListViewModel.swift tianTests/BranchListViewModelTests.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): stale-then-fresh load flow in BranchListViewModel
 
@@ -1085,12 +1085,12 @@ EOF
 ## Task 7: `WorktreeService.createWorktree` — add `remoteRef` param
 
 **Files:**
-- Modify: `aterm/Worktree/WorktreeService.swift:74-106`
-- Modify: `atermTests/WorktreeServiceTests.swift`
+- Modify: `tian/Worktree/WorktreeService.swift:74-106`
+- Modify: `tianTests/WorktreeServiceTests.swift`
 
 - [ ] **Step 7.1: Write the failing tests**
 
-Append to `atermTests/WorktreeServiceTests.swift`:
+Append to `tianTests/WorktreeServiceTests.swift`:
 
 ```swift
     // MARK: - Remote-only tracking
@@ -1163,7 +1163,7 @@ Dispatch `test-runner-slim`:
 
 - [ ] **Step 7.3: Update `createWorktree` signature and arg construction**
 
-In `aterm/Worktree/WorktreeService.swift`, replace the `createWorktree` method (currently around lines 74-106):
+In `tian/Worktree/WorktreeService.swift`, replace the `createWorktree` method (currently around lines 74-106):
 
 ```swift
     static func createWorktree(
@@ -1212,7 +1212,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 7.5: Commit**
 
 ```bash
-git add aterm/Worktree/WorktreeService.swift atermTests/WorktreeServiceTests.swift
+git add tian/Worktree/WorktreeService.swift tianTests/WorktreeServiceTests.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): createWorktree accepts a remoteRef for tracking
 
@@ -1228,12 +1228,12 @@ EOF
 ## Task 8: `WorktreeOrchestrator` — `remoteRef` param, `lastError`, `presentError`
 
 **Files:**
-- Modify: `aterm/Worktree/WorktreeOrchestrator.swift:15-50, 86-112`
-- Modify: `atermTests/WorktreeOrchestratorTests.swift`
+- Modify: `tian/Worktree/WorktreeOrchestrator.swift:15-50, 86-112`
+- Modify: `tianTests/WorktreeOrchestratorTests.swift`
 
 - [ ] **Step 8.1: Write the failing tests**
 
-Append to `atermTests/WorktreeOrchestratorTests.swift` (inside `struct WorktreeOrchestratorTests`):
+Append to `tianTests/WorktreeOrchestratorTests.swift` (inside `struct WorktreeOrchestratorTests`):
 
 ```swift
     @Test
@@ -1244,7 +1244,7 @@ Append to `atermTests/WorktreeOrchestratorTests.swift` (inside `struct WorktreeO
         try runGitSync(["branch", "feat/r"], in: remote)
 
         let clone = FileManager.default.temporaryDirectory
-            .appendingPathComponent("aterm-orch-clone-\(UUID().uuidString)").path
+            .appendingPathComponent("tian-orch-clone-\(UUID().uuidString)").path
         defer { cleanup(clone) }
         try runGitSync(["clone", remote, clone], in: FileManager.default.temporaryDirectory.path)
 
@@ -1280,7 +1280,7 @@ Dispatch `test-runner-slim`:
 
 - [ ] **Step 8.3: Update `WorktreeOrchestrator`**
 
-In `aterm/Worktree/WorktreeOrchestrator.swift`:
+In `tian/Worktree/WorktreeOrchestrator.swift`:
 
 **Add a stored property** under the existing `isCreating` / `setupCancelled` (around line 17):
 
@@ -1349,7 +1349,7 @@ Dispatch `test-runner-slim`:
 - [ ] **Step 8.5: Commit**
 
 ```bash
-git add aterm/Worktree/WorktreeOrchestrator.swift atermTests/WorktreeOrchestratorTests.swift
+git add tian/Worktree/WorktreeOrchestrator.swift tianTests/WorktreeOrchestratorTests.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): orchestrator forwards remoteRef + exposes lastError
 
@@ -1367,11 +1367,11 @@ EOF
 No unit tests (per project policy — UI is manually verified). This task is one atomic edit to the view.
 
 **Files:**
-- Modify: `aterm/View/Worktree/BranchNameInputView.swift`
+- Modify: `tian/View/Worktree/BranchNameInputView.swift`
 
 - [ ] **Step 9.1: Rewrite the view**
 
-Replace the entire contents of `aterm/View/Worktree/BranchNameInputView.swift` with:
+Replace the entire contents of `tian/View/Worktree/BranchNameInputView.swift` with:
 
 ```swift
 import SwiftUI
@@ -1590,7 +1590,7 @@ struct BranchNameInputView: View {
 Run: `scripts/build.sh Debug`
 Expected: build succeeds.
 
-If build fails with errors about the old 2-arg `onSubmit` shape in `WorkspaceWindowContent.swift`, that's expected — the next task updates the caller. For now, temporarily update the caller at `aterm/View/Workspace/WorkspaceWindowContent.swift:34-41` to match the 3-arg signature (just ignore the third arg):
+If build fails with errors about the old 2-arg `onSubmit` shape in `WorkspaceWindowContent.swift`, that's expected — the next task updates the caller. For now, temporarily update the caller at `tian/View/Workspace/WorkspaceWindowContent.swift:34-41` to match the 3-arg signature (just ignore the third arg):
 
 ```swift
                     onSubmit: { branch, existing, _ in
@@ -1608,7 +1608,7 @@ Then re-run `scripts/build.sh Debug`. This temporary edit is replaced in Task 10
 - [ ] **Step 9.3: Commit**
 
 ```bash
-git add aterm/View/Worktree/BranchNameInputView.swift aterm/View/Workspace/WorkspaceWindowContent.swift
+git add tian/View/Worktree/BranchNameInputView.swift tian/View/Workspace/WorkspaceWindowContent.swift
 git commit -m "$(cat <<'EOF'
 ✨ feat(worktree): inline branch combobox in BranchNameInputView
 
@@ -1624,11 +1624,11 @@ EOF
 ## Task 10: `WorkspaceWindowContent` — error alert + forward `remoteRef`
 
 **Files:**
-- Modify: `aterm/View/Workspace/WorkspaceWindowContent.swift`
+- Modify: `tian/View/Workspace/WorkspaceWindowContent.swift`
 
 - [ ] **Step 10.1: Update the onSubmit closure and bind the alert**
 
-Replace lines 29-46 in `aterm/View/Workspace/WorkspaceWindowContent.swift` (the `.overlay { … }` block) with:
+Replace lines 29-46 in `tian/View/Workspace/WorkspaceWindowContent.swift` (the `.overlay { … }` block) with:
 
 ```swift
         .overlay {
@@ -1676,7 +1676,7 @@ Expected: build succeeds.
 
 - [ ] **Step 10.3: Manual verification — happy paths**
 
-Launch aterm from the built bundle and confirm each scenario:
+Launch tian from the built bundle and confirm each scenario:
 
 1. Open a repo with ≥3 local and ≥3 remote branches (a fresh clone of your own repo works). Press `Cmd+Shift+B` or use the context menu → "New Worktree Space…".
 2. In "Existing branch" mode, confirm the list populates from cache almost immediately.
@@ -1696,7 +1696,7 @@ Launch aterm from the built bundle and confirm each scenario:
 - [ ] **Step 10.5: Commit**
 
 ```bash
-git add aterm/View/Workspace/WorkspaceWindowContent.swift
+git add tian/View/Workspace/WorkspaceWindowContent.swift
 git commit -m "$(cat <<'EOF'
 🐛 fix(worktree): surface orchestrator errors via alert
 
@@ -1724,7 +1724,7 @@ Expected: no changes (already regenerated in prior tasks) or a clean regeneratio
 - [ ] **Step 11.2: Run the full test suite**
 
 Dispatch `test-runner-slim`:
-> Run the full aterm test suite via `xcodebuild test -scheme aterm -derivedDataPath .build`. Skip UI tests. Report total pass/fail counts and any failures.
+> Run the full tian test suite via `xcodebuild test -scheme tian -derivedDataPath .build`. Skip UI tests. Report total pass/fail counts and any failures.
 
 Expected: all existing tests continue to pass plus the new `BranchListServiceTests`, `BranchListViewModelTests`, and additions in `WorktreeServiceTests` / `WorktreeOrchestratorTests`.
 
@@ -1750,15 +1750,15 @@ If the smoke test surfaces any issue, fix it in a new commit before closing the 
 
 | File | Change |
 |---|---|
-| `aterm/Worktree/BranchListService.swift` | **New** — service + model + protocol |
-| `aterm/View/Worktree/BranchListViewModel.swift` | **New** — presentation state |
-| `aterm/View/Worktree/BranchNameInputView.swift` | Rewrite — combobox integrated |
-| `aterm/View/Workspace/WorkspaceWindowContent.swift` | Edit — forward remoteRef, bind alert |
-| `aterm/Worktree/WorktreeOrchestrator.swift` | Edit — remoteRef, lastError, presentError |
-| `aterm/Worktree/WorktreeService.swift` | Edit — remoteRef param in createWorktree |
-| `atermTests/BranchListServiceTests.swift` | **New** |
-| `atermTests/BranchListViewModelTests.swift` | **New** |
-| `atermTests/WorktreeServiceTests.swift` | Edit — 1 test added |
-| `atermTests/WorktreeOrchestratorTests.swift` | Edit — 2 tests added |
+| `tian/Worktree/BranchListService.swift` | **New** — service + model + protocol |
+| `tian/View/Worktree/BranchListViewModel.swift` | **New** — presentation state |
+| `tian/View/Worktree/BranchNameInputView.swift` | Rewrite — combobox integrated |
+| `tian/View/Workspace/WorkspaceWindowContent.swift` | Edit — forward remoteRef, bind alert |
+| `tian/Worktree/WorktreeOrchestrator.swift` | Edit — remoteRef, lastError, presentError |
+| `tian/Worktree/WorktreeService.swift` | Edit — remoteRef param in createWorktree |
+| `tianTests/BranchListServiceTests.swift` | **New** |
+| `tianTests/BranchListViewModelTests.swift` | **New** |
+| `tianTests/WorktreeServiceTests.swift` | Edit — 1 test added |
+| `tianTests/WorktreeOrchestratorTests.swift` | Edit — 2 tests added |
 
 Tasks 1–8 are unit-tested (TDD, small commits). Tasks 9–10 are UI integration with manual verification. Task 11 is the end-to-end smoke test.
