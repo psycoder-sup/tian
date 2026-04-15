@@ -295,7 +295,9 @@ enum GitStatusService {
     ) async throws -> (exitCode: Int32, stdout: String, stderr: String) {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/git")
-        process.arguments = arguments
+        // --no-optional-locks prevents background reads (e.g. `git status`) from
+        // racing with user-initiated writes on `.git/index.lock`.
+        process.arguments = ["--no-optional-locks"] + arguments
         process.currentDirectoryURL = URL(filePath: workingDirectory)
 
         return try await withTaskCancellationHandler {
