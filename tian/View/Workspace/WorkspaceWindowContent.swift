@@ -6,6 +6,7 @@ struct WorkspaceWindowContent: View {
 
     @State private var showDebugOverlay = false
     @State private var createSpaceRequest: CreateSpaceRequest?
+    @State private var pendingResolveTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -59,7 +60,11 @@ struct WorkspaceWindowContent: View {
                             }
                         }
                     },
-                    onCancel: { createSpaceRequest = nil }
+                    onCancel: {
+                        pendingResolveTask?.cancel()
+                        pendingResolveTask = nil
+                        createSpaceRequest = nil
+                    }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -97,16 +102,23 @@ struct WorkspaceWindowContent: View {
             }()
             guard let workspace else { return }
             let wd = workspace.spaceCollection.resolveWorkingDirectory()
-            Task {
+            // Rapid repeat triggers (⇧⌘T held, or ⇧⌘T after clicking +) used to
+            // spawn overlapping resolutions; the last to finish would re-open
+            // the modal even if the user had already cancelled an earlier one.
+            // Cancel the in-flight resolution and replace it.
+            pendingResolveTask?.cancel()
+            pendingResolveTask = Task {
                 let repoURL: URL?
                 let configRepo: URL
                 if let repoRootPath = try? await WorktreeService.resolveRepoRoot(from: wd) {
-                    repoURL = URL(filePath: repoRootPath)
-                    configRepo = repoURL!
+                    let url = URL(filePath: repoRootPath)
+                    repoURL = url
+                    configRepo = url
                 } else {
                     repoURL = nil
                     configRepo = URL(filePath: wd.isEmpty ? NSHomeDirectory() : wd)
                 }
+                if Task.isCancelled { return }
                 let configURL = WorktreeService.resolveConfigFile(repoRoot: configRepo)
                 let config: WorktreeConfig
                 if let configURL, let parsed = try? WorktreeConfigParser.parse(fileURL: configURL) {
@@ -114,11 +126,17 @@ struct WorkspaceWindowContent: View {
                 } else {
                     config = WorktreeConfig()
                 }
+                if Task.isCancelled { return }
                 createSpaceRequest = CreateSpaceRequest(
                     workspace: workspace,
                     repoRoot: repoURL,
                     worktreeDir: config.worktreeDir
                 )
+                // Intentionally do NOT clear `pendingResolveTask` here: holding
+                // a handle to a completed task is harmless, and clearing it
+                // unconditionally would risk nil'ing a newer in-flight task if
+                // another trigger replaced it between our last cancellation
+                // check and this assignment.
             }
         }
     }

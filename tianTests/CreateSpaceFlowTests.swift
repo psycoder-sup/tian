@@ -57,4 +57,115 @@ struct CreateSpaceFlowTests {
         #expect(CreateSpaceView.containsInvalidBranchChars("-leading") == true)
         #expect(CreateSpaceView.containsInvalidBranchChars("") == false)
     }
+
+    // MARK: - resolveSubmitAction
+
+    private func row(
+        _ name: String,
+        isInUse: Bool = false,
+        remoteRef: String? = nil
+    ) -> BranchRow {
+        BranchRow(
+            id: "local:\(name)",
+            displayName: name,
+            badge: remoteRef == nil ? .local : .origin("origin"),
+            committerDate: Date(),
+            relativeDate: "just now",
+            isInUse: isInUse,
+            isCurrent: false,
+            remoteRef: remoteRef
+        )
+    }
+
+    @Test func submitActionBlocksOnEmptyInput() {
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "", worktreeEnabled: false, isGitRepo: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .blocked)
+    }
+
+    @Test func submitActionPlainModeReturnsPlain() {
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "my space", worktreeEnabled: false, isGitRepo: false,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .plain(name: "my space"))
+    }
+
+    @Test func submitActionWorktreeModeBlocksWhenNotGitRepo() {
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "feature", worktreeEnabled: true, isGitRepo: false,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .blocked)
+    }
+
+    @Test func submitActionBlocksOnInvalidChars() {
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "bad~name", worktreeEnabled: true, isGitRepo: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .blocked)
+    }
+
+    @Test func submitActionBlocksOnInUseCollision() {
+        let inUse = row("feature/auth", isInUse: true)
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            collision: inUse, highlightedRow: nil
+        )
+        #expect(action == .blocked)
+    }
+
+    @Test func submitActionChecksOutCollisionWhenNotInUse() {
+        let collision = row("feature/auth")
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            collision: collision, highlightedRow: nil
+        )
+        #expect(action == .checkoutExisting(branch: "feature/auth", remoteRef: nil))
+    }
+
+    @Test func submitActionPrefersExactCollisionOverHighlightedRow() {
+        let collision = row("feature/auth")
+        let highlighted = row("feature/auth-v2")
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            collision: collision, highlightedRow: highlighted
+        )
+        #expect(action == .checkoutExisting(branch: "feature/auth", remoteRef: nil))
+    }
+
+    @Test func submitActionUsesHighlightedRowWithoutCollision() {
+        let highlighted = row("origin/feature/xyz", remoteRef: "origin/feature/xyz")
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "xyz", worktreeEnabled: true, isGitRepo: true,
+            collision: nil, highlightedRow: highlighted
+        )
+        #expect(action == .checkoutExisting(
+            branch: "origin/feature/xyz",
+            remoteRef: "origin/feature/xyz"
+        ))
+    }
+
+    @Test func submitActionCreatesNewBranchWhenNoCollisionAndNoHighlight() {
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "brand-new", worktreeEnabled: true, isGitRepo: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .createBranch(name: "brand-new"))
+    }
+
+    @Test func submitActionPropagatesRemoteRefOnCollision() {
+        let collision = row("feature/remote-only", remoteRef: "origin/feature/remote-only")
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "feature/remote-only", worktreeEnabled: true, isGitRepo: true,
+            collision: collision, highlightedRow: nil
+        )
+        #expect(action == .checkoutExisting(
+            branch: "feature/remote-only",
+            remoteRef: "origin/feature/remote-only"
+        ))
+    }
 }

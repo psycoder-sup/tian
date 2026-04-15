@@ -46,25 +46,22 @@ struct CreateSpaceView: View {
         return Self.containsInvalidBranchChars(sanitizedInput)
     }
 
-    private var resolvedWorktreeRow: BranchRow? {
-        // Only relevant in worktree mode. If a row is highlighted (user typed
-        // or arrow-keyed to one), submit will checkout that existing branch.
+    private var currentCollision: BranchRow? {
         guard worktreeEnabled else { return nil }
-        return viewModel.selectedRow()
+        return viewModel.collision(for: sanitizedInput)
     }
 
-    private var canSubmit: Bool {
-        guard !sanitizedInput.isEmpty else { return false }
-        if worktreeEnabled {
-            guard isGitRepo else { return false }
-            if invalidCharsInBranchName { return false }
-            // Block submit if the typed name matches an in-use worktree branch.
-            if let collision = viewModel.collision(for: sanitizedInput), collision.isInUse {
-                return false
-            }
-        }
-        return true
+    private var submitAction: SubmitAction {
+        Self.resolveSubmitAction(
+            sanitizedInput: sanitizedInput,
+            worktreeEnabled: worktreeEnabled,
+            isGitRepo: isGitRepo,
+            collision: currentCollision,
+            highlightedRow: worktreeEnabled ? viewModel.selectedRow() : nil
+        )
     }
+
+    private var canSubmit: Bool { submitAction != .blocked }
 
     private var resolvedPath: String {
         guard let repoRoot else { return "" }
@@ -264,10 +261,12 @@ struct CreateSpaceView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
                 Text("Branch name contains invalid characters")
-            } else if let collision = viewModel.collision(for: sanitizedInput), collision.isInUse {
+            } else if let collision = currentCollision, collision.isInUse {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
                 Text("\u{201C}\(collision.displayName)\u{201D} is already in use as a worktree")
+            } else if let collision = currentCollision {
+                Text("Will check out existing branch \u{201C}\(collision.displayName)\u{201D}")
             } else if viewModel.isFetching {
                 ProgressView().controlSize(.mini)
                 Text("Syncing remotes…")
@@ -288,15 +287,15 @@ struct CreateSpaceView: View {
     // MARK: - Submit
 
     private func handleSubmit() {
-        guard canSubmit else { return }
-        if worktreeEnabled {
-            if let row = resolvedWorktreeRow {
-                submit(branch: row.displayName, existing: true, remoteRef: row.remoteRef)
-            } else {
-                submit(branch: sanitizedInput, existing: false, remoteRef: nil)
-            }
-        } else {
-            onSubmitPlain(sanitizedInput)
+        switch submitAction {
+        case .blocked:
+            return
+        case .plain(let name):
+            onSubmitPlain(name)
+        case .createBranch(let name):
+            submit(branch: name, existing: false, remoteRef: nil)
+        case .checkoutExisting(let branch, let remoteRef):
+            submit(branch: branch, existing: true, remoteRef: remoteRef)
         }
     }
 
@@ -310,6 +309,37 @@ struct CreateSpaceView: View {
         )
     }
 
+    // MARK: - Submit resolution
+
+    /// Prefers an exact-match collision over the currently highlighted row:
+    /// when the substring-filtered list anchors on a different branch than
+    /// the one the user fully typed, submit must still target the typed name.
+    static func resolveSubmitAction(
+        sanitizedInput: String,
+        worktreeEnabled: Bool,
+        isGitRepo: Bool,
+        collision: BranchRow?,
+        highlightedRow: BranchRow?
+    ) -> SubmitAction {
+        guard !sanitizedInput.isEmpty else { return .blocked }
+        if !worktreeEnabled {
+            return .plain(name: sanitizedInput)
+        }
+        guard isGitRepo else { return .blocked }
+        if containsInvalidBranchChars(sanitizedInput) { return .blocked }
+        if let collision, collision.isInUse { return .blocked }
+        if let collision {
+            return .checkoutExisting(
+                branch: collision.displayName,
+                remoteRef: collision.remoteRef
+            )
+        }
+        if let row = highlightedRow {
+            return .checkoutExisting(branch: row.displayName, remoteRef: row.remoteRef)
+        }
+        return .createBranch(name: sanitizedInput)
+    }
+
     // MARK: - Sanitization
 
     /// Live sanitization rule: replace ASCII space with `-`. Other characters
@@ -318,17 +348,16 @@ struct CreateSpaceView: View {
         raw.replacingOccurrences(of: " ", with: "-")
     }
 
-    /// Returns true if the given (already-sanitized) branch name contains
-    /// characters git rejects in ref names. The list is conservative — git's
-    /// real rules are more nuanced (see `git check-ref-format`), but blocking
-    /// these covers the cases users will hit.
+    /// Conservative subset of `git check-ref-format` — blocks the cases users
+    /// actually hit; git's real rules are stricter.
     static func containsInvalidBranchChars(_ name: String) -> Bool {
         if name.isEmpty { return false }
-        let banned: Set<Character> = ["~", "^", ":", "?", "*", "[", "\\"]
         if name.first == "-" { return true }
         if name.contains("..") { return true }
-        return name.contains(where: { banned.contains($0) })
+        return name.contains(where: { bannedBranchChars.contains($0) })
     }
+
+    private static let bannedBranchChars: Set<Character> = ["~", "^", ":", "?", "*", "[", "\\"]
 }
 
 /// Submission payload from the modal to the orchestrator.
@@ -336,4 +365,11 @@ struct CreateWorktreeSubmission {
     let branchName: String
     let existingBranch: Bool
     let remoteRef: String?
+}
+
+enum SubmitAction: Equatable {
+    case blocked
+    case plain(name: String)
+    case createBranch(name: String)
+    case checkoutExisting(branch: String, remoteRef: String?)
 }
