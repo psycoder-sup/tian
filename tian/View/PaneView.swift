@@ -4,9 +4,10 @@ import SwiftUI
 struct PaneView: View {
     let paneID: UUID
     let viewModel: PaneViewModel
+    let isTabVisible: Bool
 
     private var isFocused: Bool {
-        viewModel.splitTree.focusedPaneID == paneID
+        isTabVisible && viewModel.splitTree.focusedPaneID == paneID
     }
 
     private var showDimOverlay: Bool {

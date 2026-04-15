@@ -4,11 +4,12 @@ import SwiftUI
 struct SplitTreeView: View {
     let node: PaneNode
     let viewModel: PaneViewModel
+    let isTabVisible: Bool
 
     var body: some View {
         switch node {
         case .leaf(let paneID, _):
-            PaneView(paneID: paneID, viewModel: viewModel)
+            PaneView(paneID: paneID, viewModel: viewModel, isTabVisible: isTabVisible)
                 .id(paneID)
 
         case .split(let id, let direction, let ratio, let first, let second):
@@ -18,9 +19,9 @@ struct SplitTreeView: View {
                 ratio: ratio,
                 viewModel: viewModel
             ) {
-                SplitTreeView(node: first, viewModel: viewModel)
+                SplitTreeView(node: first, viewModel: viewModel, isTabVisible: isTabVisible)
             } second: {
-                SplitTreeView(node: second, viewModel: viewModel)
+                SplitTreeView(node: second, viewModel: viewModel, isTabVisible: isTabVisible)
             }
             .id(id)
         }

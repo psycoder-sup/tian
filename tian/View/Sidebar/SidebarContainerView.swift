@@ -124,7 +124,8 @@ struct SidebarContainerView: View {
                             && tab.id == space.activeTabID
                         SplitTreeView(
                             node: tab.paneViewModel.splitTree.root,
-                            viewModel: tab.paneViewModel
+                            viewModel: tab.paneViewModel,
+                            isTabVisible: isVisible
                         )
                         .opacity(isVisible ? 1 : 0)
                         .allowsHitTesting(isVisible)
@@ -149,10 +150,10 @@ struct SidebarContainerView: View {
                 }
             }
             .onChange(of: spaceCollection.activeSpace?.activeTabID) { _, _ in
-                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+                handleTabOrSpaceChanged()
             }
             .onChange(of: spaceCollection.activeSpaceID) { _, _ in
-                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+                handleTabOrSpaceChanged()
             }
         } else if workspaceCollection.workspaces.isEmpty {
             WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
@@ -161,13 +162,24 @@ struct SidebarContainerView: View {
 
     // MARK: - Focus
 
+    private func handleTabOrSpaceChanged() {
+        displayedSpaceCollection?.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+        // TerminalContentView.updateNSView already claims first responder when
+        // isTabVisible flips true, but that requires a SwiftUI rerender. Call
+        // explicitly here to cover fast tab/space switches where the rerender
+        // order isn't guaranteed.
+        returnFocusToTerminal()
+    }
+
     private func returnFocusToTerminal() {
-        guard let window = nsWindow,
-              let spaceCollection = displayedSpaceCollection,
-              let space = spaceCollection.activeSpace,
+        guard let space = displayedSpaceCollection?.activeSpace,
               let tab = space.activeTab else { return }
-        let focusedPaneID = tab.paneViewModel.splitTree.focusedPaneID
-        if let surfaceView = tab.paneViewModel.surfaceView(for: focusedPaneID) {
+        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        guard let surfaceView = tab.paneViewModel.surfaceView(for: paneID) else { return }
+        // nsWindow (via WindowAccessor binding) can lag during the first
+        // renders; fall back to the surface view's own window.
+        guard let window = nsWindow ?? surfaceView.window else { return }
+        if window.firstResponder !== surfaceView {
             window.makeFirstResponder(surfaceView)
         }
     }
