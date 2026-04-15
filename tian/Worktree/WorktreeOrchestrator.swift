@@ -25,6 +25,9 @@ final class WorktreeOrchestrator {
     /// Temporary event monitor for Ctrl+C during setup commands.
     private var ctrlCMonitor: Any?
 
+    /// Currently running setup process, if any. Used for cancellation/timeout.
+    private var currentSetupProcess: Process?
+
     // MARK: - Init
 
     init(workspaceProvider: any WorkspaceProviding) {
@@ -190,6 +193,7 @@ final class WorktreeOrchestrator {
     /// Cancels any in-progress setup commands.
     func cancelSetup() {
         setupCancelled = true
+        currentSetupProcess?.terminate()
     }
 
     /// Stores an error for the UI alert binding to consume.
@@ -247,26 +251,16 @@ final class WorktreeOrchestrator {
         newSpace.worktreePath = worktreeURL
         Log.worktree.info("Created worktree Space '\(branchName)' (id: \(newSpace.id))")
 
-        // Step 11: Wait for shell readiness (FR-028)
+        // Step 11: (removed) Setup no longer runs in the interactive pane, so
+        // waiting for shell readiness here is unnecessary. Layout `.pane` commands
+        // still wait for readiness inline before typing.
         let initialPaneID = newSpace.activeTab!.paneViewModel.splitTree.focusedPaneID
         let paneViewModel = newSpace.activeTab!.paneViewModel
-        if let surfaceID = paneViewModel.surface(for: initialPaneID)?.id {
-            let readyReason = await ShellReadinessWaiter.waitForReady(
-                surfaceID: surfaceID, timeout: config.shellReadyDelay
-            )
-            switch readyReason {
-            case .osc7:
-                Log.worktree.debug("Shell ready (OSC 7) for pane \(initialPaneID)")
-            case .timeout:
-                Log.worktree.debug("Shell ready (fallback delay \(config.shellReadyDelay)s) for pane \(initialPaneID)")
-            }
-        }
 
-        // Step 12: Run setup commands (FR-012)
+        // Step 12: Run setup commands as background processes (FR-012)
         await runSetupCommands(
             commands: config.setupCommands,
-            paneViewModel: paneViewModel,
-            paneID: initialPaneID,
+            worktreePath: worktreePath,
             config: config
         )
 
@@ -290,10 +284,10 @@ final class WorktreeOrchestrator {
 
     private func runSetupCommands(
         commands: [String],
-        paneViewModel: PaneViewModel,
-        paneID: UUID,
+        worktreePath: String,
         config: WorktreeConfig
     ) async {
+        guard !commands.isEmpty else { return }
         installCtrlCMonitor()
         defer { removeCtrlCMonitor() }
 
@@ -303,15 +297,64 @@ final class WorktreeOrchestrator {
                 break
             }
             Log.worktree.info("Running setup command \(index + 1)/\(commands.count): \(command)")
-            guard let surface = paneViewModel.surface(for: paneID) else { break }
-            surface.sendText(command)
-            let reason = await ShellReadinessWaiter.waitForReady(
-                surfaceID: surface.id, timeout: config.setupTimeout
+            await runSetupCommand(
+                command,
+                worktreePath: worktreePath,
+                timeout: config.setupTimeout
             )
-            if reason == .timeout {
-                Log.worktree.warning("Setup command timed out after \(config.setupTimeout)s: \(command)")
+        }
+    }
+
+    private func runSetupCommand(
+        _ command: String,
+        worktreePath: String,
+        timeout: TimeInterval
+    ) async {
+        let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
+        let process = Process()
+        process.executableURL = URL(filePath: shellPath)
+        process.arguments = ["-l", "-c", command]
+        process.currentDirectoryURL = URL(filePath: worktreePath)
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        currentSetupProcess = process
+        defer { currentSetupProcess = nil }
+
+        do {
+            try process.run()
+        } catch {
+            Log.worktree.warning("Failed to launch setup command '\(command)': \(error.localizedDescription)")
+            return
+        }
+
+        let timeoutTask = Task {
+            try? await Task.sleep(for: .seconds(timeout))
+            if process.isRunning {
+                Log.worktree.warning("Setup command timed out after \(timeout)s, terminating: \(command)")
+                process.terminate()
             }
         }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            process.terminationHandler = { _ in continuation.resume() }
+        }
+        timeoutTask.cancel()
+
+        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedStdout.isEmpty {
+            Log.worktree.info("setup stdout: \(trimmedStdout)")
+        }
+        if !trimmedStderr.isEmpty {
+            Log.worktree.warning("setup stderr: \(trimmedStderr)")
+        }
+        Log.worktree.info("Setup command exit=\(process.terminationStatus): \(command)")
     }
 
     // MARK: - Ctrl+C Monitor

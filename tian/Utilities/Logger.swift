@@ -8,11 +8,11 @@ enum Log {
     static let lifecycle = FileLogger(subsystem: subsystem, category: "lifecycle")
     static let persistence = FileLogger(subsystem: subsystem, category: "persistence")
     static let git = FileLogger(subsystem: subsystem, category: "git")
+    static let worktree = FileLogger(subsystem: subsystem, category: "worktree")
 
     // os.Logger only
     static let core = Logger(subsystem: subsystem, category: "core")
     static let view = Logger(subsystem: subsystem, category: "view")
     static let ghostty = Logger(subsystem: subsystem, category: "ghostty")
     static let perf = Logger(subsystem: subsystem, category: "perf")
-    static let worktree = Logger(subsystem: subsystem, category: "worktree")
 }
