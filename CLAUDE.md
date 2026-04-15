@@ -75,3 +75,7 @@ Prefer `scripts/build.sh [Debug|Release]` (defaults to Debug) — it runs `xcode
 ## Scratch / Temporary Files
 
 Use `.dev/tmp/` for temporary code, experiments, and scratch files instead of `/tmp`. The `.dev/tmp/` subdirectory is gitignored; `.dev/` itself is tracked.
+
+## Logs
+
+File-logged categories (`ipc`, `lifecycle`, `persistence`, `git`) dual-write to `os.Logger` and `~/Library/Logs/tian/tian.log` (rotated to `tian.1.log`). See `tian/Utilities/FileLogWriter.swift`. Other categories (`core`, `view`, `ghostty`, `perf`, `worktree`) go to unified logging only — read with `log stream --predicate 'subsystem == "com.tian.app"'`.
