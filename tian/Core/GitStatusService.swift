@@ -180,6 +180,7 @@ enum GitStatusService {
         directory: String,
         branch: String
     ) async -> PRStatus? {
+        Log.git.info("fetchPRStatus start: branch=\(branch) dir=\(directory)")
         do {
             let result = try await runProcess(
                 executablePath: "/usr/bin/env",
@@ -187,7 +188,7 @@ enum GitStatusService {
                 workingDirectory: directory
             )
             guard result.exitCode == 0, !result.stdout.isEmpty else {
-                Log.git.debug("gh pr view returned no data for \(branch) in \(directory)")
+                Log.git.info("gh pr view branch=\(branch) exit=\(result.exitCode) stderr=\(result.stderr)")
                 return nil
             }
 
@@ -197,7 +198,7 @@ enum GitStatusService {
                   let stateString = json["state"] as? String,
                   let urlString = json["url"] as? String,
                   let url = URL(string: urlString) else {
-                Log.git.debug("Failed to parse gh pr view output for \(branch)")
+                Log.git.info("Failed to parse gh pr view output for \(branch): \(result.stdout)")
                 return nil
             }
 
@@ -212,15 +213,15 @@ enum GitStatusService {
                 case "MERGED": state = .merged
                 case "CLOSED": state = .closed
                 default:
-                    Log.git.debug("Unknown PR state: \(stateString)")
+                    Log.git.info("Unknown PR state for \(branch): \(stateString)")
                     return nil
                 }
             }
 
-            Log.git.debug("PR status for \(branch): \(state.rawValue), url: \(urlString)")
+            Log.git.info("PR status for \(branch): #\(prNumber) \(state.rawValue)")
             return PRStatus(number: prNumber, state: state, url: url)
         } catch {
-            Log.git.debug("fetchPRStatus failed for \(branch): \(error)")
+            Log.git.info("fetchPRStatus threw for \(branch): \(error)")
             return nil
         }
     }
