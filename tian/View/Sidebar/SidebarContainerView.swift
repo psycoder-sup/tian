@@ -149,10 +149,10 @@ struct SidebarContainerView: View {
                 }
             }
             .onChange(of: spaceCollection.activeSpace?.activeTabID) { _, _ in
-                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+                handleTabOrSpaceChanged()
             }
             .onChange(of: spaceCollection.activeSpaceID) { _, _ in
-                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+                handleTabOrSpaceChanged()
             }
         } else if workspaceCollection.workspaces.isEmpty {
             WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
@@ -161,14 +161,29 @@ struct SidebarContainerView: View {
 
     // MARK: - Focus
 
+    private func handleTabOrSpaceChanged() {
+        displayedSpaceCollection?.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+        returnFocusToTerminal()
+    }
+
     private func returnFocusToTerminal() {
-        guard let window = nsWindow,
-              let spaceCollection = displayedSpaceCollection,
-              let space = spaceCollection.activeSpace,
-              let tab = space.activeTab else { return }
-        let focusedPaneID = tab.paneViewModel.splitTree.focusedPaneID
-        if let surfaceView = tab.paneViewModel.surfaceView(for: focusedPaneID) {
-            window.makeFirstResponder(surfaceView)
+        // Defer to the next runloop tick. SwiftUI's view updates — including
+        // TerminalContentView.updateNSView, which grabs first responder for
+        // every view model's focused pane regardless of which tab is visible —
+        // must finish first, otherwise our focus change gets clobbered.
+        let trackedWindow = nsWindow
+        let collection = displayedSpaceCollection
+        DispatchQueue.main.async {
+            guard let space = collection?.activeSpace,
+                  let tab = space.activeTab else { return }
+            let paneID = tab.paneViewModel.splitTree.focusedPaneID
+            guard let surfaceView = tab.paneViewModel.surfaceView(for: paneID) else { return }
+            // nsWindow (via WindowAccessor binding) can lag during the first
+            // renders; fall back to the surface view's own window.
+            guard let window = trackedWindow ?? surfaceView.window else { return }
+            if window.firstResponder !== surfaceView {
+                window.makeFirstResponder(surfaceView)
+            }
         }
     }
 
