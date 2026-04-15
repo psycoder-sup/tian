@@ -13,7 +13,6 @@ enum KeyAction: Hashable {
     case nextSpace
     case previousSpace
     case newSpace
-    case newWorktreeSpace
 
     // Workspace navigation
     case nextWorkspace

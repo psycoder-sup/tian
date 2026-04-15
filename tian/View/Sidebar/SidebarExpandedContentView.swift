@@ -34,16 +34,6 @@ struct SidebarExpandedContentView: View {
                         isCreatingWorktree: worktreeOrchestrator.isCreating,
                         onToggleDisclosure: { toggleDisclosure(workspace.id) },
                         onAddSpace: { addSpace(to: workspace) },
-                        onNewWorktreeSpace: {
-                            NotificationCenter.default.post(
-                                name: .showWorktreeBranchInput,
-                                object: workspaceCollection,
-                                userInfo: [
-                                    Notification.worktreeWorkingDirectoryKey: workspace.spaceCollection.resolveWorkingDirectory(),
-                                    Notification.worktreeWorkspaceIDKey: workspace.id
-                                ]
-                            )
-                        },
                         onSetDirectory: { url in
                             workspace.setDefaultWorkingDirectory(url)
                         },
@@ -152,8 +142,13 @@ struct SidebarExpandedContentView: View {
     // MARK: - Add Space
 
     private func addSpace(to workspace: Workspace) {
-        let wd = workspace.spaceCollection.resolveWorkingDirectory()
-        workspace.spaceCollection.createSpace(workingDirectory: wd)
+        NotificationCenter.default.post(
+            name: .showCreateSpaceInput,
+            object: workspaceCollection,
+            userInfo: [
+                Notification.createSpaceWorkspaceIDKey: workspace.id
+            ]
+        )
         disclosedWorkspaces.insert(workspace.id)
     }
 

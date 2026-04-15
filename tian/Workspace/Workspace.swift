@@ -20,6 +20,11 @@ final class Workspace: Identifiable {
     var defaultWorkingDirectory: URL?
     let createdAt: Date
 
+    /// Remembers the last "Create worktree" checkbox state in the unified
+    /// space-creation modal. Transient — not persisted in `WorkspaceSnapshot`,
+    /// resets on app relaunch.
+    var lastCreateWorktreeChoice: Bool?
+
     let spaceCollection: SpaceCollection
 
     /// Called when the workspace's last space is closed.

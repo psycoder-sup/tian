@@ -54,10 +54,11 @@ final class SpaceCollection {
     // MARK: - Space Operations
 
     @discardableResult
-    func createSpace(workingDirectory: String = "~") -> SpaceModel {
+    func createSpace(name: String? = nil, workingDirectory: String = "~") -> SpaceModel {
         spaceCounter += 1
         let tab = TabModel(workingDirectory: workingDirectory)
-        let space = SpaceModel(name: "Space \(spaceCounter)", initialTab: tab)
+        let resolvedName = name ?? "Space \(spaceCounter)"
+        let space = SpaceModel(name: resolvedName, initialTab: tab)
         space.workspaceDefaultDirectory = workspaceDefaultDirectory
         if let workspaceID {
             space.propagateWorkspaceID(workspaceID)

@@ -1,4 +1,4 @@
-// tian/View/Worktree/BranchListViewModel.swift
+// tian/View/CreateSpace/BranchListViewModel.swift
 import Foundation
 import Observation
 
@@ -113,8 +113,10 @@ final class BranchListViewModel {
             filtered = deduped.filter { $0.displayName.lowercased().contains(q) }
         }
         rows = filtered
-        // Re-anchor highlight on the first selectable row in the new filtered list.
-        if let first = filtered.first(where: { !$0.isInUse }) {
+        // Auto-highlight only when the user has typed something. In browse mode
+        // (empty query) we leave highlight nil so Enter doesn't silently
+        // checkout the most-recent branch.
+        if !q.isEmpty, let first = filtered.first(where: { !$0.isInUse }) {
             highlightedID = first.id
         } else {
             highlightedID = nil
