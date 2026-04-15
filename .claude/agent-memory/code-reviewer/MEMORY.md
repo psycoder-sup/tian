@@ -1,0 +1,2 @@
+- [ghostty-env-override-order](ghostty_env_override_order.md) — tian's env_vars are applied AFTER ghostty's shell_integration.setup() in Exec.zig, so tian's ZDOTDIR wins over ghostty's
+- [tian-shell-integration-model](tian_shell_integration_model.md) — how tian bootstraps ZDOTDIR, sources user rc files, and composes its own + ghostty's integrations
