@@ -183,7 +183,7 @@ enum GitStatusService {
         do {
             let result = try await runProcess(
                 executablePath: "/usr/bin/env",
-                arguments: ["gh", "pr", "view", "--head", branch, "--json", "number,state,url,isDraft"],
+                arguments: ["gh", "pr", "view", branch, "--json", "number,state,url,isDraft"],
                 workingDirectory: directory
             )
             guard result.exitCode == 0, !result.stdout.isEmpty else {
