@@ -52,20 +52,23 @@ final class GitRepoWatcher: @unchecked Sendable {
     }
 
     /// Determines which paths to monitor based on git dir type.
+    ///
+    /// The working tree is always included so that edits to tracked/untracked
+    /// files propagate to the badge without requiring an OSC 7 or git-metadata
+    /// event. FSEventStream is recursive, so for a regular repo `workingTree`
+    /// alone covers `.git/` as well. Worktrees additionally need their own
+    /// `gitDir` (under the main `.git/worktrees/NAME`) and the shared
+    /// `commonDir/refs`, since those live outside the worktree root.
     static func resolveWatchPaths(
         gitDir: String,
         commonDir: String,
-        workingDirectory: String
+        workingTree: String
     ) -> [String] {
         if gitDir.contains("/worktrees/") {
             let refsPath = (commonDir as NSString).appendingPathComponent("refs")
-            return [gitDir, refsPath]
-        } else if gitDir == ".git" {
-            return [(workingDirectory as NSString).appendingPathComponent(".git")]
-        } else if gitDir.hasSuffix("/.git") || gitDir.hasSuffix("/.git/") {
-            return [gitDir]
+            return [workingTree, gitDir, refsPath]
         } else {
-            return [gitDir]
+            return [workingTree]
         }
     }
 

@@ -16,6 +16,9 @@ struct GitStatusServiceTests {
         // commonDir should be an absolute path ending with .git
         #expect(result?.commonDir.hasPrefix("/") == true)
         #expect(result?.commonDir.hasSuffix(".git") == true)
+        // workingTree should be the canonical repo path
+        let canonicalRepo = URL(filePath: repo).standardizedFileURL.path
+        #expect(result?.workingTree == canonicalRepo)
     }
 
     @Test func detectRepoOnNonGitDir() async throws {
@@ -46,6 +49,9 @@ struct GitStatusServiceTests {
         let mainGitDir = (repo as NSString).appendingPathComponent(".git")
         let canonicalMain = URL(filePath: mainGitDir).standardizedFileURL.path
         #expect(result?.commonDir == canonicalMain)
+        // workingTree is the worktree's own root (NOT the main repo's root)
+        let canonicalWorktree = URL(filePath: worktreePath).standardizedFileURL.path
+        #expect(result?.workingTree == canonicalWorktree)
     }
 
     // MARK: - currentBranch

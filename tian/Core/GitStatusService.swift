@@ -6,14 +6,15 @@ import OSLog
 enum GitStatusService {
 
     /// Detects the git repository for a given directory.
-    /// Returns the git dir and common dir paths, or nil if not in a git repo.
+    /// Returns the git dir, common dir, and working tree root, or nil if not in
+    /// a git repo (or in a bare repo with no working tree).
     static func detectRepo(
         directory: String
-    ) async -> (gitDir: String, commonDir: String)? {
+    ) async -> (gitDir: String, commonDir: String, workingTree: String)? {
         do {
-            // Single subprocess: get both --git-dir and --git-common-dir at once
+            // Single subprocess: git-dir, common-dir, and working-tree toplevel.
             let result = try await runGit(
-                ["rev-parse", "--git-dir", "--git-common-dir"],
+                ["rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel"],
                 workingDirectory: directory
             )
             guard result.exitCode == 0, !result.stdout.isEmpty else {
@@ -22,13 +23,15 @@ enum GitStatusService {
             }
 
             let lines = result.stdout.components(separatedBy: "\n")
-            guard lines.count >= 2, !lines[0].isEmpty, !lines[1].isEmpty else {
+            guard lines.count >= 3,
+                  !lines[0].isEmpty, !lines[1].isEmpty, !lines[2].isEmpty else {
                 Log.git.info("Unexpected rev-parse output for: \(directory)")
                 return nil
             }
 
             let gitDir = lines[0]
             let rawCommonDir = lines[1]
+            let workingTree = URL(filePath: lines[2]).standardizedFileURL.path
 
             // Canonicalize commonDir to an absolute path
             let absoluteCommonDir: String
@@ -39,8 +42,8 @@ enum GitStatusService {
                     .standardizedFileURL.path
             }
 
-            Log.git.debug("Detected repo at \(directory): gitDir=\(gitDir), commonDir=\(absoluteCommonDir)")
-            return (gitDir: gitDir, commonDir: absoluteCommonDir)
+            Log.git.debug("Detected repo at \(directory): gitDir=\(gitDir), commonDir=\(absoluteCommonDir), workingTree=\(workingTree)")
+            return (gitDir: gitDir, commonDir: absoluteCommonDir, workingTree: workingTree)
         } catch {
             Log.git.error("detectRepo failed for \(directory): \(error)")
             return nil

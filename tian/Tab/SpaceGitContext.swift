@@ -114,7 +114,7 @@ final class SpaceGitContext {
                 if !self.pinnedRepoOrder.contains(newRepoID) {
                     self.pinnedRepoOrder.append(newRepoID)
                     self.sortPinnedRepoOrder()
-                    self.startWatcher(repoID: newRepoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingDirectory: newDirectory)
+                    self.startWatcher(repoID: newRepoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingTree: repo.workingTree)
                     Log.git.debug("Pinned new repo: \(newRepoID.path)")
                 }
 
@@ -246,7 +246,7 @@ final class SpaceGitContext {
             }
 
             self.repoInfo[repoID] = (gitDir: repo.gitDir, commonDir: repo.commonDir)
-            self.startWatcher(repoID: repoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingDirectory: directory)
+            self.startWatcher(repoID: repoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingTree: repo.workingTree)
 
             self.refreshRepo(repoID: repoID, directory: directory)
         }
@@ -318,14 +318,14 @@ final class SpaceGitContext {
 
     // MARK: - Watcher Management
 
-    private func startWatcher(repoID: GitRepoID, gitDir: String, commonDir: String, workingDirectory: String) {
+    private func startWatcher(repoID: GitRepoID, gitDir: String, commonDir: String, workingTree: String) {
         // Don't start a duplicate watcher if one already exists
         guard watchers[repoID] == nil else { return }
 
         let watchPaths = GitRepoWatcher.resolveWatchPaths(
             gitDir: gitDir,
             commonDir: commonDir,
-            workingDirectory: workingDirectory
+            workingTree: workingTree
         )
 
         let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] in

@@ -10,18 +10,20 @@ struct GitRepoWatcherTests {
         let paths = GitRepoWatcher.resolveWatchPaths(
             gitDir: ".git",
             commonDir: "/Users/dev/project/.git",
-            workingDirectory: "/Users/dev/project"
+            workingTree: "/Users/dev/project"
         )
-        #expect(paths == ["/Users/dev/project/.git"])
+        // Working tree is watched recursively; .git/ is covered as a subdirectory.
+        #expect(paths == ["/Users/dev/project"])
     }
 
-    @Test func worktreeWatchPathsIncludeBothPaths() {
+    @Test func worktreeWatchPathsIncludeWorkingTreeGitDirAndRefs() {
         let paths = GitRepoWatcher.resolveWatchPaths(
             gitDir: "/Users/dev/project/.git/worktrees/feature-branch",
             commonDir: "/Users/dev/project/.git",
-            workingDirectory: "/Users/dev/worktrees/feature-branch"
+            workingTree: "/Users/dev/worktrees/feature-branch"
         )
-        #expect(paths.count == 2)
+        #expect(paths.count == 3)
+        #expect(paths.contains("/Users/dev/worktrees/feature-branch"))
         #expect(paths.contains("/Users/dev/project/.git/worktrees/feature-branch"))
         #expect(paths.contains("/Users/dev/project/.git/refs"))
     }
@@ -30,9 +32,9 @@ struct GitRepoWatcherTests {
         let paths = GitRepoWatcher.resolveWatchPaths(
             gitDir: "/Users/dev/project/.git",
             commonDir: "/Users/dev/project/.git",
-            workingDirectory: "/Users/dev/project"
+            workingTree: "/Users/dev/project"
         )
-        #expect(paths == ["/Users/dev/project/.git"])
+        #expect(paths == ["/Users/dev/project"])
     }
 
     // MARK: - Lifecycle
@@ -69,6 +71,35 @@ struct GitRepoWatcherTests {
         try runGitSync(["add", "test.txt"], in: repo)
 
         // Wait for FSEvents callback
+        try await Task.sleep(for: .seconds(2))
+
+        #expect(callbackFired.didFire)
+    }
+
+    @Test func watcherDetectsWorkingTreeFileChanges() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let paths = GitRepoWatcher.resolveWatchPaths(
+            gitDir: ".git",
+            commonDir: repo + "/.git",
+            workingTree: repo
+        )
+
+        let callbackFired = CallbackTracker()
+        let watcher = GitRepoWatcher(
+            watchPaths: paths,
+            latency: 0.5,
+            onChangeDetected: { callbackFired.fire() }
+        )
+        defer { watcher.stop() }
+
+        // Create an untracked file in the working tree — does NOT touch .git.
+        // With a .git-only watcher this does not fire; the fix requires the
+        // working tree to be in watchPaths so diff changes update the badge.
+        let filePath = (repo as NSString).appendingPathComponent("new.txt")
+        try "new file".write(toFile: filePath, atomically: true, encoding: .utf8)
+
         try await Task.sleep(for: .seconds(2))
 
         #expect(callbackFired.didFire)
