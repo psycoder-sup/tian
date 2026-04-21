@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import tian
 
@@ -7,21 +8,22 @@ struct GitRepoWatcherTests {
     // MARK: - Watch Path Resolution
 
     @Test func regularRepoWatchPaths() {
-        let paths = GitRepoWatcher.resolveWatchPaths(
+        let paths = GitRepoWatcher.resolveWatchPaths(for: RepoLocation(
             gitDir: ".git",
             commonDir: "/Users/dev/project/.git",
-            workingTree: "/Users/dev/project"
-        )
-        // Working tree is watched recursively; .git/ is covered as a subdirectory.
+            workingTree: "/Users/dev/project",
+            isWorktree: false
+        ))
         #expect(paths == ["/Users/dev/project"])
     }
 
     @Test func worktreeWatchPathsIncludeWorkingTreeGitDirAndRefs() {
-        let paths = GitRepoWatcher.resolveWatchPaths(
+        let paths = GitRepoWatcher.resolveWatchPaths(for: RepoLocation(
             gitDir: "/Users/dev/project/.git/worktrees/feature-branch",
             commonDir: "/Users/dev/project/.git",
-            workingTree: "/Users/dev/worktrees/feature-branch"
-        )
+            workingTree: "/Users/dev/worktrees/feature-branch",
+            isWorktree: true
+        ))
         #expect(paths.count == 3)
         #expect(paths.contains("/Users/dev/worktrees/feature-branch"))
         #expect(paths.contains("/Users/dev/project/.git/worktrees/feature-branch"))
@@ -29,11 +31,12 @@ struct GitRepoWatcherTests {
     }
 
     @Test func absoluteGitDirEndingWithDotGit() {
-        let paths = GitRepoWatcher.resolveWatchPaths(
+        let paths = GitRepoWatcher.resolveWatchPaths(for: RepoLocation(
             gitDir: "/Users/dev/project/.git",
             commonDir: "/Users/dev/project/.git",
-            workingTree: "/Users/dev/project"
-        )
+            workingTree: "/Users/dev/project",
+            isWorktree: false
+        ))
         #expect(paths == ["/Users/dev/project"])
     }
 
@@ -70,9 +73,7 @@ struct GitRepoWatcherTests {
         try "change".write(toFile: filePath, atomically: true, encoding: .utf8)
         try runGitSync(["add", "test.txt"], in: repo)
 
-        // Wait for FSEvents callback
-        try await Task.sleep(for: .seconds(2))
-
+        try await waitForCallback(callbackFired)
         #expect(callbackFired.didFire)
     }
 
@@ -80,11 +81,12 @@ struct GitRepoWatcherTests {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
-        let paths = GitRepoWatcher.resolveWatchPaths(
+        let paths = GitRepoWatcher.resolveWatchPaths(for: RepoLocation(
             gitDir: ".git",
             commonDir: repo + "/.git",
-            workingTree: repo
-        )
+            workingTree: repo,
+            isWorktree: false
+        ))
 
         let callbackFired = CallbackTracker()
         let watcher = GitRepoWatcher(
@@ -94,23 +96,36 @@ struct GitRepoWatcherTests {
         )
         defer { watcher.stop() }
 
-        // Create an untracked file in the working tree — does NOT touch .git.
-        // With a .git-only watcher this does not fire; the fix requires the
-        // working tree to be in watchPaths so diff changes update the badge.
+        // Untracked file write — does not touch .git, so a .git-only watcher would miss it.
         let filePath = (repo as NSString).appendingPathComponent("new.txt")
         try "new file".write(toFile: filePath, atomically: true, encoding: .utf8)
 
-        try await Task.sleep(for: .seconds(2))
-
+        try await waitForCallback(callbackFired)
         #expect(callbackFired.didFire)
     }
 
     // MARK: - Helpers
 
-    final class CallbackTracker: @unchecked Sendable {
-        private var _didFire = false
-        var didFire: Bool { _didFire }
-        func fire() { _didFire = true }
+    /// Polls the tracker until it fires or `timeout` elapses. Using a deadline
+    /// instead of a fixed sleep keeps the suite fast on dev machines while
+    /// giving slower CI boxes headroom for FSEvents delivery latency.
+    private func waitForCallback(
+        _ tracker: CallbackTracker,
+        timeout: Duration = .seconds(3),
+        pollInterval: Duration = .milliseconds(50)
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !tracker.didFire, ContinuousClock.now < deadline {
+            try await Task.sleep(for: pollInterval)
+        }
+    }
+
+    /// Synchronized flag used to bridge a callback fired on the FSEvents
+    /// dispatch queue to the test task reading on the main task.
+    final class CallbackTracker: Sendable {
+        private let state = OSAllocatedUnfairLock<Bool>(initialState: false)
+        var didFire: Bool { state.withLock { $0 } }
+        func fire() { state.withLock { $0 = true } }
     }
 
     private func makeTempGitRepo() throws -> String {

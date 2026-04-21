@@ -19,6 +19,18 @@ struct GitRepoStatus: Sendable {
     var changedFiles: [GitChangedFile] = []
     var prStatus: PRStatus?
     var lastUpdated: Date
+
+    /// True when every observable field except `lastUpdated` matches `other`.
+    /// Used to skip Observable writes that would re-render the sidebar with
+    /// no visible change (FSEvents fires constantly during builds).
+    func contentMatches(_ other: GitRepoStatus) -> Bool {
+        repoID == other.repoID
+            && branchName == other.branchName
+            && isDetachedHead == other.isDetachedHead
+            && diffSummary == other.diffSummary
+            && changedFiles == other.changedFiles
+            && prStatus == other.prStatus
+    }
 }
 
 struct GitDiffSummary: Sendable, Equatable {
@@ -68,7 +80,7 @@ enum GitFileStatus: String, Sendable {
 
 // MARK: - PR
 
-struct PRStatus: Sendable {
+struct PRStatus: Sendable, Equatable {
     let number: Int
     let state: PRState
     let url: URL

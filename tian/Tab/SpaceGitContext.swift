@@ -44,9 +44,6 @@ final class SpaceGitContext {
     /// Active FSEvents watchers per repo.
     private var watchers: [GitRepoID: GitRepoWatcher] = [:]
 
-    /// Git repo info needed for watcher creation (gitDir, commonDir).
-    private var repoInfo: [GitRepoID: (gitDir: String, commonDir: String)] = [:]
-
     // MARK: - Public Computed
 
     /// Number of active FSEvents watchers. Exposed for testing.
@@ -104,17 +101,15 @@ final class SpaceGitContext {
                 // Update pane assignment
                 self.paneRepoAssignments[paneID] = newRepoID
                 self.repoDirectories[newRepoID] = newDirectory
-                self.repoInfo[newRepoID] = (gitDir: repo.gitDir, commonDir: repo.commonDir)
                 if self.repoRoots[newRepoID] == nil {
-                    let commonDirURL = URL(filePath: repo.commonDir)
-                    self.repoRoots[newRepoID] = commonDirURL.deletingLastPathComponent().path
+                    self.repoRoots[newRepoID] = repo.workingTree
                 }
 
                 // Add new repo if not already pinned
                 if !self.pinnedRepoOrder.contains(newRepoID) {
                     self.pinnedRepoOrder.append(newRepoID)
                     self.sortPinnedRepoOrder()
-                    self.startWatcher(repoID: newRepoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingTree: repo.workingTree)
+                    self.startWatcher(repoID: newRepoID, location: repo)
                     Log.git.debug("Pinned new repo: \(newRepoID.path)")
                 }
 
@@ -174,7 +169,6 @@ final class SpaceGitContext {
         for watcher in watchers.values { watcher.stop() }
         watchers.removeAll()
         prCache.evictAll()
-        repoInfo.removeAll()
     }
 
     // MARK: - Private
@@ -198,7 +192,6 @@ final class SpaceGitContext {
         repoStatuses.removeValue(forKey: repoID)
         repoDirectories.removeValue(forKey: repoID)
         repoRoots.removeValue(forKey: repoID)
-        repoInfo.removeValue(forKey: repoID)
         pinnedRepoOrder.removeAll { $0 == repoID }
         stopWatcher(repoID: repoID)
         Log.git.debug("Unpinned orphaned repo: \(repoID.path)")
@@ -231,11 +224,11 @@ final class SpaceGitContext {
             }
             self.repoDirectories[repoID] = directory
 
-            // Store repo root (parent of .git) for same-repo prefix checks
+            // For worktrees this resolves to the worktree's own root, not the
+            // main repo — so the same-repo prefix check at paneWorkingDirectoryChanged
+            // works correctly for panes scoped to a linked worktree.
             if self.repoRoots[repoID] == nil {
-                // commonDir is the .git dir; its parent is the working tree root
-                let commonDirURL = URL(filePath: repo.commonDir)
-                self.repoRoots[repoID] = commonDirURL.deletingLastPathComponent().path
+                self.repoRoots[repoID] = repo.workingTree
             }
 
             // Add to pinned order if new
@@ -245,8 +238,7 @@ final class SpaceGitContext {
                 Log.git.debug("Pinned new repo: \(repoID.path)")
             }
 
-            self.repoInfo[repoID] = (gitDir: repo.gitDir, commonDir: repo.commonDir)
-            self.startWatcher(repoID: repoID, gitDir: repo.gitDir, commonDir: repo.commonDir, workingTree: repo.workingTree)
+            self.startWatcher(repoID: repoID, location: repo)
 
             self.refreshRepo(repoID: repoID, directory: directory)
         }
@@ -309,7 +301,12 @@ final class SpaceGitContext {
                 lastUpdated: Date()
             )
 
-            self.repoStatuses[repoID] = status
+            // Skip the Observable write when nothing visible changed — avoids
+            // sidebar re-renders on every FSEvents batch during noisy activity
+            // like an active build.
+            if self.repoStatuses[repoID]?.contentMatches(status) != true {
+                self.repoStatuses[repoID] = status
+            }
             self.inFlightTasks.removeValue(forKey: repoID)
         }
 
@@ -318,15 +315,11 @@ final class SpaceGitContext {
 
     // MARK: - Watcher Management
 
-    private func startWatcher(repoID: GitRepoID, gitDir: String, commonDir: String, workingTree: String) {
+    private func startWatcher(repoID: GitRepoID, location: RepoLocation) {
         // Don't start a duplicate watcher if one already exists
         guard watchers[repoID] == nil else { return }
 
-        let watchPaths = GitRepoWatcher.resolveWatchPaths(
-            gitDir: gitDir,
-            commonDir: commonDir,
-            workingTree: workingTree
-        )
+        let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
 
         let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] in
             Task { @MainActor [weak self] in

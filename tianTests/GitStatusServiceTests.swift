@@ -11,14 +11,13 @@ struct GitStatusServiceTests {
         defer { cleanup(repo) }
 
         let result = await GitStatusService.detectRepo(directory: repo)
-        #expect(result != nil)
-        #expect(result?.gitDir == ".git")
-        // commonDir should be an absolute path ending with .git
-        #expect(result?.commonDir.hasPrefix("/") == true)
-        #expect(result?.commonDir.hasSuffix(".git") == true)
-        // workingTree should be the canonical repo path
+        let location = try #require(result)
+        #expect(location.gitDir == ".git")
+        #expect(location.commonDir.hasPrefix("/"))
+        #expect(location.commonDir.hasSuffix(".git"))
         let canonicalRepo = URL(filePath: repo).standardizedFileURL.path
-        #expect(result?.workingTree == canonicalRepo)
+        #expect(location.workingTree == canonicalRepo)
+        #expect(location.isWorktree == false)
     }
 
     @Test func detectRepoOnNonGitDir() async throws {
@@ -29,11 +28,23 @@ struct GitStatusServiceTests {
         #expect(result == nil)
     }
 
+    @Test func detectRepoOnBareRepo() async throws {
+        // Bare repos have no working tree — `--show-toplevel` returns empty.
+        // detectRepo intentionally returns nil so callers don't construct a
+        // RepoLocation with a missing workingTree.
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        try runGitSync(["init", "--bare"], in: dir)
+
+        let result = await GitStatusService.detectRepo(directory: dir)
+        #expect(result == nil)
+    }
+
     @Test func detectRepoOnWorktree() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
-        // Create a worktree
         let worktreePath = (repo as NSString)
             .deletingLastPathComponent
             .appending("/tian-wt-\(UUID().uuidString)")
@@ -42,16 +53,14 @@ struct GitStatusServiceTests {
         try runGitSync(["worktree", "add", worktreePath, "-b", "wt-branch"], in: repo)
 
         let result = await GitStatusService.detectRepo(directory: worktreePath)
-        #expect(result != nil)
-        // gitDir should be an absolute path inside main repo's .git/worktrees/
-        #expect(result?.gitDir.contains("/worktrees/") == true || result?.gitDir == ".git")
-        // commonDir should point to the main repo's .git (shared)
+        let location = try #require(result)
+        #expect(location.gitDir.contains("/worktrees/"))
         let mainGitDir = (repo as NSString).appendingPathComponent(".git")
         let canonicalMain = URL(filePath: mainGitDir).standardizedFileURL.path
-        #expect(result?.commonDir == canonicalMain)
-        // workingTree is the worktree's own root (NOT the main repo's root)
+        #expect(location.commonDir == canonicalMain)
         let canonicalWorktree = URL(filePath: worktreePath).standardizedFileURL.path
-        #expect(result?.workingTree == canonicalWorktree)
+        #expect(location.workingTree == canonicalWorktree)
+        #expect(location.isWorktree)
     }
 
     // MARK: - currentBranch

@@ -51,7 +51,7 @@ final class GitRepoWatcher: @unchecked Sendable {
         Log.git.debug("GitRepoWatcher stopped for: \(self.watchPaths)")
     }
 
-    /// Determines which paths to monitor based on git dir type.
+    /// Determines which paths to monitor for a given repo location.
     ///
     /// The working tree is always included so that edits to tracked/untracked
     /// files propagate to the badge without requiring an OSC 7 or git-metadata
@@ -59,17 +59,10 @@ final class GitRepoWatcher: @unchecked Sendable {
     /// alone covers `.git/` as well. Worktrees additionally need their own
     /// `gitDir` (under the main `.git/worktrees/NAME`) and the shared
     /// `commonDir/refs`, since those live outside the worktree root.
-    static func resolveWatchPaths(
-        gitDir: String,
-        commonDir: String,
-        workingTree: String
-    ) -> [String] {
-        if gitDir.contains("/worktrees/") {
-            let refsPath = (commonDir as NSString).appendingPathComponent("refs")
-            return [workingTree, gitDir, refsPath]
-        } else {
-            return [workingTree]
-        }
+    static func resolveWatchPaths(for location: RepoLocation) -> [String] {
+        guard location.isWorktree else { return [location.workingTree] }
+        let refsPath = (location.commonDir as NSString).appendingPathComponent("refs")
+        return [location.workingTree, location.gitDir, refsPath]
     }
 
     private func startStream(latency: CFTimeInterval, callback: @Sendable @escaping () -> Void) {
