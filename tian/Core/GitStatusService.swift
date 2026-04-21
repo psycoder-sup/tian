@@ -1,19 +1,28 @@
 import Foundation
 import OSLog
 
+/// Resolved git repository paths for a directory. `isWorktree` lets callers
+/// tell apart a regular repo from a linked worktree without re-parsing the
+/// `gitDir` string layout.
+struct RepoLocation: Sendable, Equatable {
+    let gitDir: String
+    let commonDir: String
+    let workingTree: String
+    let isWorktree: Bool
+}
+
 /// Stateless service wrapping git CLI subprocess calls.
 /// All methods are async and run subprocesses on background threads.
 enum GitStatusService {
 
     /// Detects the git repository for a given directory.
-    /// Returns the git dir and common dir paths, or nil if not in a git repo.
+    /// Returns nil if not in a git repo (or in a bare repo with no working tree).
     static func detectRepo(
         directory: String
-    ) async -> (gitDir: String, commonDir: String)? {
+    ) async -> RepoLocation? {
         do {
-            // Single subprocess: get both --git-dir and --git-common-dir at once
             let result = try await runGit(
-                ["rev-parse", "--git-dir", "--git-common-dir"],
+                ["rev-parse", "--git-dir", "--git-common-dir", "--show-toplevel"],
                 workingDirectory: directory
             )
             guard result.exitCode == 0, !result.stdout.isEmpty else {
@@ -22,25 +31,44 @@ enum GitStatusService {
             }
 
             let lines = result.stdout.components(separatedBy: "\n")
-            guard lines.count >= 2, !lines[0].isEmpty, !lines[1].isEmpty else {
+            guard lines.count >= 3,
+                  !lines[0].isEmpty, !lines[1].isEmpty, !lines[2].isEmpty else {
                 Log.git.info("Unexpected rev-parse output for: \(directory)")
                 return nil
             }
 
             let gitDir = lines[0]
             let rawCommonDir = lines[1]
+            let workingTree = URL(filePath: lines[2]).standardizedFileURL.path
+            let directoryURL = URL(filePath: directory, directoryHint: .isDirectory)
 
-            // Canonicalize commonDir to an absolute path
-            let absoluteCommonDir: String
-            if rawCommonDir.hasPrefix("/") {
-                absoluteCommonDir = URL(filePath: rawCommonDir).standardizedFileURL.path
-            } else {
-                absoluteCommonDir = URL(filePath: rawCommonDir, relativeTo: URL(filePath: directory, directoryHint: .isDirectory))
+            func canonicalize(_ path: String) -> String {
+                if path.hasPrefix("/") {
+                    return URL(filePath: path).standardizedFileURL.path
+                }
+                return URL(filePath: path, relativeTo: directoryURL)
                     .standardizedFileURL.path
             }
 
-            Log.git.debug("Detected repo at \(directory): gitDir=\(gitDir), commonDir=\(absoluteCommonDir)")
-            return (gitDir: gitDir, commonDir: absoluteCommonDir)
+            let absoluteCommonDir = canonicalize(rawCommonDir)
+            let absoluteGitDir = canonicalize(gitDir)
+
+            // For a regular repo `--git-dir` and `--git-common-dir` resolve to the
+            // same path; for a linked worktree `gitDir` lives under
+            // `commonDir/worktrees/NAME`. Comparing the two is more reliable than
+            // a `/worktrees/` substring match against `gitDir`, which would
+            // false-positive on any regular repo whose absolute `.git` path
+            // happens to contain that segment.
+            let isWorktree = absoluteGitDir != absoluteCommonDir
+
+            let location = RepoLocation(
+                gitDir: gitDir,
+                commonDir: absoluteCommonDir,
+                workingTree: workingTree,
+                isWorktree: isWorktree
+            )
+            Log.git.debug("Detected repo at \(directory): \(String(describing: location))")
+            return location
         } catch {
             Log.git.error("detectRepo failed for \(directory): \(error)")
             return nil
