@@ -110,7 +110,7 @@ struct GitRepoWatcherTests {
         try "change".write(toFile: filePath, atomically: true, encoding: .utf8)
         try runGitSync(["add", "test.txt"], in: repo)
 
-        try await waitForCallback(callbackFired)
+        try await waitForCondition { callbackFired.didFire }
         #expect(callbackFired.didFire)
     }
 
@@ -137,7 +137,7 @@ struct GitRepoWatcherTests {
         let filePath = (repo as NSString).appendingPathComponent("new.txt")
         try "new file".write(toFile: filePath, atomically: true, encoding: .utf8)
 
-        try await waitForCallback(callbackFired)
+        try await waitForCondition { callbackFired.didFire }
         #expect(callbackFired.didFire)
     }
 
@@ -179,21 +179,9 @@ struct GitRepoWatcherTests {
 
     // MARK: - Helpers
 
-    /// Polls the tracker until it fires or `timeout` elapses. Using a deadline
-    /// instead of a fixed sleep keeps the suite fast on dev machines while
-    /// giving slower CI boxes headroom for FSEvents delivery latency.
-    private func waitForCallback(
-        _ tracker: CallbackTracker,
-        timeout: Duration = .seconds(3),
-        pollInterval: Duration = .milliseconds(50)
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while !tracker.didFire, ContinuousClock.now < deadline {
-            try await Task.sleep(for: pollInterval)
-        }
-    }
-
-    /// Polls `condition` until it returns true or `timeout` elapses.
+    /// Polls `condition` until it returns true or `timeout` elapses. Using a
+    /// deadline instead of a fixed sleep keeps the suite fast on dev machines
+    /// while giving slower CI boxes headroom for FSEvents delivery latency.
     private func waitForCondition(
         timeout: Duration = .seconds(3),
         pollInterval: Duration = .milliseconds(50),
