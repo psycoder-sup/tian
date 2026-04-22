@@ -197,6 +197,8 @@ targets:
     dependencies:
       - package: swift-argument-parser
         product: ArgumentParser
+      - package: TOMLKit
+        product: TOMLKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.cli
