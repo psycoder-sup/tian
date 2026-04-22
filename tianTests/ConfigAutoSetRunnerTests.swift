@@ -85,8 +85,9 @@ struct ConfigAutoSetRunnerTests {
         let written = try String(contentsOf: configURL, encoding: .utf8)
         #expect(written == toml)
 
-        // Invoker received the cwd and model.
+        // Invoker received the template prompt, cwd, and model.
         #expect(stub.calls.count == 1)
+        #expect(stub.calls[0].prompt == AutoSetPrompt.template)
         #expect(stub.calls[0].cwd.resolvingSymlinksInPath() == tmp.resolvingSymlinksInPath())
         #expect(stub.calls[0].model == "sonnet")
     }
@@ -182,6 +183,33 @@ struct ConfigAutoSetRunnerTests {
         #expect(FileManager.default.fileExists(atPath: rejectedURL.path))
         let rejected = try String(contentsOf: rejectedURL, encoding: .utf8)
         #expect(rejected == bad)
+    }
+
+    // MARK: - Invoker error propagation
+
+    @Test func run_propagatesInvokerError_andDoesNotWriteConfig() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        let stub = StubClaudeInvoker(error: CLIError.general("claude -p failed (exit 1)"))
+        let runner = ConfigAutoSetRunner(invoker: stub)
+
+        #expect(throws: CLIError.self) {
+            try runner.run(cwd: tmp, force: false, model: "sonnet")
+        }
+
+        // The invoker WAS called (otherwise we couldn't propagate its error).
+        #expect(stub.calls.count == 1)
+
+        // config.toml must NOT be created when the invoker fails.
+        let configURL = tmp.appendingPathComponent(".tian/config.toml")
+        #expect(!FileManager.default.fileExists(atPath: configURL.path))
+
+        // config.toml.rejected must also NOT exist — an invoker failure
+        // is not a validation failure.
+        let rejectedURL = tmp.appendingPathComponent(".tian/config.toml.rejected")
+        #expect(!FileManager.default.fileExists(atPath: rejectedURL.path))
     }
 
     @Test func run_writesRejectedFile_onMissingCommandField() throws {

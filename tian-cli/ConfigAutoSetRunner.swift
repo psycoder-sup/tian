@@ -88,10 +88,13 @@ struct ConfigAutoSetRunner {
         do {
             validation = try ConfigValidator.validate(tomlString: tomlString)
         } catch {
-            try? writeRejectedOutput(tomlString, repoRoot: repoRoot)
-            throw CLIError.general(
-                "\(error.localizedDescription) Raw output saved to .tian/config.toml.rejected."
-            )
+            let savedHint: String
+            if (try? writeRejectedOutput(tomlString, repoRoot: repoRoot)) != nil {
+                savedHint = " Raw output saved to .tian/config.toml.rejected."
+            } else {
+                savedHint = ""
+            }
+            throw CLIError.general("\(error.localizedDescription)\(savedHint)")
         }
 
         try writeConfig(tomlString, to: configURL)
