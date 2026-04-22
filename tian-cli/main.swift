@@ -16,6 +16,7 @@ struct TianCLI: ParsableCommand {
             StatusGroup.self,
             NotifyCommand.self,
             WorktreeGroup.self,
+            ConfigGroup.self,
         ]
     )
 }
