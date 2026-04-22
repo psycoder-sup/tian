@@ -52,4 +52,108 @@ struct ConfigAutoSetRunner {
         }
         return URL(fileURLWithPath: path)
     }
+
+    /// Top-level orchestration for `tian config auto-set`.
+    ///
+    /// - Parameters:
+    ///   - cwd: User's current working directory.
+    ///   - force: Overwrite an existing `.tian/config.toml` if true.
+    ///   - model: Claude model name passed through to `claude -p --model`.
+    /// - Returns: Counts of setup/copy entries written.
+    /// - Throws: `CLIError` on any failure.
+    @discardableResult
+    func run(cwd: URL, force: Bool, model: String) throws -> ConfigAutoSetResult {
+        let repoRoot = try resolveRepoRoot(from: cwd)
+        let configURL = repoRoot
+            .appendingPathComponent(".tian")
+            .appendingPathComponent("config.toml")
+
+        if FileManager.default.fileExists(atPath: configURL.path) && !force {
+            throw CLIError.general(
+                ".tian/config.toml already exists. Re-run with --force to overwrite."
+            )
+        }
+
+        FileHandle.standardError.write(Data(
+            "Analyzing repository with claude -p (this usually takes 20–60s)…\n".utf8
+        ))
+
+        let tomlString = try invoker.run(
+            prompt: AutoSetPrompt.template,
+            cwd: repoRoot,
+            model: model
+        )
+
+        let validation: ConfigValidationResult
+        do {
+            validation = try ConfigValidator.validate(tomlString: tomlString)
+        } catch {
+            try? writeRejectedOutput(tomlString, repoRoot: repoRoot)
+            throw CLIError.general(
+                "\(error.localizedDescription) Raw output saved to .tian/config.toml.rejected."
+            )
+        }
+
+        try writeConfig(tomlString, to: configURL)
+
+        return ConfigAutoSetResult(
+            setupCount: validation.setupCount,
+            copyCount: validation.copyCount
+        )
+    }
+
+    // MARK: - File writes
+
+    /// Atomically writes the validated TOML to `.tian/config.toml`.
+    private func writeConfig(_ tomlString: String, to configURL: URL) throws {
+        let dir = configURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(
+                at: dir, withIntermediateDirectories: true
+            )
+        } catch {
+            throw CLIError.general(
+                "Failed to create \(dir.path): \(error.localizedDescription)"
+            )
+        }
+
+        let tmpURL = configURL.appendingPathExtension("tmp")
+        try? FileManager.default.removeItem(at: tmpURL) // clear stale tmp
+        do {
+            try tomlString.write(to: tmpURL, atomically: true, encoding: .utf8)
+        } catch {
+            throw CLIError.general(
+                "Failed to write \(tmpURL.path): \(error.localizedDescription)"
+            )
+        }
+
+        // Atomic replace. If the destination doesn't exist,
+        // replaceItemAt throws, so fall back to a plain move.
+        if FileManager.default.fileExists(atPath: configURL.path) {
+            do {
+                _ = try FileManager.default.replaceItemAt(configURL, withItemAt: tmpURL)
+            } catch {
+                throw CLIError.general(
+                    "Failed to replace \(configURL.path): \(error.localizedDescription)"
+                )
+            }
+        } else {
+            do {
+                try FileManager.default.moveItem(at: tmpURL, to: configURL)
+            } catch {
+                throw CLIError.general(
+                    "Failed to move \(tmpURL.path) → \(configURL.path): \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    /// Writes Claude's raw output to `.tian/config.toml.rejected` for
+    /// user inspection when validation fails.
+    private func writeRejectedOutput(_ tomlString: String, repoRoot: URL) throws {
+        let dir = repoRoot.appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let rejected = dir.appendingPathComponent("config.toml.rejected")
+        try tomlString.write(to: rejected, atomically: true, encoding: .utf8)
+    }
 }
