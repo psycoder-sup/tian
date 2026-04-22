@@ -38,8 +38,11 @@ final class SpaceGitContext {
     /// PR status cache with 60-second TTL.
     private let prCache = PRStatusCache()
 
-    /// Tracks in-flight PR fetch tasks per repo for cancellation.
-    private var prFetchTasks: [GitRepoID: Task<Void, Never>] = [:]
+    /// Tracks in-flight PR fetch tasks per repo, keyed inner by a per-call
+    /// UUID so a completing task removes only its own entry. The outer key
+    /// exists so `teardown`/`unpinRepo` can cancel all fetches for a repo
+    /// in one pass.
+    private var prFetchTasks: [GitRepoID: [UUID: Task<Void, Never>]] = [:]
 
     /// Active FSEvents watchers per repo.
     private var watchers: [GitRepoID: GitRepoWatcher] = [:]
@@ -158,7 +161,9 @@ final class SpaceGitContext {
     func teardown() {
         for task in inFlightTasks.values { task.cancel() }
         inFlightTasks.removeAll()
-        for task in prFetchTasks.values { task.cancel() }
+        for inner in prFetchTasks.values {
+            for task in inner.values { task.cancel() }
+        }
         prFetchTasks.removeAll()
         repoStatuses.removeAll()
         paneRepoAssignments.removeAll()
@@ -187,7 +192,9 @@ final class SpaceGitContext {
     private func unpinRepo(_ repoID: GitRepoID) {
         inFlightTasks[repoID]?.cancel()
         inFlightTasks.removeValue(forKey: repoID)
-        prFetchTasks[repoID]?.cancel()
+        if let inner = prFetchTasks[repoID] {
+            for task in inner.values { task.cancel() }
+        }
         prFetchTasks.removeValue(forKey: repoID)
         repoStatuses.removeValue(forKey: repoID)
         repoDirectories.removeValue(forKey: repoID)
@@ -244,10 +251,20 @@ final class SpaceGitContext {
         }
     }
 
-    /// Refreshes branch and diff status for a specific repo, with in-flight cancellation.
+    /// Refreshes branch and diff status for a specific repo, cancelling any
+    /// in-flight branch + diff task on re-entry.
+    ///
+    /// In-flight PR fetches are deliberately left running: `markPending`
+    /// dedupes concurrent fetches for the same (repo, branch), the
+    /// completion handler skips writes when the branch has moved, and
+    /// cancelling would race against the cancelled task's deferred
+    /// `clearPending` — potentially leaving pending set long enough for
+    /// the next refresh to skip fetching entirely. Each fetch is tracked
+    /// by a per-call UUID so its completion handler removes only its own
+    /// entry, even if a later refresh spawned a fresh fetch after an evict
+    /// cleared `pending`.
     private func refreshRepo(repoID: GitRepoID, directory: String) {
         inFlightTasks[repoID]?.cancel()
-        prFetchTasks[repoID]?.cancel()
 
         let task = Task { [weak self] in
             async let branchResult = GitStatusService.currentBranch(directory: directory)
@@ -259,24 +276,42 @@ final class SpaceGitContext {
             guard !Task.isCancelled else { return }
             guard let self else { return }
 
-            // Check PR cache
+            // Check PR cache. On miss, seed from the previously-rendered
+            // status only when the branch name is unchanged — so the badge
+            // keeps its old value through a TTL-expiry refetch, but a branch
+            // switch doesn't render the prior branch's PR under the new name.
             var prStatus: PRStatus? = nil
             if let branchName = branch?.name {
-                let cacheResult = self.prCache.get(repoID: repoID, branch: branchName)
-                switch cacheResult {
+                if self.repoStatuses[repoID]?.branchName == branchName {
+                    prStatus = self.repoStatuses[repoID]?.prStatus
+                }
+                switch self.prCache.get(repoID: repoID, branch: branchName) {
                 case .hit(let cached):
                     prStatus = cached
                 case .miss:
-                    if self.prCache.markPending(repoID: repoID, branch: branchName) {
+                    if let fetchGen = self.prCache.markPending(repoID: repoID, branch: branchName) {
+                        let taskID = UUID()
                         let prTask = Task { [weak self] in
-                            defer { self?.prCache.clearPending(repoID: repoID, branch: branchName) }
+                            defer {
+                                self?.prCache.clearPending(
+                                    repoID: repoID,
+                                    branch: branchName,
+                                    generation: fetchGen
+                                )
+                                self?.prFetchTasks[repoID]?.removeValue(forKey: taskID)
+                            }
                             let fetched = await GitStatusService.fetchPRStatus(
                                 directory: directory,
                                 branch: branchName
                             )
                             guard !Task.isCancelled else { return }
                             guard let self else { return }
-                            self.prCache.set(repoID: repoID, branch: branchName, status: fetched)
+                            self.prCache.set(
+                                repoID: repoID,
+                                branch: branchName,
+                                status: fetched,
+                                generation: fetchGen
+                            )
                             // Only update if branch still matches (avoid stale overwrite)
                             if let current = self.repoStatuses[repoID],
                                current.branchName == branchName {
@@ -284,9 +319,8 @@ final class SpaceGitContext {
                                 updated.prStatus = fetched
                                 self.repoStatuses[repoID] = updated
                             }
-                            self.prFetchTasks.removeValue(forKey: repoID)
                         }
-                        self.prFetchTasks[repoID] = prTask
+                        self.prFetchTasks[repoID, default: [:]][taskID] = prTask
                     }
                 }
             }
@@ -320,11 +354,26 @@ final class SpaceGitContext {
         guard watchers[repoID] == nil else { return }
 
         let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
+        // Canonicalize once so `pathsAffectPRState` doesn't call `realpath(3)`
+        // on every FSEvents batch.
+        let canonicalCommonDir = GitRepoWatcher.canonicalizedPath(location.commonDir)
 
-        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] in
+        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] paths in
+            // When a batch of events touches `refs/remotes/*` or `packed-refs`,
+            // drop the cached `gh pr view` result for this repo — the next
+            // refresh will refetch so `gh pr create`, `gh pr merge`, or remote
+            // ref updates are reflected immediately instead of waiting for the
+            // 60 s TTL to expire.
+            let affectsPR = GitRepoWatcher.pathsAffectPRState(
+                paths,
+                canonicalCommonDir: canonicalCommonDir
+            )
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let dir = self.repoDirectories[repoID] else { return }
+                if affectsPR {
+                    self.prCache.evict(repoID: repoID)
+                }
                 self.refreshRepo(repoID: repoID, directory: dir)
             }
         }
