@@ -107,6 +107,56 @@ struct ConfigAutoSetRunnerTests {
         #expect(FileManager.default.fileExists(atPath: dotTian, isDirectory: &isDir))
         #expect(isDir.boolValue)
     }
+
+    // MARK: - Overwrite guard
+
+    @Test func run_refuses_whenConfigExists_andForceIsFalse() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        // Pre-create the file with known content.
+        let dotTian = tmp.appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(at: dotTian, withIntermediateDirectories: true)
+        let configURL = dotTian.appendingPathComponent("config.toml")
+        let original = "# existing content\n"
+        try original.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let stub = StubClaudeInvoker(output: "[[setup]]\ncommand = \"echo hi\"\n")
+        let runner = ConfigAutoSetRunner(invoker: stub)
+
+        #expect(throws: CLIError.self) {
+            try runner.run(cwd: tmp, force: false, model: "sonnet")
+        }
+
+        // File unchanged.
+        let after = try String(contentsOf: configURL, encoding: .utf8)
+        #expect(after == original)
+
+        // Invoker NOT called — we bailed before calling claude.
+        #expect(stub.calls.isEmpty)
+    }
+
+    @Test func run_overwrites_whenConfigExists_andForceIsTrue() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        let dotTian = tmp.appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(at: dotTian, withIntermediateDirectories: true)
+        let configURL = dotTian.appendingPathComponent("config.toml")
+        try "# existing content\n".write(to: configURL, atomically: true, encoding: .utf8)
+
+        let newToml = "[[setup]]\ncommand = \"echo hi\"\n"
+        let stub = StubClaudeInvoker(output: newToml)
+        let runner = ConfigAutoSetRunner(invoker: stub)
+
+        _ = try runner.run(cwd: tmp, force: true, model: "sonnet")
+
+        let after = try String(contentsOf: configURL, encoding: .utf8)
+        #expect(after == newToml)
+        #expect(stub.calls.count == 1)
+    }
 }
 
 // MARK: - StubClaudeInvoker
