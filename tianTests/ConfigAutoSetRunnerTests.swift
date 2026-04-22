@@ -157,6 +157,50 @@ struct ConfigAutoSetRunnerTests {
         #expect(after == newToml)
         #expect(stub.calls.count == 1)
     }
+
+    // MARK: - Invalid TOML handling
+
+    @Test func run_writesRejectedFile_onMalformedTOML() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        let bad = "this is = = not valid toml\n"
+        let stub = StubClaudeInvoker(output: bad)
+        let runner = ConfigAutoSetRunner(invoker: stub)
+
+        #expect(throws: CLIError.self) {
+            try runner.run(cwd: tmp, force: false, model: "sonnet")
+        }
+
+        // config.toml was NOT written.
+        let configURL = tmp.appendingPathComponent(".tian/config.toml")
+        #expect(!FileManager.default.fileExists(atPath: configURL.path))
+
+        // config.toml.rejected WAS written with the raw output.
+        let rejectedURL = tmp.appendingPathComponent(".tian/config.toml.rejected")
+        #expect(FileManager.default.fileExists(atPath: rejectedURL.path))
+        let rejected = try String(contentsOf: rejectedURL, encoding: .utf8)
+        #expect(rejected == bad)
+    }
+
+    @Test func run_writesRejectedFile_onMissingCommandField() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        // Valid TOML syntax, but missing required 'command' in [[setup]].
+        let bad = "[[setup]]\n"
+        let stub = StubClaudeInvoker(output: bad)
+        let runner = ConfigAutoSetRunner(invoker: stub)
+
+        #expect(throws: CLIError.self) {
+            try runner.run(cwd: tmp, force: false, model: "sonnet")
+        }
+
+        let rejectedURL = tmp.appendingPathComponent(".tian/config.toml.rejected")
+        #expect(FileManager.default.fileExists(atPath: rejectedURL.path))
+    }
 }
 
 // MARK: - StubClaudeInvoker
