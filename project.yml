@@ -170,6 +170,11 @@ targets:
     sources:
       - path: tianTests
       - path: tian-cli/CommandLogger.swift
+      - path: tian-cli/AutoSetPrompt.swift
+      - path: tian-cli/ConfigValidator.swift
+      - path: tian-cli/ClaudeInvoker.swift
+      - path: tian-cli/ConfigAutoSetRunner.swift
+      - path: tian-cli/CLIError.swift
     dependencies:
       - target: tian
     settings:
