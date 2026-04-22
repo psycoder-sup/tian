@@ -4,7 +4,10 @@ import OSLog
 
 struct PaneStatus {
     let label: String
-    let updatedAt: Date
+    /// Monotonic write sequence. Strictly increases with every `setStatus`
+    /// call, so `latestStatus` has a total order even when two writes land
+    /// inside the same `Date()` tick (which `Date()` does not guarantee).
+    let sequence: UInt64
 }
 
 /// Manages ephemeral status indicators for panes (e.g., "Thinking...").
@@ -16,10 +19,13 @@ final class PaneStatusManager {
     private(set) var statuses: [UUID: PaneStatus] = [:]
     private(set) var sessionStates: [UUID: ClaudeSessionState] = [:]
 
+    private var nextSequence: UInt64 = 0
+
     init() {}
 
     func setStatus(paneID: UUID, label: String) {
-        statuses[paneID] = PaneStatus(label: label, updatedAt: Date())
+        nextSequence += 1
+        statuses[paneID] = PaneStatus(label: label, sequence: nextSequence)
     }
 
     /// Clears both the free-form status label and session state for the pane.
@@ -41,7 +47,7 @@ final class PaneStatusManager {
         for tab in space.tabs {
             for paneID in tab.paneViewModel.splitTree.allLeaves() {
                 guard let status = statuses[paneID] else { continue }
-                if latest == nil || status.updatedAt > latest!.updatedAt {
+                if latest == nil || status.sequence > latest!.sequence {
                     latest = status
                 }
             }
