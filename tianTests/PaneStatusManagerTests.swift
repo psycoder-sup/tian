@@ -14,7 +14,7 @@ struct PaneStatusManagerTests {
         manager.setStatus(paneID: paneID, label: "Thinking...")
 
         #expect(manager.statuses[paneID]?.label == "Thinking...")
-        #expect(manager.statuses[paneID]?.updatedAt != nil)
+        #expect(manager.statuses[paneID]?.sequence != nil)
     }
 
     // MARK: - clearStatus (FR-22)
