@@ -40,6 +40,43 @@ struct GitRepoWatcherTests {
         #expect(paths == ["/Users/dev/project"])
     }
 
+    // MARK: - pathsAffectPRState
+
+    @Test func pathsAffectPRStateTrueForRemoteRef() {
+        let commonDir = "/Users/dev/project/.git"
+        let paths = [commonDir + "/refs/remotes/origin/main"]
+        #expect(GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: commonDir))
+    }
+
+    @Test func pathsAffectPRStateTrueForPackedRefs() {
+        let commonDir = "/Users/dev/project/.git"
+        let paths = [commonDir + "/packed-refs"]
+        #expect(GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: commonDir))
+    }
+
+    @Test func pathsAffectPRStateFalseForLocalHeadMove() {
+        let commonDir = "/Users/dev/project/.git"
+        // `git commit` bumps refs/heads/<branch> but doesn't change the remote
+        // PR state, so we shouldn't evict the PR cache on every commit.
+        let paths = [commonDir + "/refs/heads/feature"]
+        #expect(!GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: commonDir))
+    }
+
+    @Test func pathsAffectPRStateFalseForIndexWrite() {
+        let commonDir = "/Users/dev/project/.git"
+        let paths = [commonDir + "/index", "/Users/dev/project/src/app.swift"]
+        #expect(!GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: commonDir))
+    }
+
+    @Test func pathsAffectPRStateTrueWhenBatchMixesRefsAndIndex() {
+        let commonDir = "/Users/dev/project/.git"
+        let paths = [
+            commonDir + "/index",
+            commonDir + "/refs/remotes/origin/feature",
+        ]
+        #expect(GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: commonDir))
+    }
+
     // MARK: - Lifecycle
 
     @Test func watcherCanBeCreatedAndTornDown() async throws {
@@ -48,7 +85,7 @@ struct GitRepoWatcherTests {
 
         let watcher = GitRepoWatcher(
             watchPaths: [repo + "/.git"],
-            onChangeDetected: { }
+            onChangeDetected: { _ in }
         )
 
         #expect(watcher.isRunning)
@@ -64,7 +101,7 @@ struct GitRepoWatcherTests {
         let watcher = GitRepoWatcher(
             watchPaths: [repo + "/.git"],
             latency: 0.5,
-            onChangeDetected: { callbackFired.fire() }
+            onChangeDetected: { _ in callbackFired.fire() }
         )
         defer { watcher.stop() }
 
@@ -73,7 +110,7 @@ struct GitRepoWatcherTests {
         try "change".write(toFile: filePath, atomically: true, encoding: .utf8)
         try runGitSync(["add", "test.txt"], in: repo)
 
-        try await waitForCallback(callbackFired)
+        try await waitForCondition { callbackFired.didFire }
         #expect(callbackFired.didFire)
     }
 
@@ -92,7 +129,7 @@ struct GitRepoWatcherTests {
         let watcher = GitRepoWatcher(
             watchPaths: paths,
             latency: 0.5,
-            onChangeDetected: { callbackFired.fire() }
+            onChangeDetected: { _ in callbackFired.fire() }
         )
         defer { watcher.stop() }
 
@@ -100,22 +137,58 @@ struct GitRepoWatcherTests {
         let filePath = (repo as NSString).appendingPathComponent("new.txt")
         try "new file".write(toFile: filePath, atomically: true, encoding: .utf8)
 
-        try await waitForCallback(callbackFired)
+        try await waitForCondition { callbackFired.didFire }
         #expect(callbackFired.didFire)
+    }
+
+    @Test func watcherReportsEventPathsForRemoteRefWrite() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // FSEvents reports `/private/var/...` while `repo` is `/var/...`;
+        // canonicalize so the prefix check matches.
+        let commonDir = GitRepoWatcher.canonicalizedPath(repo + "/.git")
+        let paths = GitRepoWatcher.resolveWatchPaths(for: RepoLocation(
+            gitDir: ".git",
+            commonDir: commonDir,
+            workingTree: repo,
+            isWorktree: false
+        ))
+
+        let recorder = PathRecorder()
+        let watcher = GitRepoWatcher(
+            watchPaths: paths,
+            latency: 0.5,
+            onChangeDetected: { received in recorder.record(received) }
+        )
+        defer { watcher.stop() }
+
+        // Simulate `git push` updating a remote ref without invoking the network.
+        let remoteRefDir = commonDir + "/refs/remotes/origin"
+        try FileManager.default.createDirectory(
+            atPath: remoteRefDir, withIntermediateDirectories: true)
+        let remoteRef = remoteRefDir + "/main"
+        try "0000000000000000000000000000000000000000\n"
+            .write(toFile: remoteRef, atomically: true, encoding: .utf8)
+
+        try await waitForCondition {
+            GitRepoWatcher.pathsAffectPRState(recorder.paths, canonicalCommonDir: commonDir)
+        }
+        #expect(GitRepoWatcher.pathsAffectPRState(recorder.paths, canonicalCommonDir: commonDir))
     }
 
     // MARK: - Helpers
 
-    /// Polls the tracker until it fires or `timeout` elapses. Using a deadline
-    /// instead of a fixed sleep keeps the suite fast on dev machines while
-    /// giving slower CI boxes headroom for FSEvents delivery latency.
-    private func waitForCallback(
-        _ tracker: CallbackTracker,
+    /// Polls `condition` until it returns true or `timeout` elapses. Using a
+    /// deadline instead of a fixed sleep keeps the suite fast on dev machines
+    /// while giving slower CI boxes headroom for FSEvents delivery latency.
+    private func waitForCondition(
         timeout: Duration = .seconds(3),
-        pollInterval: Duration = .milliseconds(50)
+        pollInterval: Duration = .milliseconds(50),
+        _ condition: @Sendable () -> Bool
     ) async throws {
         let deadline = ContinuousClock.now.advanced(by: timeout)
-        while !tracker.didFire, ContinuousClock.now < deadline {
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: pollInterval)
         }
     }
@@ -126,6 +199,15 @@ struct GitRepoWatcherTests {
         private let state = OSAllocatedUnfairLock<Bool>(initialState: false)
         var didFire: Bool { state.withLock { $0 } }
         func fire() { state.withLock { $0 = true } }
+    }
+
+    /// Thread-safe accumulator for paths reported by the watcher across batches.
+    final class PathRecorder: Sendable {
+        private let state = OSAllocatedUnfairLock<[String]>(initialState: [])
+        var paths: [String] { state.withLock { $0 } }
+        func record(_ received: [String]) {
+            state.withLock { $0.append(contentsOf: received) }
+        }
     }
 
     private func makeTempGitRepo() throws -> String {

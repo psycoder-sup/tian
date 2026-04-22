@@ -38,8 +38,11 @@ final class SpaceGitContext {
     /// PR status cache with 60-second TTL.
     private let prCache = PRStatusCache()
 
-    /// Tracks in-flight PR fetch tasks per repo for cancellation.
-    private var prFetchTasks: [GitRepoID: Task<Void, Never>] = [:]
+    /// Tracks in-flight PR fetch tasks per repo, keyed inner by a per-call
+    /// UUID so a completing task removes only its own entry. The outer key
+    /// exists so `teardown`/`unpinRepo` can cancel all fetches for a repo
+    /// in one pass.
+    private var prFetchTasks: [GitRepoID: [UUID: Task<Void, Never>]] = [:]
 
     /// Active FSEvents watchers per repo.
     private var watchers: [GitRepoID: GitRepoWatcher] = [:]
@@ -158,7 +161,9 @@ final class SpaceGitContext {
     func teardown() {
         for task in inFlightTasks.values { task.cancel() }
         inFlightTasks.removeAll()
-        for task in prFetchTasks.values { task.cancel() }
+        for inner in prFetchTasks.values {
+            for task in inner.values { task.cancel() }
+        }
         prFetchTasks.removeAll()
         repoStatuses.removeAll()
         paneRepoAssignments.removeAll()
@@ -187,7 +192,9 @@ final class SpaceGitContext {
     private func unpinRepo(_ repoID: GitRepoID) {
         inFlightTasks[repoID]?.cancel()
         inFlightTasks.removeValue(forKey: repoID)
-        prFetchTasks[repoID]?.cancel()
+        if let inner = prFetchTasks[repoID] {
+            for task in inner.values { task.cancel() }
+        }
         prFetchTasks.removeValue(forKey: repoID)
         repoStatuses.removeValue(forKey: repoID)
         repoDirectories.removeValue(forKey: repoID)
@@ -244,10 +251,16 @@ final class SpaceGitContext {
         }
     }
 
-    /// Refreshes branch and diff status for a specific repo, with in-flight cancellation.
+    /// Refreshes branch and diff status for a specific repo, cancelling any
+    /// in-flight branch + diff task on re-entry.
+    ///
+    /// PR fetches are not cancelled on re-entry: `markPending` dedupes
+    /// concurrent fetches per (repo, branch) and the completion handler
+    /// skips writes when the branch has moved. Each fetch is tracked by a
+    /// per-call UUID so its completion removes only its own entry, even
+    /// when a later refresh spawned a fresh fetch after an `evict`.
     private func refreshRepo(repoID: GitRepoID, directory: String) {
         inFlightTasks[repoID]?.cancel()
-        prFetchTasks[repoID]?.cancel()
 
         let task = Task { [weak self] in
             async let branchResult = GitStatusService.currentBranch(directory: directory)
@@ -259,35 +272,24 @@ final class SpaceGitContext {
             guard !Task.isCancelled else { return }
             guard let self else { return }
 
-            // Check PR cache
+            // Check PR cache. On miss, seed from the previously-rendered
+            // status only when the branch name is unchanged — so the badge
+            // keeps its old value through a TTL-expiry refetch, but a branch
+            // switch doesn't render the prior branch's PR under the new name.
             var prStatus: PRStatus? = nil
             if let branchName = branch?.name {
-                let cacheResult = self.prCache.get(repoID: repoID, branch: branchName)
-                switch cacheResult {
+                if self.repoStatuses[repoID]?.branchName == branchName {
+                    prStatus = self.repoStatuses[repoID]?.prStatus
+                }
+                switch self.prCache.get(repoID: repoID, branch: branchName) {
                 case .hit(let cached):
                     prStatus = cached
                 case .miss:
-                    if self.prCache.markPending(repoID: repoID, branch: branchName) {
-                        let prTask = Task { [weak self] in
-                            defer { self?.prCache.clearPending(repoID: repoID, branch: branchName) }
-                            let fetched = await GitStatusService.fetchPRStatus(
-                                directory: directory,
-                                branch: branchName
-                            )
-                            guard !Task.isCancelled else { return }
-                            guard let self else { return }
-                            self.prCache.set(repoID: repoID, branch: branchName, status: fetched)
-                            // Only update if branch still matches (avoid stale overwrite)
-                            if let current = self.repoStatuses[repoID],
-                               current.branchName == branchName {
-                                var updated = current
-                                updated.prStatus = fetched
-                                self.repoStatuses[repoID] = updated
-                            }
-                            self.prFetchTasks.removeValue(forKey: repoID)
-                        }
-                        self.prFetchTasks[repoID] = prTask
-                    }
+                    self.launchPRFetchIfNeeded(
+                        repoID: repoID,
+                        branch: branchName,
+                        directory: directory
+                    )
                 }
             }
 
@@ -313,6 +315,35 @@ final class SpaceGitContext {
         inFlightTasks[repoID] = task
     }
 
+    /// Launches a PR status fetch unless one is already in flight for this
+    /// (repo, branch). The task keys itself by a per-call UUID so its
+    /// completion removes only its own entry, surviving an evict that
+    /// spawned a fresh fetch in parallel.
+    private func launchPRFetchIfNeeded(repoID: GitRepoID, branch: String, directory: String) {
+        guard let fetchGen = prCache.markPending(repoID: repoID, branch: branch) else { return }
+        let taskID = UUID()
+        let prTask = Task { [weak self] in
+            defer {
+                self?.prCache.clearPending(repoID: repoID, branch: branch, generation: fetchGen)
+                self?.prFetchTasks[repoID]?.removeValue(forKey: taskID)
+            }
+            let fetched = await GitStatusService.fetchPRStatus(directory: directory, branch: branch)
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            self.prCache.set(repoID: repoID, branch: branch, status: fetched, generation: fetchGen)
+            // Skip the write if the branch moved (stale overwrite) or the PR
+            // didn't change (avoid Observable churn on TTL-expiry refetches).
+            if let current = self.repoStatuses[repoID],
+               current.branchName == branch,
+               current.prStatus != fetched {
+                var updated = current
+                updated.prStatus = fetched
+                self.repoStatuses[repoID] = updated
+            }
+        }
+        prFetchTasks[repoID, default: [:]][taskID] = prTask
+    }
+
     // MARK: - Watcher Management
 
     private func startWatcher(repoID: GitRepoID, location: RepoLocation) {
@@ -320,11 +351,26 @@ final class SpaceGitContext {
         guard watchers[repoID] == nil else { return }
 
         let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
+        // Canonicalize once so `pathsAffectPRState` doesn't call `realpath(3)`
+        // on every FSEvents batch.
+        let canonicalCommonDir = GitRepoWatcher.canonicalizedPath(location.commonDir)
 
-        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] in
+        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] paths in
+            // When a batch of events touches `refs/remotes/*` or `packed-refs`,
+            // drop the cached `gh pr view` result for this repo — the next
+            // refresh will refetch so `gh pr create`, `gh pr merge`, or remote
+            // ref updates are reflected immediately instead of waiting for the
+            // 60 s TTL to expire.
+            let affectsPR = GitRepoWatcher.pathsAffectPRState(
+                paths,
+                canonicalCommonDir: canonicalCommonDir
+            )
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let dir = self.repoDirectories[repoID] else { return }
+                if affectsPR {
+                    self.prCache.evict(repoID: repoID)
+                }
                 self.refreshRepo(repoID: repoID, directory: dir)
             }
         }
