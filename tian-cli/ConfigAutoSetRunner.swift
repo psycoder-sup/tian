@@ -6,7 +6,7 @@ struct ConfigAutoSetResult: Equatable {
     let copyCount: Int
 }
 
-/// Orchestrates `tian config auto-set`: resolves the repo, invokes
+/// Orchestrates `tian-cli config auto-set`: resolves the repo, invokes
 /// `claude -p`, validates the output, and writes `.tian/config.toml`.
 ///
 /// Pure Swift — no dependency on `ArgumentParser`. All outside-world
@@ -53,7 +53,7 @@ struct ConfigAutoSetRunner {
         return URL(fileURLWithPath: path)
     }
 
-    /// Top-level orchestration for `tian config auto-set`.
+    /// Top-level orchestration for `tian-cli config auto-set`.
     ///
     /// - Parameters:
     ///   - cwd: User's current working directory.
