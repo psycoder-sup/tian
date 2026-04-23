@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     static var stateDirectory: URL {
         FileManager.default
@@ -35,35 +35,17 @@ enum SessionSerializer {
                 activeSpaceId: workspace.spaceCollection.activeSpaceID,
                 defaultWorkingDirectory: workspace.defaultWorkingDirectory?.path,
                 spaces: workspace.spaceCollection.spaces.map { space in
-                    // Phase 1 compat shim: snapshot derives the v3 `tabs` /
-                    // `activeTabId` fields from the Terminal section only.
-                    // Claude-section state is intentionally NOT persisted
-                    // during Phase 1 — it re-synthesises fresh each launch.
-                    let terminalTabs = space.terminalSection.tabs
-                    let activeTabId = space.terminalSection.activeTabID
-                    // When the Terminal section is empty, v3 schema still
-                    // requires a non-nil activeTabId. Emit a fresh sentinel
-                    // UUID — `SessionRestorer.validate` rejects empty `tabs`
-                    // upstream, so this branch is unreachable in practice
-                    // for the primary restore path.
-                    let resolvedActiveTabId = terminalTabs.first.map(\.id) ?? activeTabId
-                    return SpaceState(
+                    SpaceState(
                         id: space.id,
                         name: space.name,
-                        activeTabId: resolvedActiveTabId,
                         defaultWorkingDirectory: space.defaultWorkingDirectory?.path,
                         worktreePath: space.worktreePath?.path,
-                        tabs: terminalTabs.map { tab in
-                            TabState(
-                                id: tab.id,
-                                name: tab.customName,
-                                activePaneId: tab.paneViewModel.splitTree.focusedPaneID,
-                                root: tab.paneViewModel.splitTree.root.toState(
-                                    restoreCommands: tab.paneViewModel.restoreCommands,
-                                    sessionStates: sessionStates
-                                )
-                            )
-                        }
+                        claudeSection: sectionState(from: space.claudeSection, sessionStates: sessionStates),
+                        terminalSection: sectionState(from: space.terminalSection, sessionStates: sessionStates),
+                        terminalVisible: space.terminalVisible,
+                        dockPosition: space.dockPosition,
+                        splitRatio: space.splitRatio,
+                        focusedSectionKind: space.focusedSectionKind
                     )
                 },
                 windowFrame: windowFrame,
@@ -78,6 +60,31 @@ enum SessionSerializer {
             // rejects empty-workspace states on read, so the value is unobservable.
             activeWorkspaceId: collection.activeWorkspaceID ?? UUID(),
             workspaces: workspaces
+        )
+    }
+
+    @MainActor
+    private static func sectionState(
+        from section: SectionModel,
+        sessionStates: [UUID: ClaudeSessionState]
+    ) -> SectionState {
+        let tabs = section.tabs.map { tab in
+            TabState(
+                id: tab.id,
+                name: tab.customName,
+                activePaneId: tab.paneViewModel.splitTree.focusedPaneID,
+                root: tab.paneViewModel.splitTree.root.toState(
+                    restoreCommands: tab.paneViewModel.restoreCommands,
+                    sessionStates: sessionStates
+                ),
+                sectionKind: section.kind
+            )
+        }
+        return SectionState(
+            id: section.id,
+            kind: section.kind,
+            activeTabId: tabs.isEmpty ? nil : section.activeTabID,
+            tabs: tabs
         )
     }
 

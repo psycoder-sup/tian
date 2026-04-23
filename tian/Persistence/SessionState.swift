@@ -3,7 +3,6 @@ import Foundation
 // MARK: - Session State (Top-Level)
 
 /// The complete persisted state of a tian session.
-/// Maps 1:1 to the JSON schema defined in the M5 persistence spec.
 struct SessionState: Codable, Sendable, Equatable {
     let version: Int
     let savedAt: Date
@@ -32,40 +31,68 @@ struct WindowFrame: Codable, Sendable, Equatable {
     let height: Double
 }
 
-// MARK: - Space State
+// MARK: - Space State (v4)
+//
+// v4 replaces the flat `tabs: [TabState]` + `activeTabId` pair with two
+// sections (Claude + Terminal) plus layout metadata. The v3 shape is
+// rewritten by `SessionStateMigrator.migrations[3]`.
 
 struct SpaceState: Codable, Sendable, Equatable {
     let id: UUID
     let name: String
-    let activeTabId: UUID
     let defaultWorkingDirectory: String?
     let worktreePath: String?
-    let tabs: [TabState]
+    let claudeSection: SectionState
+    let terminalSection: SectionState
+    let terminalVisible: Bool
+    let dockPosition: DockPosition
+    let splitRatio: Double
+    let focusedSectionKind: SectionKind
 
     init(
         id: UUID,
         name: String,
-        activeTabId: UUID,
         defaultWorkingDirectory: String?,
         worktreePath: String? = nil,
-        tabs: [TabState]
+        claudeSection: SectionState,
+        terminalSection: SectionState,
+        terminalVisible: Bool,
+        dockPosition: DockPosition,
+        splitRatio: Double,
+        focusedSectionKind: SectionKind
     ) {
         self.id = id
         self.name = name
-        self.activeTabId = activeTabId
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.worktreePath = worktreePath
-        self.tabs = tabs
+        self.claudeSection = claudeSection
+        self.terminalSection = terminalSection
+        self.terminalVisible = terminalVisible
+        self.dockPosition = dockPosition
+        self.splitRatio = splitRatio
+        self.focusedSectionKind = focusedSectionKind
     }
 }
 
-// MARK: - Tab State
+// MARK: - Section State (v4)
+
+struct SectionState: Codable, Sendable, Equatable {
+    let id: UUID
+    let kind: SectionKind
+    let activeTabId: UUID?
+    let tabs: [TabState]
+}
+
+// MARK: - Tab State (v4)
 
 struct TabState: Codable, Sendable, Equatable {
     let id: UUID
     let name: String?
     let activePaneId: UUID
     let root: PaneNodeState
+    /// Required in v4 — migration sets it explicitly on every tab, and
+    /// freshly-created tabs set it from their owning section (NG5).
+    let sectionKind: SectionKind
 }
 
 // MARK: - Pane Node State

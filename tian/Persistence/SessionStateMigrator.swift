@@ -20,6 +20,82 @@ enum SessionStateMigrator {
         // v2 → v3: Added optional claudeSessionState to PaneLeafState.
         // The field is optional so existing v2 data decodes correctly without transformation.
         2: { json in json },
+        // v3 → v4: Split flat SpaceState.tabs into (claudeSection, terminalSection).
+        // Legacy tabs (all shell, per v3 semantics) move into terminalSection
+        // preserving order + PaneLeafState.claudeSessionState. A fresh Claude
+        // section with one pane is synthesised at the Space's default
+        // working directory.
+        3: { json in
+            var dict = json
+            guard var workspaces = dict["workspaces"] as? [[String: Any]] else {
+                return dict
+            }
+            for wi in workspaces.indices {
+                guard var spaces = workspaces[wi]["spaces"] as? [[String: Any]] else { continue }
+                for si in spaces.indices {
+                    var newSpace = spaces[si]
+
+                    // 1. Legacy tabs → Terminal section.
+                    let legacyTabs = (newSpace["tabs"] as? [[String: Any]]) ?? []
+                    let taggedTabs: [[String: Any]] = legacyTabs.map { tab in
+                        var t = tab
+                        t["sectionKind"] = "terminal"
+                        return t
+                    }
+                    let legacyActive = newSpace["activeTabId"] as? String
+                    let terminalActiveTabId: Any
+                    if taggedTabs.isEmpty {
+                        terminalActiveTabId = NSNull()
+                    } else {
+                        terminalActiveTabId = legacyActive ?? (taggedTabs[0]["id"] as? String ?? "")
+                    }
+                    newSpace["terminalSection"] = [
+                        "id": UUID().uuidString,
+                        "kind": "terminal",
+                        "activeTabId": terminalActiveTabId,
+                        "tabs": taggedTabs,
+                    ] as [String: Any]
+
+                    // 2. Synthesise a fresh Claude section with one tab + one pane.
+                    let paneID = UUID().uuidString
+                    let tabID = UUID().uuidString
+                    let wd = (newSpace["defaultWorkingDirectory"] as? String)
+                        ?? ProcessInfo.processInfo.environment["HOME"] ?? "/"
+                    let leaf: [String: Any] = [
+                        "type": "pane",
+                        "paneID": paneID,
+                        "workingDirectory": wd,
+                    ]
+                    let freshTab: [String: Any] = [
+                        "id": tabID,
+                        "activePaneId": paneID,
+                        "root": leaf,
+                        "sectionKind": "claude",
+                    ]
+                    newSpace["claudeSection"] = [
+                        "id": UUID().uuidString,
+                        "kind": "claude",
+                        "activeTabId": tabID,
+                        "tabs": [freshTab],
+                    ] as [String: Any]
+
+                    // 3. Layout defaults.
+                    newSpace["terminalVisible"] = false
+                    newSpace["dockPosition"] = "right"
+                    newSpace["splitRatio"] = 0.7
+                    newSpace["focusedSectionKind"] = "claude"
+
+                    // 4. Remove legacy keys.
+                    newSpace.removeValue(forKey: "tabs")
+                    newSpace.removeValue(forKey: "activeTabId")
+
+                    spaces[si] = newSpace
+                }
+                workspaces[wi]["spaces"] = spaces
+            }
+            dict["workspaces"] = workspaces
+            return dict
+        },
     ]
 
     // MARK: - Errors
