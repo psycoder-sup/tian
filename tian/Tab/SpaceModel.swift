@@ -88,6 +88,7 @@ final class SpaceModel: Identifiable {
             for tab in section.tabs {
                 wireDirectoryFallback(tab)
                 wireGitContext(tab)
+                wireCrossSectionFocus(tab)
                 for (paneID, wd) in tab.paneViewModel.splitTree.allLeafInfo() {
                     gitContext.paneAdded(paneID: paneID, workingDirectory: wd)
                 }
@@ -131,10 +132,17 @@ final class SpaceModel: Identifiable {
 
     @discardableResult
     func createTab(workingDirectory: String = "~") -> TabModel {
-        let tab = terminalSection.createTab(workingDirectory: workingDirectory)
-        wireDirectoryFallback(tab)
-        wireHierarchyContext(tab)
-        wireGitContext(tab)
+        createTab(in: terminalSection, workingDirectory: workingDirectory)
+    }
+
+    /// FR-18 — create a tab in the named section and wire SpaceModel-level
+    /// hooks (directory fallback, hierarchy context, git context,
+    /// cross-section focus). Called by the key dispatcher for `.newTab` in
+    /// the focused pane's section.
+    @discardableResult
+    func createTab(in section: SectionModel, workingDirectory: String) -> TabModel {
+        let tab = section.createTab(workingDirectory: workingDirectory)
+        wireTab(tab)
         let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
         gitContext.paneAdded(paneID: initialPaneID, workingDirectory: workingDirectory)
         return tab
@@ -169,12 +177,7 @@ final class SpaceModel: Identifiable {
     func showTerminal() {
         if terminalSection.tabs.isEmpty {
             let wd = resolvedWorkingDirectoryForSpawn()
-            let tab = terminalSection.createTab(workingDirectory: wd)
-            wireDirectoryFallback(tab)
-            wireHierarchyContext(tab)
-            wireGitContext(tab)
-            let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
-            gitContext.paneAdded(paneID: initialPaneID, workingDirectory: wd)
+            createTab(in: terminalSection, workingDirectory: wd)
         }
         terminalVisible = true
         focusedSectionKind = .terminal
@@ -263,6 +266,87 @@ final class SpaceModel: Identifiable {
         // Terminal section empties → auto-hide. Space stays open.
         terminalSection.onEmpty = { [weak self] in
             self?.hideTerminal()
+        }
+    }
+
+    /// Wire all SpaceModel-level closures on a newly-created or restored
+    /// tab's PaneViewModel. Used both by `createTab(in:workingDirectory:)`
+    /// and by restore paths that hand tabs in pre-built.
+    func wireTab(_ tab: TabModel) {
+        wireDirectoryFallback(tab)
+        wireHierarchyContext(tab)
+        wireGitContext(tab)
+        wireCrossSectionFocus(tab)
+    }
+
+    private func wireCrossSectionFocus(_ tab: TabModel) {
+        tab.paneViewModel.onFocusCrossSection = { [weak self, weak tab] direction in
+            guard let self, let tab else { return false }
+            return self.tryCrossSectionFocus(
+                from: tab.paneViewModel.splitTree.focusedPaneID,
+                in: tab.sectionKind,
+                direction: direction
+            )
+        }
+    }
+
+    private func tryCrossSectionFocus(
+        from sourcePaneID: UUID,
+        in sourceKind: SectionKind,
+        direction: NavigationDirection
+    ) -> Bool {
+        // Find the active tab's container size. Use the source tab's
+        // paneViewModel.containerSize as a proxy for the section's frame
+        // — combined with SectionLayout, this gives approximate global
+        // frames. Full space-level container size would require the view
+        // layer to propagate container geometry; for v1 we approximate.
+        let sourceSection = (sourceKind == .claude) ? claudeSection : terminalSection
+        guard let activeTab = sourceSection.activeTab else { return false }
+        let sourceContainer = activeTab.paneViewModel.containerSize
+        guard sourceContainer.width > 0, sourceContainer.height > 0 else { return false }
+
+        // Reconstruct approximate global container size from the section
+        // frame fraction (dock + ratio).
+        let globalSize = approximateGlobalContainerSize(
+            sectionContainerSize: sourceContainer,
+            sectionKind: sourceKind
+        )
+        guard globalSize.width > 0, globalSize.height > 0 else { return false }
+
+        let navigator = SpaceLevelSplitNavigation(space: self, containerSize: globalSize)
+        guard let target = navigator.neighbor(
+            from: sourcePaneID,
+            in: sourceKind,
+            direction: direction
+        ) else { return false }
+
+        // Cross-section result: switch focus.
+        if target.sectionKind != focusedSectionKind {
+            focusedSectionKind = target.sectionKind
+        }
+        let targetSection = (target.sectionKind == .claude) ? claudeSection : terminalSection
+        targetSection.activeTab?.paneViewModel.focusPane(paneID: target.paneID)
+        targetSection.lastFocusedPaneID = target.paneID
+        return true
+    }
+
+    private func approximateGlobalContainerSize(
+        sectionContainerSize: CGSize,
+        sectionKind: SectionKind
+    ) -> CGSize {
+        let dividerThickness = SectionDividerView.thickness
+        let ratio = splitRatio
+        let fraction = (sectionKind == .claude) ? ratio : (1.0 - ratio)
+        // Avoid div-by-zero; if fraction collapses, fall back to the
+        // raw section size.
+        guard fraction > 0.01 else { return sectionContainerSize }
+        switch dockPosition {
+        case .right:
+            let totalWidth = sectionContainerSize.width / fraction + dividerThickness
+            return CGSize(width: totalWidth, height: sectionContainerSize.height)
+        case .bottom:
+            let totalHeight = sectionContainerSize.height / fraction + dividerThickness
+            return CGSize(width: sectionContainerSize.width, height: totalHeight)
         }
     }
 

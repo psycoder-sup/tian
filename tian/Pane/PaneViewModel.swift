@@ -56,6 +56,12 @@ final class PaneViewModel {
     /// this immediately after construction.
     var sectionKind: SectionKind
 
+    /// FR-19 — invoked by `focusDirection` when within-tab search finds
+    /// no neighbor, giving the owning SpaceModel a chance to navigate
+    /// across the section divider. Returns true when the cross-section
+    /// jump was made.
+    var onFocusCrossSection: ((NavigationDirection) -> Bool)?
+
     // MARK: - Private
 
     nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
@@ -316,12 +322,17 @@ final class PaneViewModel {
         guard containerSize.width > 0, containerSize.height > 0 else { return }
         let rect = CGRect(origin: .zero, size: containerSize)
         let layoutResult = SplitLayout.layout(node: splitTree.root, in: rect)
-        guard let targetID = SplitNavigation.neighbor(
+        if let targetID = SplitNavigation.neighbor(
             of: splitTree.focusedPaneID,
             direction: direction,
             in: layoutResult.paneFrames
-        ) else { return }
-        focusPane(paneID: targetID)
+        ) {
+            focusPane(paneID: targetID)
+            return
+        }
+        // No within-tab neighbor — ask the owning SpaceModel to try
+        // crossing the section divider (FR-19).
+        _ = onFocusCrossSection?(direction)
     }
 
     func updateRatio(splitID: UUID, newRatio: Double) {

@@ -23,6 +23,10 @@ enum KeyAction: Hashable {
     case toggleSidebar
     case focusSidebar
 
+    // Sections (space-sections feature)
+    case toggleTerminalSection
+    case cycleSectionFocus
+
     // Debug
     case toggleDebugOverlay
 }
