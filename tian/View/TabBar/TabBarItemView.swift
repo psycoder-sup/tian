@@ -26,7 +26,7 @@ struct TabBarItemView: View {
                     onSelect()
                 }
             }
-            .draggable(TabDragItem(tabID: tab.id))
+            .draggable(TabDragItem(tabID: tab.id, sectionKind: tab.sectionKind))
             .contextMenu {
                 Button("Rename") { isRenaming = true }
                 Divider()

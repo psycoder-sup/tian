@@ -93,8 +93,19 @@ struct SectionTabBarView: View {
         .padding(.horizontal, 8)
         .frame(height: 44)
         .dropDestination(for: TabDragItem.self) { items, _ in
-            guard let item = items.first,
-                  let sourceIndex = section.tabs.firstIndex(where: { $0.id == item.tabID }) else {
+            guard let item = items.first else { return false }
+            // FR-22 — reject drops that cross the section boundary.
+            // Items without an explicit sectionKind (legacy payloads)
+            // are treated conservatively: accept only when the tabID is
+            // already in this section.
+            if let srcKind = item.sectionKind {
+                guard SectionTabBarDropCoordinator.canAccept(
+                    sourceSectionKind: srcKind,
+                    destinationSectionKind: section.kind,
+                    tabID: item.tabID
+                ) else { return false }
+            }
+            guard let sourceIndex = section.tabs.firstIndex(where: { $0.id == item.tabID }) else {
                 return false
             }
             let destIndex = section.tabs.count - 1

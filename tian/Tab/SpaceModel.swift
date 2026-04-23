@@ -175,17 +175,20 @@ final class SpaceModel: Identifiable {
     // MARK: - Terminal visibility
 
     func showTerminal() {
-        if terminalSection.tabs.isEmpty {
+        let wasEmpty = terminalSection.tabs.isEmpty
+        if wasEmpty {
             let wd = resolvedWorkingDirectoryForSpawn()
             createTab(in: terminalSection, workingDirectory: wd)
         }
         terminalVisible = true
         focusedSectionKind = .terminal
+        Log.lifecycle.info("Terminal section shown (space=\(self.name), spawnedFreshTab=\(wasEmpty))")
     }
 
     func hideTerminal() {
         // FR-13 invariant: never mutates tabs/panes/focusedSectionKind.
         terminalVisible = false
+        Log.lifecycle.info("Terminal section hidden (space=\(self.name))")
     }
 
     func toggleTerminal() {
