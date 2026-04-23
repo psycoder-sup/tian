@@ -45,11 +45,11 @@ struct SidebarContainerView: View {
                     }
                     .frame(width: max(sidebarState.mode.width, 104), alignment: .leading)
 
-                    tabBar
+                    Spacer(minLength: 0)
                 }
                 .frame(height: 44)
 
-                terminalZStack
+                spaceContentStack
                     .padding(.leading, sidebarState.mode.width)
             }
         }
@@ -97,39 +97,20 @@ struct SidebarContainerView: View {
         }
     }
 
-    // MARK: - Tab Bar
+    // MARK: - Space Content
 
     @ViewBuilder
-    private var tabBar: some View {
-        if let spaceCollection = displayedSpaceCollection,
-           let space = spaceCollection.activeSpace {
-            TabBarView(space: space) {
-                let wd = spaceCollection.resolveWorkingDirectory()
-                space.createTab(workingDirectory: wd)
-            }
-        } else {
-            Color.clear.frame(height: 44)
-        }
-    }
-
-    // MARK: - Terminal Panes
-
-    @ViewBuilder
-    private var terminalZStack: some View {
+    private var spaceContentStack: some View {
         if let spaceCollection = displayedSpaceCollection {
             ZStack {
                 ForEach(spaceCollection.spaces) { space in
-                    ForEach(space.tabs) { tab in
-                        let isVisible = space.id == spaceCollection.activeSpaceID
-                            && tab.id == space.activeTabID
-                        SplitTreeView(
-                            node: tab.paneViewModel.splitTree.root,
-                            viewModel: tab.paneViewModel,
-                            isTabVisible: isVisible
-                        )
-                        .opacity(isVisible ? 1 : 0)
-                        .allowsHitTesting(isVisible)
-                    }
+                    let isActive = space.id == spaceCollection.activeSpaceID
+                    SpaceContentView(
+                        spaceModel: space,
+                        resolveWorkingDirectory: { spaceCollection.resolveWorkingDirectory() }
+                    )
+                    .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(isActive)
                 }
             }
             .background(

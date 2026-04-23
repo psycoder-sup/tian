@@ -75,6 +75,14 @@ final class SpaceModel: Identifiable {
         self.gitContext = SpaceGitContext(worktreePath: worktreeURL)
         self.sectionDividerDragController = SectionDividerDragController()
 
+        // FR-15 — apply any dock toggle that was queued mid-drag once the
+        // gesture ends. Weak self to avoid retaining the space via its own
+        // controller callback.
+        self.sectionDividerDragController.onDragEnd = { [weak self] queued in
+            guard let self, let queued else { return }
+            self.dockPosition = queued
+        }
+
         wireSectionCloseHandlers()
         for section in [claudeSection, terminalSection] {
             for tab in section.tabs {
