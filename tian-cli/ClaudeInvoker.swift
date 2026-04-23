@@ -1,21 +1,26 @@
 import Foundation
 
-/// Invokes `claude -p` with a given prompt and returns stdout.
+/// Invokes `claude -p` with a given prompt + JSON Schema and returns the
+/// full JSON-envelope stdout.
 ///
 /// Extracted behind a protocol so `ConfigAutoSetRunner` tests can inject
 /// a stub without spawning a real subprocess.
 protocol ClaudeInvoker {
     /// - Parameters:
     ///   - prompt: The prompt to send to `claude -p`.
+    ///   - jsonSchema: Compact JSON Schema passed to `--json-schema`.
+    ///     Claude validates its response against this server-side, so
+    ///     the caller can trust the shape on a successful envelope.
     ///   - cwd: Working directory for the subprocess (the repo root).
     ///   - model: Model name passed via `--model`.
-    /// - Returns: Full captured stdout, UTF-8 decoded.
+    /// - Returns: Full captured stdout, UTF-8 decoded. With
+    ///   `--output-format json`, this is a single-object JSON envelope.
     /// - Throws: `CLIError.general` on spawn failure, non-zero exit, or
     ///   output decoding failure.
-    func run(prompt: String, cwd: URL, model: String) throws -> String
+    func run(prompt: String, jsonSchema: String, cwd: URL, model: String) throws -> String
 }
 
-/// Spawns `claude -p` with read-only tools and captures stdout.
+/// Spawns `claude -p --json-schema …` with read-only tools and captures stdout.
 struct ProcessClaudeInvoker: ClaudeInvoker {
     /// Path to the `claude` executable. `nil` means resolve via `PATH`.
     let claudePath: String?
@@ -24,35 +29,32 @@ struct ProcessClaudeInvoker: ClaudeInvoker {
         self.claudePath = claudePath
     }
 
-    func run(prompt: String, cwd: URL, model: String) throws -> String {
+    func run(prompt: String, jsonSchema: String, cwd: URL, model: String) throws -> String {
         let process = Process()
 
-        // Resolve the claude executable.
+        // `--tools` is authoritative (restricts to exactly these). `--json-schema`
+        // + `--output-format json` force a schema-validated `structured_output`.
+        var arguments: [String] = [
+            "-p",
+            "--tools", "Read,Glob,Grep",
+            "--model", model,
+            "--output-format", "json",
+            "--json-schema", jsonSchema,
+            prompt,
+        ]
         if let override = claudePath {
             process.executableURL = URL(fileURLWithPath: override)
         } else {
-            // Use /usr/bin/env so PATH resolution matches the user's shell.
+            // /usr/bin/env so PATH resolution matches the user's shell.
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            arguments.insert("claude", at: 0)
         }
-
-        var arguments: [String] = []
-        if claudePath == nil { arguments.append("claude") }
-        arguments.append(contentsOf: [
-            "-p",
-            "--allowedTools", "Read,Glob,Grep",
-            "--permission-mode", "acceptEdits",
-            "--model", model,
-            prompt,
-        ])
         process.arguments = arguments
 
         process.currentDirectoryURL = cwd
 
         let stdoutPipe = Pipe()
         process.standardOutput = stdoutPipe
-        // Let stderr pass through to the user's terminal so any claude
-        // diagnostics are visible. (claude -p is mostly silent in text
-        // mode, so this is rarely chatty.)
         process.standardError = FileHandle.standardError
 
         do {
