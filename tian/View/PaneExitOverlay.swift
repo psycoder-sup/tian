@@ -4,6 +4,11 @@ import SwiftUI
 /// or fails to spawn. Offers Restart and Close actions.
 struct PaneExitOverlay: View {
     let state: PaneState
+    /// Phase 5 / FR-08 — governs the overlay's restart-button label.
+    /// Claude-kind panes show "Retry" so the wording matches the user's
+    /// mental model (the Claude binary failed to spawn), while Terminal
+    /// panes keep the existing "Restart Shell" copy.
+    var sectionKind: SectionKind = .terminal
     let onRestart: () -> Void
     let onClose: () -> Void
 
@@ -25,7 +30,7 @@ struct PaneExitOverlay: View {
                     .multilineTextAlignment(.center)
 
                 HStack(spacing: 12) {
-                    Button("Restart Shell") { onRestart() }
+                    Button(restartLabel) { onRestart() }
                         .keyboardShortcut(.return, modifiers: [])
 
                     Button("Close Pane") { onClose() }
@@ -40,6 +45,17 @@ struct PaneExitOverlay: View {
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(titleText)
+        }
+    }
+
+    private var restartLabel: String {
+        switch state {
+        case .spawnFailed:
+            return sectionKind == .claude ? "Retry" : "Restart Shell"
+        case .exited:
+            return "Restart Shell"
+        case .running:
+            preconditionFailure("PaneExitOverlay should not be shown for .running state")
         }
     }
 

@@ -68,6 +68,7 @@ struct PaneView: View {
             if state != .running {
                 PaneExitOverlay(
                     state: state,
+                    sectionKind: viewModel.sectionKind,
                     onRestart: { viewModel.restartShell(paneID: paneID) },
                     onClose: { viewModel.closePane(paneID: paneID) }
                 )

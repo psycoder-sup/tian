@@ -20,17 +20,23 @@ struct SectionView: View {
     var body: some View {
         Group {
             if section.kind == .claude && section.tabs.isEmpty {
-                EmptyClaudePlaceholderView(onNewTab: {
-                    let wd = resolveWorkingDirectory()
-                    section.createTab(workingDirectory: wd)
-                })
+                EmptyClaudePlaceholderView(
+                    onNewTab: {
+                        let wd = resolveWorkingDirectory()
+                        spaceModel.createTab(in: section, workingDirectory: wd)
+                    },
+                    onCloseSpace: {
+                        // FR-07c — explicit Cmd+W closes the Space.
+                        Task { await spaceModel.requestSpaceClose() }
+                    }
+                )
             } else if let activeTab = section.activeTab {
                 VStack(spacing: 0) {
                     SectionTabBarView(
                         section: section,
                         onNewTab: {
                             let wd = resolveWorkingDirectory()
-                            section.createTab(workingDirectory: wd)
+                            spaceModel.createTab(in: section, workingDirectory: wd)
                         },
                         trailingToolbar: {
                             SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
