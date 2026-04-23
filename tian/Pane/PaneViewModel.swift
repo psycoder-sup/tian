@@ -50,18 +50,30 @@ final class PaneViewModel {
     /// Set by the owning SpaceModel via `wireHierarchyContext`.
     var hierarchyContext: PaneHierarchyContext?
 
+    /// Mirrors the owning tab / section's kind. Inherited by every pane
+    /// produced via `splitPane(...)`. Set on construction; callers that
+    /// hand in a pre-built view model (e.g. SessionRestorer) re-assign
+    /// this immediately after construction.
+    var sectionKind: SectionKind
+
     // MARK: - Private
 
     nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
 
     // MARK: - Init
 
-    init(workingDirectory: String = "~") {
+    init(workingDirectory: String = "~", sectionKind: SectionKind = .terminal) {
         let initialID = UUID()
         let surface = GhosttyTerminalSurface()
         let surfaceView = TerminalSurfaceView()
         surfaceView.terminalSurface = surface
-        surfaceView.initialWorkingDirectory = workingDirectory
+        self.sectionKind = sectionKind
+        SectionSpawner.configure(
+            view: surfaceView,
+            kind: sectionKind,
+            workingDirectory: workingDirectory,
+            environmentVariables: [:]
+        )
         self.splitTree = SplitTree(paneID: initialID, workingDirectory: workingDirectory)
         self.surfaces[initialID] = surface
         self.surfaceViews[initialID] = surfaceView
@@ -69,14 +81,14 @@ final class PaneViewModel {
         installObservers()
     }
 
-    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID) -> PaneViewModel {
+    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, sectionKind: SectionKind = .terminal) -> PaneViewModel {
         var surfaces: [UUID: GhosttyTerminalSurface] = [:]
         var surfaceViews: [UUID: TerminalSurfaceView] = [:]
         var restoreCommands: [UUID: String] = [:]
         var sessionStates: [UUID: ClaudeSessionState] = [:]
-        let paneNode = Self.buildPaneNode(from: root, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+        let paneNode = Self.buildPaneNode(from: root, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
         let splitTree = SplitTree(root: paneNode, focusedPaneID: focusedPaneID)
-        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews)
+        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews, sectionKind: sectionKind)
         pvm.restoreCommands = restoreCommands
         for (paneID, state) in sessionStates {
             PaneStatusManager.shared.setSessionState(paneID: paneID, state: state)
@@ -87,11 +99,13 @@ final class PaneViewModel {
     private init(
         splitTree: SplitTree,
         surfaces: [UUID: GhosttyTerminalSurface],
-        surfaceViews: [UUID: TerminalSurfaceView]
+        surfaceViews: [UUID: TerminalSurfaceView],
+        sectionKind: SectionKind = .terminal
     ) {
         self.splitTree = splitTree
         self.surfaces = surfaces
         self.surfaceViews = surfaceViews
+        self.sectionKind = sectionKind
         self.paneStates = Dictionary(uniqueKeysWithValues: surfaces.keys.map { ($0, PaneState.running) })
         installObservers()
     }
@@ -113,7 +127,9 @@ final class PaneViewModel {
                   let surfaceId = notification.userInfo?["surfaceId"] as? UUID,
                   let exitCode = notification.userInfo?["exitCode"] as? UInt32 else { return }
             guard let paneID = self.paneID(forSurfaceID: surfaceId) else { return }
-            if exitCode == 0 {
+            // FR-06: Claude panes close on any exit code (no exit-code overlay).
+            // Terminal panes show the exit-code overlay for non-zero codes.
+            if exitCode == 0 || self.sectionKind == .claude {
                 self.closePane(paneID: paneID)
             } else {
                 self.paneStates[paneID] = .exited(code: exitCode)
@@ -173,6 +189,7 @@ final class PaneViewModel {
 
     private static func buildPaneNode(
         from state: PaneNodeState,
+        sectionKind: SectionKind,
         surfaces: inout [UUID: GhosttyTerminalSurface],
         surfaceViews: inout [UUID: TerminalSurfaceView],
         restoreCommands: inout [UUID: String],
@@ -183,11 +200,18 @@ final class PaneViewModel {
             let surface = GhosttyTerminalSurface()
             let surfaceView = TerminalSurfaceView()
             surfaceView.terminalSurface = surface
-            surfaceView.initialWorkingDirectory = leaf.workingDirectory
+            // Route through SectionSpawner so Claude panes get initialInput = "claude\n".
+            SectionSpawner.configure(
+                view: surfaceView,
+                kind: sectionKind,
+                workingDirectory: leaf.workingDirectory,
+                environmentVariables: [:]
+            )
             surfaces[leaf.paneID] = surface
             surfaceViews[leaf.paneID] = surfaceView
             if let cmd = leaf.restoreCommand {
                 restoreCommands[leaf.paneID] = cmd
+                // restoreCommand takes precedence over the kind-based seed.
                 surfaceView.initialInput = cmd + "\n"
             }
             if let state = leaf.claudeSessionState {
@@ -198,10 +222,10 @@ final class PaneViewModel {
         case .split(let split):
             guard let direction = SplitDirection.from(stateValue: split.direction) else {
                 // Invalid direction — treat as a single pane with the first leaf
-                return buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+                return buildPaneNode(from: split.first, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
             }
-            let first = buildPaneNode(from: split.first, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
-            let second = buildPaneNode(from: split.second, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+            let first = buildPaneNode(from: split.first, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+            let second = buildPaneNode(from: split.second, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
             return .split(id: UUID(), direction: direction, ratio: split.ratio, first: first, second: second)
         }
     }
@@ -236,8 +260,14 @@ final class PaneViewModel {
 
         let workingDirectory = resolveWorkingDirectory(for: splitTree.focusedPaneID)
 
-        newSurfaceView.initialWorkingDirectory = workingDirectory
-        newSurfaceView.environmentVariables = buildEnvironmentVariables(forPaneID: newPaneID)
+        // Route through SectionSpawner so the new pane inherits the tab's
+        // section kind (Claude → initialInput = "claude\n"; Terminal → nil).
+        SectionSpawner.configure(
+            view: newSurfaceView,
+            kind: sectionKind,
+            workingDirectory: workingDirectory,
+            environmentVariables: buildEnvironmentVariables(forPaneID: newPaneID)
+        )
 
         guard splitTree.insertSplit(
             direction: direction,
@@ -323,11 +353,21 @@ final class PaneViewModel {
         paneStates[paneID] = .running
 
         let workingDirectory = resolveWorkingDirectory(for: paneID)
+        // Preserve the view's `window` reference across the restart — we
+        // cannot precondition-check `view.window == nil` here because it
+        // may still be attached. Set the fields directly rather than via
+        // SectionSpawner.configure (which asserts window==nil).
         surfaceView.initialWorkingDirectory = workingDirectory
         surfaceView.environmentVariables = buildEnvironmentVariables(forPaneID: paneID)
+        // Reset initialInput so a Claude-kind pane re-seeds "claude\n" on
+        // restart, while a Terminal pane gets a clean shell.
+        switch sectionKind {
+        case .claude: surfaceView.initialInput = "claude\n"
+        case .terminal: surfaceView.initialInput = nil
+        }
 
         if surfaceView.window != nil {
-            newSurface.createSurface(view: surfaceView, workingDirectory: workingDirectory, environmentVariables: surfaceView.environmentVariables)
+            newSurface.createSurface(view: surfaceView, workingDirectory: workingDirectory, environmentVariables: surfaceView.environmentVariables, initialInput: surfaceView.initialInput)
         }
     }
 

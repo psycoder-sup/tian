@@ -35,13 +35,25 @@ enum SessionSerializer {
                 activeSpaceId: workspace.spaceCollection.activeSpaceID,
                 defaultWorkingDirectory: workspace.defaultWorkingDirectory?.path,
                 spaces: workspace.spaceCollection.spaces.map { space in
-                    SpaceState(
+                    // Phase 1 compat shim: snapshot derives the v3 `tabs` /
+                    // `activeTabId` fields from the Terminal section only.
+                    // Claude-section state is intentionally NOT persisted
+                    // during Phase 1 — it re-synthesises fresh each launch.
+                    let terminalTabs = space.terminalSection.tabs
+                    let activeTabId = space.terminalSection.activeTabID
+                    // When the Terminal section is empty, v3 schema still
+                    // requires a non-nil activeTabId. Emit a fresh sentinel
+                    // UUID — `SessionRestorer.validate` rejects empty `tabs`
+                    // upstream, so this branch is unreachable in practice
+                    // for the primary restore path.
+                    let resolvedActiveTabId = terminalTabs.first.map(\.id) ?? activeTabId
+                    return SpaceState(
                         id: space.id,
                         name: space.name,
-                        activeTabId: space.activeTabID,
+                        activeTabId: resolvedActiveTabId,
                         defaultWorkingDirectory: space.defaultWorkingDirectory?.path,
                         worktreePath: space.worktreePath?.path,
-                        tabs: space.tabs.map { tab in
+                        tabs: terminalTabs.map { tab in
                             TabState(
                                 id: tab.id,
                                 name: tab.customName,

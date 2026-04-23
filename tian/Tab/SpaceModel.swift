@@ -1,17 +1,30 @@
 import Foundation
 import Observation
 
-/// A named space containing an ordered list of tabs.
+/// A named space. Owns two `SectionModel`s (Claude + Terminal) plus layout
+/// metadata (visibility, dock position, split ratio, focused section).
 @MainActor @Observable
 final class SpaceModel: Identifiable {
     let id: UUID
     var name: String
-    private(set) var tabs: [TabModel]
-    var activeTabID: UUID
     let createdAt: Date
     var defaultWorkingDirectory: URL?
 
-    /// Filesystem path of the associated git worktree. When non-nil, identifies this Space as worktree-backed.
+    // MARK: - Sections (Phase 1)
+
+    let claudeSection: SectionModel
+    let terminalSection: SectionModel
+    var terminalVisible: Bool
+    var dockPosition: DockPosition
+    var splitRatio: Double
+    var focusedSectionKind: SectionKind
+
+    /// Minimal stub for Phase 1; drag handling lands in Phase 2.
+    let sectionDividerDragController: SectionDividerDragController
+
+    // MARK: - Git
+
+    /// Filesystem path of the associated git worktree.
     var worktreePath: URL? {
         didSet {
             if let worktreePath {
@@ -20,171 +33,228 @@ final class SpaceModel: Identifiable {
         }
     }
 
-    /// Per-Space git repository context. Tracks repos, branch names, and status for sidebar display.
     let gitContext: SpaceGitContext
 
-    /// The owning workspace's default directory, set by SpaceCollection/Workspace.
+    /// The owning workspace's default directory.
     var workspaceDefaultDirectory: URL?
 
-    /// The owning workspace's ID, set via `propagateWorkspaceID` from SpaceCollection.
+    /// The owning workspace's ID.
     var workspaceID: UUID?
 
-    /// Called when the space's last tab is closed. The owning SpaceCollection should remove this space.
-    var onEmpty: (() -> Void)?
+    /// Called when the user explicitly asks to close this Space
+    /// (Cmd+W on empty Claude placeholder, sidebar close, etc.).
+    /// NEVER fires automatically from section emptiness.
+    var onSpaceClose: (() -> Void)?
 
-    init(name: String, initialTab: TabModel) {
-        self.id = UUID()
-        self.name = name
-        self.tabs = [initialTab]
-        self.activeTabID = initialTab.id
-        self.createdAt = Date()
-        self.gitContext = SpaceGitContext(worktreePath: nil)
+    // MARK: - Init (primary, Phase 1)
 
-        wireTabClose(initialTab)
-        wireDirectoryFallback(initialTab)
-        wireGitContext(initialTab)
-        // Seed git context with initial pane directories
-        for (paneID, wd) in initialTab.paneViewModel.splitTree.allLeafInfo() {
-            gitContext.paneAdded(paneID: paneID, workingDirectory: wd)
-        }
-    }
-
-    /// Restore a space with specific ID, pre-built tabs, and active tab selection.
-    init(id: UUID, name: String, tabs: [TabModel], activeTabID: UUID, defaultWorkingDirectory: URL?) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        claudeSection: SectionModel,
+        terminalSection: SectionModel,
+        terminalVisible: Bool = false,
+        dockPosition: DockPosition = .right,
+        splitRatio: Double = 0.7,
+        focusedSectionKind: SectionKind = .claude,
+        defaultWorkingDirectory: URL? = nil,
+        worktreePath: String? = nil
+    ) {
         self.id = id
         self.name = name
-        self.tabs = tabs
-        self.activeTabID = tabs.contains(where: { $0.id == activeTabID })
-            ? activeTabID
-            : tabs[0].id
         self.createdAt = Date()
+        self.claudeSection = claudeSection
+        self.terminalSection = terminalSection
+        self.terminalVisible = terminalVisible
+        self.dockPosition = dockPosition
+        self.splitRatio = splitRatio.clamped(to: 0.1...0.9)
+        self.focusedSectionKind = focusedSectionKind
         self.defaultWorkingDirectory = defaultWorkingDirectory
-        self.gitContext = SpaceGitContext(worktreePath: nil)
+        let worktreeURL = worktreePath.map { URL(fileURLWithPath: $0) }
+        self.worktreePath = worktreeURL
+        self.gitContext = SpaceGitContext(worktreePath: worktreeURL)
+        self.sectionDividerDragController = SectionDividerDragController()
 
-        for tab in tabs {
-            wireTabClose(tab)
-            wireDirectoryFallback(tab)
-            wireGitContext(tab)
-            // Seed git context with persisted pane directories
-            for (paneID, wd) in tab.paneViewModel.splitTree.allLeafInfo() {
-                gitContext.paneAdded(paneID: paneID, workingDirectory: wd)
+        wireSectionCloseHandlers()
+        for section in [claudeSection, terminalSection] {
+            for tab in section.tabs {
+                wireDirectoryFallback(tab)
+                wireGitContext(tab)
+                for (paneID, wd) in tab.paneViewModel.splitTree.allLeafInfo() {
+                    gitContext.paneAdded(paneID: paneID, workingDirectory: wd)
+                }
             }
         }
     }
 
-    // MARK: - Computed
-
-    var activeTab: TabModel? {
-        tabs.first(where: { $0.id == activeTabID })
+    /// Convenience — constructs a Space with a fresh Claude section (one
+    /// `claude` pane) and an empty Terminal section. Used by
+    /// `SpaceCollection.createSpace` in Phase 1.
+    convenience init(name: String, workingDirectory: String) {
+        let claudeTab = TabModel(workingDirectory: workingDirectory, sectionKind: .claude)
+        let claudeSection = SectionModel(kind: .claude, initialTab: claudeTab)
+        let terminalSection = SectionModel(
+            id: UUID(),
+            kind: .terminal,
+            tabs: [],
+            activeTabID: UUID()
+        )
+        self.init(
+            name: name,
+            claudeSection: claudeSection,
+            terminalSection: terminalSection
+        )
     }
 
-    // MARK: - Tab Operations
+    // MARK: - Legacy compat (will move to focusedSection in later phases)
+
+    /// Phase 1 compat: legacy accessor. Routes to `terminalSection.tabs`
+    /// so existing call sites (IPC, sidebar, serializer) keep working
+    /// without touching them in this phase.
+    var tabs: [TabModel] { terminalSection.tabs }
+
+    /// Phase 1 compat: legacy active-tab id for the Terminal section.
+    var activeTabID: UUID {
+        get { terminalSection.activeTabID }
+        set { terminalSection.activateTab(id: newValue) }
+    }
+
+    var activeTab: TabModel? { terminalSection.activeTab }
 
     @discardableResult
     func createTab(workingDirectory: String = "~") -> TabModel {
-        let tab = TabModel(workingDirectory: workingDirectory)
-        wireTabClose(tab)
+        let tab = terminalSection.createTab(workingDirectory: workingDirectory)
         wireDirectoryFallback(tab)
         wireHierarchyContext(tab)
         wireGitContext(tab)
         let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
         gitContext.paneAdded(paneID: initialPaneID, workingDirectory: workingDirectory)
-        tabs.append(tab)
-        activeTabID = tab.id
         return tab
     }
 
-    func removeTab(id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        let tab = tabs[index]
-        tab.cleanup()
-        tabs.remove(at: index)
-
-        if tabs.isEmpty {
-            onEmpty?()
-            return
-        }
-
-        // If we removed the active tab, activate nearest (prefer left, else right)
-        if activeTabID == id {
-            let newIndex = index > 0 ? index - 1 : 0
-            activeTabID = tabs[newIndex].id
-        }
-    }
-
-    func activateTab(id: UUID) {
-        guard tabs.contains(where: { $0.id == id }) else { return }
-        activeTabID = id
-    }
-
-    // MARK: - Navigation
-
-    func nextTab() {
-        guard let currentIndex = tabs.firstIndex(where: { $0.id == activeTabID }) else { return }
-        let nextIndex = (currentIndex + 1) % tabs.count
-        activeTabID = tabs[nextIndex].id
-    }
-
-    func previousTab() {
-        guard let currentIndex = tabs.firstIndex(where: { $0.id == activeTabID }) else { return }
-        let prevIndex = (currentIndex - 1 + tabs.count) % tabs.count
-        activeTabID = tabs[prevIndex].id
-    }
-
-    /// Go to the Nth tab (1-indexed). Index 9 always goes to the last tab.
-    func goToTab(index: Int) {
-        guard !tabs.isEmpty else { return }
-        if index == 9 {
-            activeTabID = tabs[tabs.count - 1].id
-            return
-        }
-        let arrayIndex = index - 1
-        guard arrayIndex >= 0, arrayIndex < tabs.count else { return }
-        activeTabID = tabs[arrayIndex].id
-    }
-
-    // MARK: - Reorder
-
+    func removeTab(id: UUID) { terminalSection.removeTab(id: id) }
+    func activateTab(id: UUID) { terminalSection.activateTab(id: id) }
+    func nextTab() { terminalSection.nextTab() }
+    func previousTab() { terminalSection.previousTab() }
+    func goToTab(index: Int) { terminalSection.goToTab(index: index) }
     func reorderTab(from sourceIndex: Int, to destinationIndex: Int) {
-        guard sourceIndex != destinationIndex,
-              sourceIndex >= 0, sourceIndex < tabs.count,
-              destinationIndex >= 0, destinationIndex < tabs.count else { return }
-        let tab = tabs.remove(at: sourceIndex)
-        tabs.insert(tab, at: destinationIndex)
+        terminalSection.reorderTab(from: sourceIndex, to: destinationIndex)
     }
+    func closeOtherTabs(keepingID: UUID) { terminalSection.closeOtherTabs(keepingID: keepingID) }
+    func closeTabsToRight(ofID: UUID) { terminalSection.closeTabsToRight(ofID: ofID) }
 
-    // MARK: - Batch Close
+    // MARK: - Section accessors (new API)
 
-    func closeOtherTabs(keepingID: UUID) {
-        let tabsToClose = tabs.filter { $0.id != keepingID }
-        for tab in tabsToClose {
-            tab.cleanup()
-        }
-        tabs.removeAll(where: { $0.id != keepingID })
-        if let remaining = tabs.first {
-            activeTabID = remaining.id
+    var focusedSection: SectionModel {
+        switch focusedSectionKind {
+        case .claude: return claudeSection
+        case .terminal: return terminalSection
         }
     }
 
-    func closeTabsToRight(ofID: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == ofID }) else { return }
-        let rightTabs = tabs[(index + 1)...]
-        for tab in rightTabs {
-            tab.cleanup()
-        }
-        tabs.removeSubrange((index + 1)...)
+    var isEffectivelyEmpty: Bool {
+        claudeSection.tabs.isEmpty && terminalSection.tabs.isEmpty
+    }
 
-        // If active tab was removed, activate the kept tab
-        if !tabs.contains(where: { $0.id == activeTabID }) {
-            activeTabID = ofID
+    // MARK: - Terminal visibility
+
+    func showTerminal() {
+        if terminalSection.tabs.isEmpty {
+            let wd = resolvedWorkingDirectoryForSpawn()
+            let tab = terminalSection.createTab(workingDirectory: wd)
+            wireDirectoryFallback(tab)
+            wireHierarchyContext(tab)
+            wireGitContext(tab)
+            let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
+            gitContext.paneAdded(paneID: initialPaneID, workingDirectory: wd)
+        }
+        terminalVisible = true
+        focusedSectionKind = .terminal
+    }
+
+    func hideTerminal() {
+        // FR-13 invariant: never mutates tabs/panes/focusedSectionKind.
+        terminalVisible = false
+    }
+
+    func toggleTerminal() {
+        if terminalVisible {
+            hideTerminal()
+        } else {
+            showTerminal()
+        }
+    }
+
+    func setDockPosition(_ position: DockPosition) {
+        if sectionDividerDragController.isDragging {
+            sectionDividerDragController.enqueueDockPosition(position)
+        } else {
+            dockPosition = position
+        }
+    }
+
+    func setSplitRatio(_ ratio: Double) {
+        splitRatio = ratio.clamped(to: 0.1...0.9)
+    }
+
+    /// Explicit user-initiated teardown — kills every Terminal tab/pane
+    /// (SIGHUP each shell) and returns the section to zero-tab state.
+    func resetTerminalSection() {
+        terminalSection.clearAllTabs()
+        terminalVisible = false
+        focusedSectionKind = .claude
+    }
+
+    /// FR-20 — alternates focus between Claude and Terminal, but only if
+    /// the target section has at least one tab.
+    func cycleFocusedSection() {
+        let target: SectionKind = (focusedSectionKind == .claude) ? .terminal : .claude
+        let targetSection = (target == .claude) ? claudeSection : terminalSection
+        guard !targetSection.tabs.isEmpty else { return }
+        focusedSectionKind = target
+    }
+
+    /// Placeholder for the empty-Claude visual state; v1 only flips focus
+    /// back to Claude so the placeholder renders. No Space close here.
+    func enterEmptyClaudeState() {
+        focusedSectionKind = .claude
+    }
+
+    /// Explicit user-gesture close. If Terminal has live foreground
+    /// processes and `confirm != nil`, awaits the closure. Only fires
+    /// `onSpaceClose` when not cancelled.
+    func requestSpaceClose(confirm: (([ForegroundProcessSummary]) async -> Bool)? = nil) async {
+        let processes = enumerateForegroundProcesses()
+        if !processes.isEmpty, let confirm {
+            let ok = await confirm(processes)
+            guard ok else { return }
+        }
+        onSpaceClose?()
+    }
+
+    // MARK: - Hierarchy / propagation
+
+    func propagateWorkspaceID(_ id: UUID) {
+        self.workspaceID = id
+        for section in [claudeSection, terminalSection] {
+            for tab in section.tabs {
+                wireHierarchyContext(tab)
+            }
         }
     }
 
     // MARK: - Private
 
-    private func wireTabClose(_ tab: TabModel) {
-        tab.onEmpty = { [weak self, tabID = tab.id] in
-            self?.removeTab(id: tabID)
+    private func wireSectionCloseHandlers() {
+        claudeSection.rewireTabCloseHandlers()
+        terminalSection.rewireTabCloseHandlers()
+        // Claude section empties → enter empty-Claude state. Space stays open.
+        claudeSection.onEmpty = { [weak self] in
+            self?.enterEmptyClaudeState()
+        }
+        // Terminal section empties → auto-hide. Space stays open.
+        terminalSection.onEmpty = { [weak self] in
+            self?.hideTerminal()
         }
     }
 
@@ -223,16 +293,124 @@ final class SpaceModel: Identifiable {
         tab.paneViewModel.applyEnvironmentVariables()
     }
 
-    /// Updates the workspace ID and wires hierarchy context for all existing tabs.
-    func propagateWorkspaceID(_ id: UUID) {
-        self.workspaceID = id
-        for tab in tabs {
-            wireHierarchyContext(tab)
-        }
+    private func resolvedWorkingDirectoryForSpawn() -> String {
+        if let defaultWorkingDirectory { return defaultWorkingDirectory.path }
+        if let workspaceDefaultDirectory { return workspaceDefaultDirectory.path }
+        return ProcessInfo.processInfo.environment["HOME"] ?? "~"
+    }
+
+    private func enumerateForegroundProcesses() -> [ForegroundProcessSummary] {
+        // Placeholder for Phase 1 — the real enumeration hook lands with
+        // the parent quit-time flow (PRD FR-22). Empty list means the
+        // confirm closure is never invoked and the close proceeds.
+        []
     }
 
     private static let cliPath: String = Bundle.main.executableURL!
         .deletingLastPathComponent()
         .appendingPathComponent("tian-cli")
         .path
+}
+
+// MARK: - Phase 1 compat: legacy `initialTab` initializer
+
+extension SpaceModel {
+    /// Phase 1 back-compat: legacy initializer taking a single "initial
+    /// tab". The initial tab is routed into the Terminal section and a
+    /// fresh Claude section is synthesised. Preserved during Phase 1 so
+    /// existing call sites (IPC, sidebar, tests, Workspace constructor)
+    /// keep working; will be removed when callers migrate to the primary
+    /// section-aware initializer.
+    convenience init(name: String, initialTab: TabModel) {
+        let claudeTab = TabModel(workingDirectory: "~", sectionKind: .claude)
+        let claudeSection = SectionModel(kind: .claude, initialTab: claudeTab)
+        let terminalSection: SectionModel
+        if initialTab.sectionKind == .terminal {
+            terminalSection = SectionModel(
+                id: UUID(),
+                kind: .terminal,
+                tabs: [initialTab],
+                activeTabID: initialTab.id
+            )
+        } else {
+            // The caller handed in a non-terminal-kind tab; fall back to
+            // an empty Terminal section to preserve the precondition.
+            terminalSection = SectionModel(
+                id: UUID(),
+                kind: .terminal,
+                tabs: [],
+                activeTabID: UUID()
+            )
+        }
+        self.init(
+            name: name,
+            claudeSection: claudeSection,
+            terminalSection: terminalSection
+        )
+    }
+}
+
+// MARK: - Phase 1 compat: restore-time initializer used by SessionRestorer shim
+
+extension SpaceModel {
+    /// Phase 1 back-compat constructor: accepts the legacy "flat tabs"
+    /// shape from v3 state, synthesises a fresh Claude section in memory,
+    /// and routes the restored tabs into the Terminal section. Removed
+    /// at end of Phase 4 once SessionRestorer is v4-native.
+    convenience init(
+        id: UUID,
+        name: String,
+        tabs: [TabModel],
+        activeTabID: UUID,
+        defaultWorkingDirectory: URL?
+    ) {
+        // Synthesise a fresh Claude section (one Claude tab).
+        let claudeWD = defaultWorkingDirectory?.path ?? (ProcessInfo.processInfo.environment["HOME"] ?? "~")
+        let claudeTab = TabModel(workingDirectory: claudeWD, sectionKind: .claude)
+        let claudeSection = SectionModel(kind: .claude, initialTab: claudeTab)
+
+        // Route restored tabs into the Terminal section.
+        let terminalSection: SectionModel
+        if tabs.isEmpty {
+            terminalSection = SectionModel(
+                id: UUID(),
+                kind: .terminal,
+                tabs: [],
+                activeTabID: UUID()
+            )
+        } else {
+            terminalSection = SectionModel(
+                id: UUID(),
+                kind: .terminal,
+                tabs: tabs,
+                activeTabID: activeTabID
+            )
+        }
+
+        self.init(
+            id: id,
+            name: name,
+            claudeSection: claudeSection,
+            terminalSection: terminalSection,
+            terminalVisible: false,
+            defaultWorkingDirectory: defaultWorkingDirectory
+        )
+    }
+}
+
+// MARK: - Foreground process summary (stub for Phase 1)
+
+/// Placeholder summary of a running foreground process in a pane.
+/// Full implementation lands with the parent PRD FR-22 quit-time flow.
+struct ForegroundProcessSummary: Sendable, Equatable {
+    let pid: Int32
+    let name: String
+}
+
+// MARK: - Helpers
+
+private extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
+    }
 }

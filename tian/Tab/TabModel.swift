@@ -9,14 +9,19 @@ final class TabModel: Identifiable {
     let paneViewModel: PaneViewModel
     let createdAt: Date
 
+    /// Mirrors the owning SectionModel.kind. Set on construction, never
+    /// changed — panes do not move sections (PRD NG5).
+    let sectionKind: SectionKind
+
     /// Called when the tab's last pane is closed. The owning SpaceModel should remove this tab.
     var onEmpty: (() -> Void)?
 
-    init(customName: String? = nil, workingDirectory: String = "~") {
+    init(customName: String? = nil, workingDirectory: String = "~", sectionKind: SectionKind = .terminal) {
         self.id = UUID()
         self.customName = customName
         self.createdAt = Date()
-        self.paneViewModel = PaneViewModel(workingDirectory: workingDirectory)
+        self.sectionKind = sectionKind
+        self.paneViewModel = PaneViewModel(workingDirectory: workingDirectory, sectionKind: sectionKind)
 
         // Wire cascading close: last pane → tab empty → space removes tab
         self.paneViewModel.onEmpty = { [weak self] in
@@ -25,11 +30,13 @@ final class TabModel: Identifiable {
     }
 
     /// Restore a tab with a specific ID and pre-built PaneViewModel.
-    init(id: UUID, customName: String? = nil, paneViewModel: PaneViewModel) {
+    init(id: UUID, customName: String? = nil, paneViewModel: PaneViewModel, sectionKind: SectionKind = .terminal) {
         self.id = id
         self.customName = customName
         self.createdAt = Date()
+        self.sectionKind = sectionKind
         self.paneViewModel = paneViewModel
+        self.paneViewModel.sectionKind = sectionKind
 
         self.paneViewModel.onEmpty = { [weak self] in
             self?.onEmpty?()

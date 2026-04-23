@@ -79,15 +79,17 @@ struct SpaceModelTests {
         #expect(space.activeTabID == tab2ID)
     }
 
-    @Test func removeLastTabTriggersOnEmpty() {
+    @Test func removeLastTabFiresSectionOnEmpty() {
+        // v4: Space no longer has `onEmpty`; the Terminal section's
+        // `onEmpty` fires `SpaceModel.hideTerminal()` (auto-hide).
         let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
-        var fired = false
-        space.onEmpty = { fired = true }
+        space.terminalVisible = true
 
         space.removeTab(id: tab.id)
         #expect(space.tabs.isEmpty)
-        #expect(fired)
+        // hideTerminal ran via terminal section's onEmpty.
+        #expect(space.terminalVisible == false)
     }
 
     @Test func nextTabWraps() {
@@ -173,28 +175,29 @@ struct SpaceModelTests {
     }
 
     @Test func cascadingCloseFromPaneToTab() async {
+        // v4: pane → tab → section cascade. Space no longer has `onEmpty`.
         let tab = TabModel()
         let space = SpaceModel(name: "default", initialTab: tab)
-        var spaceEmpty = false
-        space.onEmpty = { spaceEmpty = true }
+        space.terminalVisible = true
 
-        // Close the only pane in the only tab
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
         tab.paneViewModel.closePane(paneID: paneID)
 
-        // Tab's onEmpty should have removed it from space, triggering space's onEmpty
+        // Tab's onEmpty → SectionModel.removeTab → section empty → hideTerminal
         #expect(space.tabs.isEmpty)
-        #expect(spaceEmpty)
+        #expect(space.terminalVisible == false)
     }
 }
 
 @MainActor
 struct SpaceCollectionTests {
     @Test func initWithDefaultSpace() {
+        // v4: Default Space seeds one Claude tab; Terminal section is empty.
         let collection = SpaceCollection()
         #expect(collection.spaces.count == 1)
         #expect(collection.spaces[0].name == "default")
-        #expect(collection.spaces[0].tabs.count == 1)
+        #expect(collection.spaces[0].claudeSection.tabs.count == 1)
+        #expect(collection.spaces[0].terminalSection.tabs.isEmpty)
         #expect(!collection.shouldQuit)
     }
 
@@ -254,45 +257,32 @@ struct SpaceCollectionTests {
         #expect(collection.spaces[1].id == space1ID)
     }
 
-    @Test func fullCascadeFromPaneToQuit() async {
+    @Test func explicitSpaceCloseCascadesToQuit() async {
+        // v4: cascading close from pane no longer auto-closes the Space;
+        // the user must explicitly close via `requestSpaceClose`.
         let collection = SpaceCollection()
-        // Single space, single tab, single pane
         let space = collection.spaces[0]
-        let tab = space.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        await space.requestSpaceClose()
 
-        tab.paneViewModel.closePane(paneID: paneID)
-
-        #expect(space.tabs.isEmpty)
         #expect(collection.spaces.isEmpty)
         #expect(collection.shouldQuit)
     }
 
-    @Test func cascadeStopsWhenTabsRemain() async {
+    @Test func terminalPaneCloseDoesNotCloseSpaceInV4() async {
+        // v4: closing the last Terminal pane auto-hides the section but
+        // leaves the Space alive. The Claude section remains populated.
         let collection = SpaceCollection()
         let space = collection.spaces[0]
-        space.createTab() // now 2 tabs
-        let tab1 = space.tabs[0]
-        let paneID = tab1.paneViewModel.splitTree.focusedPaneID
+        space.showTerminal() // ensure a terminal tab exists
 
-        tab1.paneViewModel.closePane(paneID: paneID)
-
-        // Tab 1 removed, but tab 2 still exists
-        #expect(space.tabs.count == 1)
-        #expect(collection.spaces.count == 1)
-        #expect(!collection.shouldQuit)
-    }
-
-    @Test func cascadeStopsWhenSpacesRemain() async {
-        let collection = SpaceCollection()
-        collection.createSpace() // 2 spaces
-        let space1 = collection.spaces[0]
-        let tab = space1.tabs[0]
+        #expect(space.terminalSection.tabs.count == 1)
+        let tab = space.terminalSection.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
         tab.paneViewModel.closePane(paneID: paneID)
 
-        // Space 1 removed, but space 2 still exists
+        #expect(space.terminalSection.tabs.isEmpty)
+        #expect(space.terminalVisible == false)
         #expect(collection.spaces.count == 1)
         #expect(!collection.shouldQuit)
     }
@@ -334,10 +324,11 @@ struct StressTests {
     }
 
     @Test func closeAllTabsFromMiddle() {
+        // v4: removing tabs from the Terminal section no longer triggers
+        // Space-level onEmpty; it auto-hides the section instead.
         let collection = SpaceCollection()
         let space = collection.spaces[0]
-        var cascaded = false
-        space.onEmpty = { cascaded = true }
+        space.showTerminal()
 
         for _ in 1..<20 {
             space.createTab()
@@ -352,11 +343,11 @@ struct StressTests {
             #expect(space.activeTab != nil)
         }
 
-        // Close the last tab — should cascade
+        // Close the last tab — section auto-hides.
         let lastID = space.tabs[0].id
         space.removeTab(id: lastID)
         #expect(space.tabs.isEmpty)
-        #expect(cascaded)
+        #expect(space.terminalVisible == false)
     }
 
     @Test func closeOtherTabsWithManyTabs() {
@@ -404,7 +395,7 @@ struct StressTests {
         }
         #expect(collection.spaces.count == 10)
 
-        // Close spaces from the end
+        // Close spaces from the end via explicit removeSpace
         while !collection.spaces.isEmpty {
             let lastID = collection.spaces.last!.id
             collection.removeSpace(id: lastID)
@@ -443,40 +434,37 @@ struct StressTests {
         #expect(collection.activeSpace?.activeTab != nil)
     }
 
-    @Test func cascadingCloseAcrossMultipleSpacesAndTabs() {
+    @Test func cascadingCloseAcrossMultipleSpacesAndTabs() async {
+        // v4: pane-level cascades auto-hide the Terminal section but do
+        // NOT close the Space. Space closes require explicit user gesture.
         let collection = SpaceCollection()
 
-        // 3 spaces, each with 5 tabs
+        // 3 spaces, each with terminal visible + 5 terminal tabs
         for _ in 1..<3 {
             collection.createSpace()
         }
         for space in collection.spaces {
+            space.showTerminal()
             for _ in 1..<5 {
                 space.createTab()
             }
         }
         #expect(collection.spaces.count == 3)
 
-        // Close all panes in all tabs of space 0 via cascading close
+        // Close all panes in all tabs of space 0 — terminal auto-hides
         let space0 = collection.spaces[0]
         while !space0.tabs.isEmpty {
             let tab = space0.tabs[0]
             let paneID = tab.paneViewModel.splitTree.focusedPaneID
             tab.paneViewModel.closePane(paneID: paneID)
         }
+        #expect(space0.terminalVisible == false)
+        #expect(collection.spaces.count == 3)
 
-        // Space 0 should have been removed via cascade
-        #expect(collection.spaces.count == 2)
-        #expect(!collection.shouldQuit)
-
-        // Close everything — should reach quit
+        // User explicitly closes each space
         while !collection.spaces.isEmpty {
             let space = collection.spaces[0]
-            while !space.tabs.isEmpty {
-                let tab = space.tabs[0]
-                let paneID = tab.paneViewModel.splitTree.focusedPaneID
-                tab.paneViewModel.closePane(paneID: paneID)
-            }
+            await space.requestSpaceClose()
         }
         #expect(collection.shouldQuit)
     }
@@ -522,11 +510,14 @@ struct StressTests {
     // MARK: - Interleaved Operations
 
     @Test func interleavedCreateSwitchClose() {
+        // v4: Each new Space gets a Claude section (one Claude tab) and an
+        // empty Terminal section. We drive Terminal tabs here to exercise
+        // the legacy compat API (`space.createTab` → terminalSection).
         let collection = SpaceCollection()
 
-        // Interleave: create, switch, close, create...
         for i in 0..<20 {
             collection.createSpace()
+            collection.activeSpace?.showTerminal()
             collection.activeSpace?.createTab()
             collection.nextSpace()
             collection.activeSpace?.nextTab()
@@ -537,18 +528,16 @@ struct StressTests {
             }
         }
 
-        // Should still be in a valid state
         #expect(!collection.spaces.isEmpty)
         #expect(collection.activeSpace != nil)
-        #expect(collection.activeSpace?.activeTab != nil)
         #expect(!collection.shouldQuit)
 
-        // Verify invariants: activeSpaceID references existing space
+        // Invariant: activeSpaceID references an existing space
         #expect(collection.spaces.contains(where: { $0.id == collection.activeSpaceID }))
 
-        // Verify each space's activeTabID references existing tab
+        // Invariant: each space's Claude section is non-empty
         for space in collection.spaces {
-            #expect(space.tabs.contains(where: { $0.id == space.activeTabID }))
+            #expect(space.claudeSection.tabs.isEmpty == false)
         }
     }
 }

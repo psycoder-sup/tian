@@ -95,7 +95,10 @@ final class Workspace: Identifiable {
 
     func cleanup() {
         for space in spaceCollection.spaces {
-            for tab in space.tabs {
+            for tab in space.claudeSection.tabs {
+                tab.cleanup()
+            }
+            for tab in space.terminalSection.tabs {
                 tab.cleanup()
             }
         }

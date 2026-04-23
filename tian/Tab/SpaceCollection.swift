@@ -23,8 +23,7 @@ final class SpaceCollection {
     private var spaceCounter: Int = 1
 
     init(workingDirectory: String = "~") {
-        let initialTab = TabModel(workingDirectory: workingDirectory)
-        let initialSpace = SpaceModel(name: "default", initialTab: initialTab)
+        let initialSpace = SpaceModel(name: "default", workingDirectory: workingDirectory)
         self.spaces = [initialSpace]
         self.activeSpaceID = initialSpace.id
 
@@ -56,9 +55,9 @@ final class SpaceCollection {
     @discardableResult
     func createSpace(name: String? = nil, workingDirectory: String = "~") -> SpaceModel {
         spaceCounter += 1
-        let tab = TabModel(workingDirectory: workingDirectory)
         let resolvedName = name ?? "Space \(spaceCounter)"
-        let space = SpaceModel(name: resolvedName, initialTab: tab)
+        // Seed a Claude section (one Claude tab) and an empty Terminal section.
+        let space = SpaceModel(name: resolvedName, workingDirectory: workingDirectory)
         space.workspaceDefaultDirectory = workspaceDefaultDirectory
         if let workspaceID {
             space.propagateWorkspaceID(workspaceID)
@@ -72,8 +71,11 @@ final class SpaceCollection {
     func removeSpace(id: UUID) {
         guard let index = spaces.firstIndex(where: { $0.id == id }) else { return }
         let space = spaces[index]
-        // Cleanup all tabs in the space
-        for tab in space.tabs {
+        // Cleanup all tabs in both sections.
+        for tab in space.claudeSection.tabs {
+            tab.cleanup()
+        }
+        for tab in space.terminalSection.tabs {
             tab.cleanup()
         }
         space.gitContext.teardown()
@@ -176,7 +178,10 @@ final class SpaceCollection {
     // MARK: - Private
 
     private func wireSpaceClose(_ space: SpaceModel) {
-        space.onEmpty = { [weak self, spaceID = space.id] in
+        // v4 cascade: Space closes only on explicit user gesture
+        // (Cmd+W on empty Claude placeholder, sidebar Close, etc.).
+        // Section emptiness no longer triggers auto-close.
+        space.onSpaceClose = { [weak self, spaceID = space.id] in
             self?.removeSpace(id: spaceID)
         }
     }
