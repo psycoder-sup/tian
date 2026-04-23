@@ -142,7 +142,9 @@ struct DefaultWorkingDirectoryTests {
 
         // The initial tab should have a fallback that resolves to workspace default
         let space = ws.spaces[0]
-        let tab = space.tabs[0]
+        // v4: fresh Space has 0 Terminal tabs; the seeded Claude tab
+        // carries the directory fallback.
+        let tab = space.claudeSection.tabs[0]
         let fallback = tab.paneViewModel.directoryFallback?()
         #expect(fallback == "/tmp/project")
     }
@@ -153,7 +155,8 @@ struct DefaultWorkingDirectoryTests {
         let space = ws.spaces[0]
         space.defaultWorkingDirectory = URL(filePath: "/tmp/space-override")
 
-        let tab = space.tabs[0]
+        // v4: fresh Space has 0 Terminal tabs; use the seeded Claude tab.
+        let tab = space.claudeSection.tabs[0]
         let fallback = tab.paneViewModel.directoryFallback?()
         #expect(fallback == "/tmp/space-override")
     }

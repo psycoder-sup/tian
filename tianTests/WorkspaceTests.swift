@@ -7,9 +7,13 @@ import Foundation
 @MainActor
 struct WorkspaceTests {
     @Test func initCreatesOneSpaceWithOneTab() {
+        // v4: new Spaces seed the Claude section with one Claude tab and
+        // leave the Terminal section empty + hidden. Legacy `space.tabs`
+        // aliases Terminal — so the assertion migrates to the v4 shape.
         let ws = Workspace(name: "project")
         #expect(ws.spaces.count == 1)
-        #expect(ws.spaces[0].tabs.count == 1)
+        #expect(ws.spaces[0].claudeSection.tabs.count == 1)
+        #expect(ws.spaces[0].terminalSection.tabs.isEmpty)
         #expect(ws.name == "project")
     }
 
@@ -31,15 +35,16 @@ struct WorkspaceTests {
         #expect(ws.activeSpace?.id == ws.spaceCollection.activeSpace?.id)
     }
 
-    @Test func onEmptyFiredWhenLastSpaceClosed() {
+    @Test func onEmptyFiredWhenLastSpaceExplicitlyClosed() async {
+        // v4: ws.onEmpty fires when the last Space is removed. Space
+        // removal now requires an explicit user close (requestSpaceClose),
+        // not a pane-exit cascade.
         let ws = Workspace(name: "project")
         var fired = false
         ws.onEmpty = { fired = true }
 
         let space = ws.spaceCollection.spaces[0]
-        let tab = space.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
-        tab.paneViewModel.closePane(paneID: paneID)
+        await space.requestSpaceClose()
 
         #expect(fired)
     }
@@ -348,33 +353,39 @@ struct WorkspaceCollectionTests {
 
     // MARK: - Cascading Close
 
-    @Test func fullCascadeFromPaneToOnEmpty() {
+    @Test func explicitCloseCascadesFromSpaceToOnEmpty() async {
+        // v4: closing the last pane no longer cascades to Space close.
+        // Explicit `requestSpaceClose` fires onSpaceClose → removeSpace,
+        // which in turn cascades upward to the workspace collection
+        // when the last workspace's last space goes away.
         let collection = WorkspaceCollection()
         var emptyCalled = false
         collection.onEmpty = { emptyCalled = true }
         let ws = collection.workspaces[0]
         let space = ws.spaceCollection.spaces[0]
-        let tab = space.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
-        tab.paneViewModel.closePane(paneID: paneID)
+        await space.requestSpaceClose()
 
-        #expect(space.tabs.isEmpty)
         #expect(ws.spaceCollection.spaces.isEmpty)
         #expect(collection.workspaces.isEmpty)
         #expect(emptyCalled)
     }
 
     @Test func cascadeStopsWhenTabsRemain() {
+        // v4: fresh Space has 0 Terminal tabs; seed 2 Terminal tabs so
+        // closing one leaves a Terminal tab behind.
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
         let space = ws.spaceCollection.spaces[0]
-        space.createTab()
+        space.createTab()  // 1 Terminal tab
+        space.createTab()  // 2 Terminal tabs
         let tab1 = space.tabs[0]
         let paneID = tab1.paneViewModel.splitTree.focusedPaneID
 
         tab1.paneViewModel.closePane(paneID: paneID)
 
+        // Closing tab1's only pane removes that tab; 1 Terminal tab remains
+        // and the Space stays alive regardless of Claude section content.
         #expect(space.tabs.count == 1)
         #expect(collection.workspaces.count == 1)
     }
@@ -384,12 +395,14 @@ struct WorkspaceCollectionTests {
         let ws = collection.workspaces[0]
         ws.spaceCollection.createSpace()
         let space1 = ws.spaceCollection.spaces[0]
+        space1.createTab()  // v4: seed a Terminal tab so the test has one to close
         let tab = space1.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
         tab.paneViewModel.closePane(paneID: paneID)
 
-        #expect(ws.spaceCollection.spaces.count == 1)
+        // v4: Space stays alive when Terminal auto-hides.
+        #expect(ws.spaceCollection.spaces.count == 2)
         #expect(collection.workspaces.count == 1)
     }
 
@@ -398,11 +411,14 @@ struct WorkspaceCollectionTests {
         let ws1 = collection.workspaces[0]
         collection.createWorkspace(name: "second")
         let space = ws1.spaceCollection.spaces[0]
+        space.createTab()  // v4: seed a Terminal tab so the test has one to close
         let tab = space.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
 
         tab.paneViewModel.closePane(paneID: paneID)
 
-        #expect(collection.workspaces.count == 1)
+        // v4: closing the pane auto-hides Terminal; neither the Space nor
+        // the owning Workspace are removed.
+        #expect(collection.workspaces.count == 2)
     }
 }

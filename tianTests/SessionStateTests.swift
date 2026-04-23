@@ -391,7 +391,9 @@ struct SessionSnapshotTests {
         let ws = snapshot.workspaces[0]
         #expect(ws.name == "default")
         #expect(ws.spaces.count == 1)
-        #expect(ws.spaces[0].tabs.count == 1)
+        // v4: fresh Space seeds Claude section with one tab; Terminal is empty.
+        #expect(ws.spaces[0].claudeSection.tabs.count == 1)
+        #expect(ws.spaces[0].terminalSection.tabs.isEmpty)
     }
 
     @Test func snapshotCapturesMultipleWorkspaces() {
@@ -409,15 +411,16 @@ struct SessionSnapshotTests {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
         let space = ws.spaceCollection.activeSpace!
-        let tab = space.activeTab!
+        // v4: use the seeded Claude tab (Terminal empty on fresh Space).
+        let tab = space.claudeSection.tabs[0]
         let focusedPaneID = tab.paneViewModel.splitTree.focusedPaneID
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
         #expect(snapshot.activeWorkspaceId == ws.id)
         #expect(snapshot.workspaces[0].activeSpaceId == space.id)
-        #expect(snapshot.workspaces[0].spaces[0].activeTabId == tab.id)
-        #expect(snapshot.workspaces[0].spaces[0].tabs[0].activePaneId == focusedPaneID)
+        #expect(snapshot.workspaces[0].spaces[0].claudeSection.activeTabId == tab.id)
+        #expect(snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].activePaneId == focusedPaneID)
     }
 
     @Test func snapshotCapturesWorkingDirectory() {
@@ -452,13 +455,15 @@ struct SessionSnapshotTests {
 
     @Test func snapshotCapturesRestoreCommand() {
         let collection = WorkspaceCollection()
-        let tab = collection.workspaces[0].spaceCollection.activeSpace!.activeTab!
+        let space = collection.workspaces[0].spaceCollection.activeSpace!
+        // v4: use the seeded Claude tab (Terminal is empty on a fresh Space).
+        let tab = space.claudeSection.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
         tab.paneViewModel.setRestoreCommand(paneID: paneID, command: "claude --resume test123")
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        let root = snapshot.workspaces[0].spaces[0].tabs[0].root
+        let root = snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].root
         if case .pane(let leaf) = root {
             #expect(leaf.restoreCommand == "claude --resume test123")
         } else {
@@ -471,7 +476,8 @@ struct SessionSnapshotTests {
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        let root = snapshot.workspaces[0].spaces[0].tabs[0].root
+        // v4: Claude section holds the seeded tab on a fresh Space.
+        let root = snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].root
         if case .pane(let leaf) = root {
             #expect(leaf.restoreCommand == nil)
         } else {
@@ -673,33 +679,59 @@ struct SpaceStateWorktreePathTests {
     }
 
     @Test func decodesV1JSONWithMissingWorktreePath() throws {
-        // Simulate a v1 JSON that has no worktreePath field at all
-        let paneID = UUID()
+        // v4: the SpaceState shape no longer has a flat `tabs` field, so
+        // v1 payloads reach this code path only AFTER the migrator has
+        // rewritten them into the v4 shape. Here we drive the full
+        // migration chain (v1 → v2 → v3 → v4) and then decode.
+        let paneID = UUID().uuidString
+        let workspaceID = UUID().uuidString
+        let spaceID = UUID().uuidString
+        let tabID = UUID().uuidString
         let json: [String: Any] = [
-            "id": paneID.uuidString,
-            "name": "default",
-            "activeTabId": paneID.uuidString,
-            "defaultWorkingDirectory": "/tmp",
-            "tabs": [
+            "version": 1,
+            "savedAt": "2026-04-20T00:00:00Z",
+            "activeWorkspaceId": workspaceID,
+            "workspaces": [
                 [
-                    "id": paneID.uuidString,
-                    "name": "Tab 1",
-                    "activePaneId": paneID.uuidString,
-                    "root": [
-                        "type": "pane",
-                        "paneID": paneID.uuidString,
-                        "workingDirectory": "/tmp"
-                    ] as [String: Any]
+                    "id": workspaceID,
+                    "name": "ws",
+                    "activeSpaceId": spaceID,
+                    "defaultWorkingDirectory": "/tmp",
+                    "spaces": [
+                        [
+                            "id": spaceID,
+                            "name": "default",
+                            "activeTabId": tabID,
+                            "defaultWorkingDirectory": "/tmp",
+                            "tabs": [
+                                [
+                                    "id": tabID,
+                                    "name": "Tab 1",
+                                    "activePaneId": paneID,
+                                    "root": [
+                                        "type": "pane",
+                                        "paneID": paneID,
+                                        "workingDirectory": "/tmp"
+                                    ] as [String: Any]
+                                ] as [String: Any]
+                            ]
+                        ] as [String: Any]
+                    ]
                 ] as [String: Any]
             ]
         ]
 
-        let data = try JSONSerialization.data(withJSONObject: json)
-        let decoded = try JSONDecoder().decode(SpaceState.self, from: data)
+        let v1Data = try JSONSerialization.data(withJSONObject: json)
+        let migratedOpt = try SessionStateMigrator.migrateIfNeeded(data: v1Data)
+        let migrated = try #require(migratedOpt)
+        // Use SessionRestorer.decode to pick up the ISO-8601 date strategy
+        // the snapshot writer uses.
+        let decoded = try SessionRestorer.decode(from: migrated)
 
-        #expect(decoded.worktreePath == nil)
-        #expect(decoded.name == "default")
-        #expect(decoded.tabs.count == 1)
+        #expect(decoded.workspaces[0].spaces[0].worktreePath == nil)
+        #expect(decoded.workspaces[0].spaces[0].name == "default")
+        #expect(decoded.workspaces[0].spaces[0].terminalSection.tabs.count == 1)
+        #expect(decoded.workspaces[0].spaces[0].claudeSection.tabs.count == 1)
     }
 }
 

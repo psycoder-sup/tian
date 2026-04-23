@@ -299,8 +299,9 @@ struct StressTests {
         let collection = SpaceCollection()
         let space = collection.spaces[0]
 
-        // Create 50 tabs
-        for _ in 1..<50 {
+        // v4: fresh Space has 0 Terminal tabs (Claude section holds 1).
+        // Create 50 Terminal tabs.
+        for _ in 0..<50 {
             space.createTab()
         }
         #expect(space.tabs.count == 50)
@@ -412,8 +413,9 @@ struct StressTests {
         for _ in 1..<5 {
             collection.createSpace()
         }
+        // v4: each fresh Space has 0 Terminal tabs; create 10 Terminal tabs.
         for space in collection.spaces {
-            for _ in 1..<10 {
+            for _ in 0..<10 {
                 space.createTab()
             }
         }

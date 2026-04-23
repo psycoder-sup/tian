@@ -254,6 +254,13 @@ final class WorktreeOrchestrator {
         // Step 11: (removed) Setup no longer runs in the interactive pane, so
         // waiting for shell readiness here is unnecessary. Layout `.pane` commands
         // still wait for readiness inline before typing.
+        //
+        // v4 space-sections: the Terminal section starts empty on a fresh
+        // Space, so `activeTab` (which aliases the Terminal section) would
+        // be nil. `showTerminal()` is a no-op for visibility and spawns the
+        // first Terminal tab when empty; after this the activeTab force-
+        // unwraps are safe.
+        newSpace.showTerminal()
         let initialPaneID = newSpace.activeTab!.paneViewModel.splitTree.focusedPaneID
         let paneViewModel = newSpace.activeTab!.paneViewModel
 

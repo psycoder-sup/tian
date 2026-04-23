@@ -175,10 +175,15 @@ struct SessionRestorerValidationTests {
         }
     }
 
-    @Test func emptyTabsThrows() {
+    @Test func emptyClaudeTabsThrows() {
+        // v4 — only an empty Claude section is a hard error; Terminal may
+        // legitimately be empty. Construct a state with an empty Claude
+        // section directly.
         let spaceID = UUID()
+        let emptyClaude = SectionState(id: UUID(), kind: .claude, activeTabId: nil, tabs: [])
+        let emptyTerminal = SectionState(id: UUID(), kind: .terminal, activeTabId: nil, tabs: [])
         let state = SessionState(
-            version: 1,
+            version: 4,
             savedAt: Date(),
             activeWorkspaceId: UUID(),
             workspaces: [
@@ -191,9 +196,13 @@ struct SessionRestorerValidationTests {
                         SpaceState(
                             id: spaceID,
                             name: "space",
-                            activeTabId: UUID(),
                             defaultWorkingDirectory: nil,
-                            tabs: []
+                            claudeSection: emptyClaude,
+                            terminalSection: emptyTerminal,
+                            terminalVisible: false,
+                            dockPosition: .right,
+                            splitRatio: 0.7,
+                            focusedSectionKind: .claude
                         )
                     ],
                     windowFrame: nil,
@@ -903,8 +912,11 @@ struct SessionRestorerMetricsTests {
 
         #expect(metrics.workspaceCount == 1)
         #expect(metrics.spaceCount == 1)
-        #expect(metrics.tabCount == 1)
-        #expect(metrics.paneCount == 1)
+        // v4: legacy fixture helper synthesises one Claude tab + one
+        // Terminal tab, so the validator counts both sections' tabs
+        // + panes.
+        #expect(metrics.tabCount == 2)
+        #expect(metrics.paneCount == 2)
     }
 
     // MARK: - Stale ID Counting
@@ -1187,8 +1199,9 @@ struct SessionRestorerMetricsTests {
 
         #expect(metrics.workspaceCount == 1)
         #expect(metrics.spaceCount == 2)
-        #expect(metrics.tabCount == 2)
-        #expect(metrics.paneCount == 3)
+        // v4: legacy helper synthesises a Claude tab per Space (2 spaces).
+        #expect(metrics.tabCount == 4)
+        #expect(metrics.paneCount == 5)
         #expect(metrics.totalStaleIdFixes == 0)
     }
 
