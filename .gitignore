@@ -18,6 +18,13 @@ build/
 # Superpowers brainstorming mockups
 .superpowers/
 
+# Claude Code local state
+.claude/scheduled_tasks.lock
+.claude/agent-memory/
+
+# tian-cli config artifacts
+.tian/*.rejected
+
 # Swift Package Manager
 .build/
 Package.resolved
