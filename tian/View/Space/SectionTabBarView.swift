@@ -27,12 +27,13 @@ struct SectionTabBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             SectionKindGlyph(kind: section.kind, size: 20)
                 .padding(.leading, 4)
+                .padding(.trailing, 2)
 
             GlassEffectContainer {
-                HStack(spacing: 0) {
+                HStack(spacing: 6) {
                     ForEach(section.tabs) { tab in
                         TabBarItemView(
                             tab: tab,
@@ -72,8 +73,6 @@ struct SectionTabBarView: View {
                         .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(4)
-                .background(Color.gray.opacity(0.12), in: Capsule())
             }
 
             Button(action: onNewTab) {
@@ -90,8 +89,8 @@ struct SectionTabBarView: View {
                 trailingToolbar
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 44)
+        .padding(.horizontal, 12)
+        .frame(height: 48)
         .dropDestination(for: TabDragItem.self) { items, _ in
             guard let item = items.first else { return false }
             // FR-22 — reject drops that cross the section boundary.

@@ -43,35 +43,63 @@ struct TabBarItemView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        let inner = HStack(spacing: 6) {
+        let tint = tab.sectionKind.tint
+        let inner = HStack(spacing: 8) {
             InlineRenameView(
                 text: tab.displayName,
                 isRenaming: $isRenaming,
                 onCommit: { tab.customName = $0 }
             )
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 11.5, weight: .medium))
             .foregroundStyle(isActive ? .primary : .secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if isActive || isHovering {
                 Button(action: onClose) {
                     Text("\u{00D7}")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.secondary)
+                        .opacity(isActive ? 0.9 : 0.5)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close tab \(tab.displayName)")
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 8))
+        .padding(.horizontal, 14)
+        .frame(height: 30)
         .contentShape(Capsule())
+        .overlay(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            tint.opacity(0.22),
+                            tint.opacity(0.06),
+                            Color.clear,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .opacity(isActive ? 1 : 0)
+                .allowsHitTesting(false)
+        )
 
         if isActive {
             inner
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .glassEffect(.regular.tint(tint.opacity(0.12)).interactive(), in: .capsule)
                 .glassEffectID("activeTab", in: namespace)
         } else {
             inner
+                .background {
+                    Capsule()
+                        .fill(Color.primary.opacity(isHovering ? 0.045 : 0.025))
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                        )
+                }
         }
     }
 }
