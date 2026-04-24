@@ -4,11 +4,11 @@ import Testing
 @MainActor
 struct SectionDividerViewTests {
 
-    @Test func dividerThicknessIsSixPoints() {
-        #expect(SectionDividerView.thickness == 6)
+    @Test func dividerIsHairline() {
+        #expect(SectionDividerView.thickness == 1)
     }
 
-    @Test func paneDividerIsThinnerThanSectionDivider() {
-        #expect(SplitLayout.dividerThickness < SectionDividerView.thickness)
+    @Test func sectionDividerIsThinnerThanPaneDivider() {
+        #expect(SectionDividerView.thickness < SplitLayout.dividerThickness)
     }
 }

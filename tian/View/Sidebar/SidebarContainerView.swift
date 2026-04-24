@@ -26,6 +26,15 @@ struct SidebarContainerView: View {
         workspaceCollection.activeSpaceCollection
     }
 
+    /// Leading inset that reserves room for the traffic lights + sidebar
+    /// toggle when the sidebar is collapsed, and matches the sidebar width
+    /// when expanded. 104pt = 80pt traffic-light gutter + 6pt HStack spacing
+    /// + ~18pt toggle button. Shared by both the toggle overlay and the
+    /// content's leading padding so the overlay never covers content.
+    private var toggleGutterWidth: CGFloat {
+        max(sidebarState.mode.width, 104)
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             if sidebarState.isExpanded {
@@ -37,21 +46,14 @@ struct SidebarContainerView: View {
                 .frame(width: sidebarState.mode.width)
             }
 
-            VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        Color.clear.frame(width: 80)
-                        SidebarToggleButton(workspaceCollection: workspaceCollection)
-                    }
-                    .frame(width: max(sidebarState.mode.width, 104), alignment: .leading)
+            spaceContentStack
+                .padding(.leading, toggleGutterWidth)
 
-                    Spacer(minLength: 0)
-                }
-                .frame(height: 44)
-
-                spaceContentStack
-                    .padding(.leading, sidebarState.mode.width)
+            HStack(spacing: 6) {
+                Color.clear.frame(width: 80)
+                SidebarToggleButton(workspaceCollection: workspaceCollection)
             }
+            .frame(width: toggleGutterWidth, height: 44, alignment: .leading)
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowAccessor(window: $nsWindow))

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Draggable divider between the Claude and Terminal sections.
 ///
-/// * 6pt visual thickness (FR-27 — thicker than `SplitLayout.dividerThickness` which is 4pt).
+/// * 1pt visual hairline (thinner than `SplitLayout.dividerThickness` which is 4pt).
 /// * 10pt total hit area for comfortable pointer acquisition.
 /// * Cursor swaps to `resizeLeftRight` / `resizeUpDown` based on `dock`.
 /// * Drag clamped via `SectionDividerClamper` (Claude ≥ 320pt, Terminal ≥ 160pt).
@@ -110,8 +110,7 @@ struct SectionDividerView: View {
     }
 }
 
-// FR-27: static constant co-located with the view so tests can assert it.
 extension SectionDividerView {
     /// Visual thickness of the section divider in points.
-    static let thickness: CGFloat = 6
+    static let thickness: CGFloat = 1
 }
