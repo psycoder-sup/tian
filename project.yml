@@ -28,11 +28,9 @@ schemes:
         tian: all
         tian-cli: all
         tianTests: [test]
-        tianUITests: [test]
     test:
       targets:
         - tianTests
-        - tianUITests
 
 targets:
   tian:
@@ -203,15 +201,3 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.cli
         PRODUCT_NAME: tian-cli
-
-  tianUITests:
-    type: bundle.ui-testing
-    platform: macOS
-    sources:
-      - path: tianUITests
-    dependencies:
-      - target: tian
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tian.uitests
-        GENERATE_INFOPLIST_FILE: true
