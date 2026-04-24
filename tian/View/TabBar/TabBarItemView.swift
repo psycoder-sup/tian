@@ -13,6 +13,15 @@ struct TabBarItemView: View {
     @State private var isRenaming = false
     @State private var lastClickTime: Date?
 
+    /// Gated on `isActive` so inactive tabs don't observe the status
+    /// dictionary — the aurora only shows on the active pill anyway,
+    /// and reading `PaneStatusManager.shared.sessionStates` subscribes
+    /// the whole dictionary for change tracking.
+    private var hasBusyPane: Bool {
+        guard isActive, tab.sectionKind == .claude else { return false }
+        return PaneStatusManager.shared.hasSessionState(.busy, in: tab)
+    }
+
     var body: some View {
         tabContent
             .onHover { isHovering = $0 }
@@ -44,6 +53,7 @@ struct TabBarItemView: View {
     @ViewBuilder
     private var tabContent: some View {
         let tint = tab.sectionKind.tint
+        let showAurora = isActive && hasBusyPane
         let inner = HStack(spacing: 8) {
             InlineRenameView(
                 text: tab.displayName,
@@ -85,6 +95,14 @@ struct TabBarItemView: View {
                 .opacity(isActive ? 1 : 0)
                 .allowsHitTesting(false)
         )
+        .overlay {
+            if showAurora {
+                AuroraCapsuleFill()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.45), value: showAurora)
 
         if isActive {
             inner

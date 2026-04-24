@@ -40,12 +40,9 @@ struct PaneView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showDimOverlay)
-        // Layer 3: Session state border (busy = rainbow, needsAttention = orange)
+        // Layer 3: needs-attention border. (Busy state renders on the tab pill, not here.)
         .overlay {
             switch sessionState {
-            case .busy:
-                RainbowBorder()
-                    .transition(.opacity)
             case .needsAttention:
                 SessionStateBorder(color: Color(red: 1.0, green: 0.624, blue: 0.039))
                     .transition(.opacity)

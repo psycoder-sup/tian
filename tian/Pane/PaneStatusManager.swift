@@ -71,6 +71,14 @@ final class PaneStatusManager {
         sessionStates[paneID]
     }
 
+    /// Whether any pane under this tab is currently in the given state.
+    func hasSessionState(_ state: ClaudeSessionState, in tab: TabModel) -> Bool {
+        for paneID in tab.paneViewModel.splitTree.allLeaves() {
+            if sessionStates[paneID] == state { return true }
+        }
+        return false
+    }
+
     /// Returns all (paneID, state) pairs in the space with non-nil, non-inactive state,
     /// sorted by priority (highest first).
     func sessionStates(in space: SpaceModel) -> [(paneID: UUID, state: ClaudeSessionState)] {

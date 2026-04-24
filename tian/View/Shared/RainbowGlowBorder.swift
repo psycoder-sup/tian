@@ -16,6 +16,13 @@ let rainbowColors: [Color] = [
 
 private let glowCornerRadius: CGFloat = 6
 
+/// Shared breathing envelope for rainbow overlays — oscillates in
+/// `[0.70, 1.00]` with a 2.5 s period. Used by `RainbowGlow` and
+/// `AuroraCapsuleFill` so sibling indicators pulse in sync.
+@inlinable func rainbowBreathe(_ t: TimeInterval) -> Double {
+    0.85 + 0.15 * sin(t * 0.8 * .pi)
+}
+
 // MARK: - Focus indicator (sharp rainbow border, no glow)
 
 struct RainbowBorder: View {
@@ -60,7 +67,7 @@ struct RainbowGlow: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let angle = Angle.degrees(t * 60)
-            let breathe = 0.85 + 0.15 * sin(t * 0.8 * .pi)
+            let breathe = rainbowBreathe(t)
 
             let gradient = AngularGradient(
                 colors: rainbowColors,
