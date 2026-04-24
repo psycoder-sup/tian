@@ -44,7 +44,7 @@ final class PaneStatusManager {
     /// Returns the most recently updated status among all panes in all tabs of the space.
     func latestStatus(in space: SpaceModel) -> PaneStatus? {
         var latest: PaneStatus?
-        for tab in space.tabs {
+        for tab in space.allTabs {
             for paneID in tab.paneViewModel.splitTree.allLeaves() {
                 guard let status = statuses[paneID] else { continue }
                 if latest == nil || status.sequence > latest!.sequence {
@@ -75,7 +75,7 @@ final class PaneStatusManager {
     /// sorted by priority (highest first).
     func sessionStates(in space: SpaceModel) -> [(paneID: UUID, state: ClaudeSessionState)] {
         var result: [(paneID: UUID, state: ClaudeSessionState)] = []
-        for tab in space.tabs {
+        for tab in space.allTabs {
             for paneID in tab.paneViewModel.splitTree.allLeaves() {
                 guard let state = sessionStates[paneID],
                       state != .inactive else { continue }

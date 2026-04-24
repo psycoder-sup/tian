@@ -81,7 +81,7 @@ final class WindowCoordinator {
             let collection = controller.workspaceCollection
             for workspace in collection.workspaces {
                 for space in workspace.spaceCollection.spaces {
-                    for tab in space.tabs {
+                    for tab in space.allTabs {
                         guard tab.paneViewModel.splitTree.root.containsLeaf(paneID: paneID) else {
                             continue
                         }
@@ -95,7 +95,7 @@ final class WindowCoordinator {
             let collection = controller.workspaceCollection
             for workspace in collection.workspaces {
                 for space in workspace.spaceCollection.spaces {
-                    for tab in space.tabs {
+                    for tab in space.allTabs {
                         guard let resolved = tab.paneViewModel.paneID(forSurfaceID: paneID) else {
                             continue
                         }
@@ -116,7 +116,7 @@ final class WindowCoordinator {
     ) {
         controller.workspaceCollection.activateWorkspace(id: workspace.id)
         workspace.spaceCollection.activateSpace(id: space.id)
-        space.activateTab(id: tab.id)
+        space.activate(tab: tab)
         tab.paneViewModel.focusPane(paneID: paneID)
         NSApp.activate()
         controller.window?.makeKeyAndOrderFront(nil)

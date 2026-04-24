@@ -117,10 +117,15 @@ final class SpaceModel: Identifiable {
 
     // MARK: - Legacy compat (will move to focusedSection in later phases)
 
-    /// Phase 1 compat: legacy accessor. Routes to `terminalSection.tabs`
-    /// so existing call sites (IPC, sidebar, serializer) keep working
-    /// without touching them in this phase.
+    /// Phase 1 compat shim: returns Terminal-section tabs only. Kept for
+    /// the legacy IPC `tab.create`/`tab.list` and sidebar tab-count call
+    /// sites that are intentionally Terminal-scoped. For anything that
+    /// needs to see Claude panes too (status tracking, process safety,
+    /// pane resolution, focus), use `allTabs`.
     var tabs: [TabModel] { terminalSection.tabs }
+
+    /// Every tab across both sections.
+    var allTabs: [TabModel] { claudeSection.tabs + terminalSection.tabs }
 
     /// Phase 1 compat: legacy active-tab id for the Terminal section.
     var activeTabID: UUID {
@@ -150,6 +155,22 @@ final class SpaceModel: Identifiable {
 
     func removeTab(id: UUID) { terminalSection.removeTab(id: id) }
     func activateTab(id: UUID) { terminalSection.activateTab(id: id) }
+
+    /// Section-aware tab activation. Routes to the section that owns the
+    /// tab (Claude or Terminal), updates `focusedSectionKind`, and
+    /// unhides the Terminal section when activating a Terminal tab while
+    /// it's hidden. Use this whenever a tab is being focused from outside
+    /// the section (e.g. IPC, notification click) — the legacy
+    /// `activateTab(id:)` shim only handles Terminal tabs.
+    func activate(tab: TabModel) {
+        let owningSection = (tab.sectionKind == .claude) ? claudeSection : terminalSection
+        owningSection.activateTab(id: tab.id)
+        focusedSectionKind = tab.sectionKind
+        if tab.sectionKind == .terminal && !terminalVisible {
+            terminalVisible = true
+        }
+    }
+
     func nextTab() { terminalSection.nextTab() }
     func previousTab() { terminalSection.previousTab() }
     func goToTab(index: Int) { terminalSection.goToTab(index: index) }

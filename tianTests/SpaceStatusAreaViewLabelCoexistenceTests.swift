@@ -213,4 +213,31 @@ struct SpaceStatusAreaViewLabelCoexistenceTests {
         let latest = manager.latestStatus(in: space)
         #expect(latest?.label == "Manual status")
     }
+
+    /// Regression: status set on a Claude pane must surface in
+    /// `sessionStates(in:)` and `latestStatus(in:)`. Earlier `space.tabs`
+    /// only enumerated the Terminal section, so Claude session status
+    /// was invisible in the sidebar. Also pin a Terminal pane in the
+    /// same space so the test exercises the cross-section enumeration
+    /// rather than relying on the Terminal section being empty.
+    @Test func claudePaneSessionStateAppearsInSpaceQuery() {
+        let manager = PaneStatusManager()
+        let space = SpaceModel(name: "test", workingDirectory: "~")
+        let claudeTab = space.claudeSection.tabs.first!
+        let claudePaneID = claudeTab.paneViewModel.splitTree.focusedPaneID
+
+        let terminalTab = space.createTab()
+        let terminalPaneID = terminalTab.paneViewModel.splitTree.focusedPaneID
+
+        manager.setSessionState(paneID: claudePaneID, state: .busy)
+        manager.setSessionState(paneID: terminalPaneID, state: .idle)
+        manager.setStatus(paneID: claudePaneID, label: "Delegating")
+
+        let sessions = manager.sessionStates(in: space)
+        #expect(sessions.count == 2)
+        #expect(sessions.contains { $0.paneID == claudePaneID && $0.state == .busy })
+        #expect(sessions.contains { $0.paneID == terminalPaneID && $0.state == .idle })
+
+        #expect(manager.latestStatus(in: space)?.label == "Delegating")
+    }
 }

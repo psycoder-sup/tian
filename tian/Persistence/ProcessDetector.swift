@@ -22,7 +22,7 @@ enum ProcessDetector {
         for collection in collections {
             for workspace in collection.workspaces {
                 for space in workspace.spaceCollection.spaces {
-                    for tab in space.tabs {
+                    for tab in space.allTabs {
                         for (paneID, terminalSurface) in tab.paneViewModel.surfaces {
                             guard let surface = terminalSurface.surface,
                                   ghostty_surface_needs_confirm_quit(surface) else { continue }

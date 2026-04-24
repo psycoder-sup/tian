@@ -122,7 +122,7 @@ final class IPCCommandHandler {
         }
 
         let force = optionalBool("force", from: request.params)
-        let tabs = workspace.spaceCollection.spaces.flatMap(\.tabs)
+        let tabs = workspace.spaceCollection.spaces.flatMap(\.allTabs)
         if let error = checkProcessSafety(force: force, tabs: tabs) { return error }
 
         collection.removeWorkspace(id: id)
@@ -195,7 +195,7 @@ final class IPCCommandHandler {
         }
 
         let force = optionalBool("force", from: request.params)
-        if let error = checkProcessSafety(force: force, tabs: space.tabs) { return error }
+        if let error = checkProcessSafety(force: force, tabs: space.allTabs) { return error }
 
         workspace.spaceCollection.removeSpace(id: id)
         return .success()
@@ -281,10 +281,10 @@ final class IPCCommandHandler {
 
         // Try as UUID first
         if let uuid = UUID(uuidString: target) {
-            guard let (space, _) = resolveTab(id: uuid, spaceId: nil) else {
+            guard let (space, tab) = resolveTab(id: uuid, spaceId: nil) else {
                 return .failure(code: 1, message: "Tab not found: \(target)")
             }
-            space.activateTab(id: uuid)
+            space.activate(tab: tab)
             return .success()
         }
 
@@ -615,7 +615,7 @@ final class IPCCommandHandler {
                     workspace.spaceCollection.spaces
                 }
                 for space in spaces {
-                    if let tab = space.tabs.first(where: { $0.id == id }) {
+                    if let tab = space.allTabs.first(where: { $0.id == id }) {
                         return (space, tab)
                     }
                 }
@@ -629,9 +629,9 @@ final class IPCCommandHandler {
             for workspace in collection.workspaces {
                 for space in workspace.spaceCollection.spaces {
                     let tabs = if let tabId {
-                        space.tabs.filter { $0.id == tabId }
+                        space.allTabs.filter { $0.id == tabId }
                     } else {
-                        space.tabs
+                        space.allTabs
                     }
                     for tab in tabs {
                         if tab.paneViewModel.splitTree.root.containsLeaf(paneID: id) {
