@@ -31,7 +31,19 @@ struct SectionView: View {
                     }
                 )
             } else if let activeTab = section.activeTab {
-                VStack(spacing: 0) {
+                // ZStack (not VStack) so the tab bar's aurora glow can
+                // bleed downward over the terminal NSView area without
+                // being clipped — VStack siblings composited under the
+                // opaque Metal-backed terminal layer occlude the glow.
+                ZStack(alignment: .top) {
+                    SplitTreeView(
+                        node: activeTab.paneViewModel.splitTree.root,
+                        viewModel: activeTab.paneViewModel,
+                        isTabVisible: isSectionFocused
+                            || spaceModel.focusedSectionKind != section.kind
+                    )
+                    .padding(.top, SectionTabBarView.height)
+
                     SectionTabBarView(
                         section: section,
                         onNewTab: {
@@ -41,13 +53,6 @@ struct SectionView: View {
                         trailingToolbar: {
                             SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
                         }
-                    )
-
-                    SplitTreeView(
-                        node: activeTab.paneViewModel.splitTree.root,
-                        viewModel: activeTab.paneViewModel,
-                        isTabVisible: isSectionFocused
-                            || spaceModel.focusedSectionKind != section.kind
                     )
                 }
             } else {

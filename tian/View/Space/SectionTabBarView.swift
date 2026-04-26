@@ -5,6 +5,12 @@ import SwiftUI
 /// for individual tabs. Cross-section drag-reorder is enforced in
 /// Phase 6; this phase only allows reorder within a single section.
 struct SectionTabBarView: View {
+    /// Fixed height of the section tab bar. Exposed so `SectionView`
+    /// can offset the underlying `SplitTreeView` by the same amount
+    /// when composing them in a ZStack (so the tab bar's aurora glow
+    /// can bleed over the terminal area).
+    static let height: CGFloat = 48
+
     let section: SectionModel
     let trailingToolbar: AnyView?
     var onNewTab: () -> Void = {}
