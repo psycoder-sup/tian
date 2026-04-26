@@ -6,6 +6,10 @@ import Foundation
 struct AutoSetPayload: Codable, Equatable {
     let setup: [SetupEntry]
     let copy: [CopyEntry]
+    /// Cleanup commands run when the worktree Space is removed — inverse
+    /// of `setup`. Same shape as a setup entry; empty array when nothing
+    /// to clean up.
+    let archive: [SetupEntry]
     /// Optional human-readable notes, rendered as a comment block above
     /// the TOML body. Not part of the `WorktreeConfig` schema.
     let notes: String?
@@ -19,13 +23,27 @@ struct AutoSetPayload: Codable, Equatable {
         let dest: String
     }
 
+    /// Defaulting `archive` to `[]` keeps the dozens of existing test
+    /// constructors green without forcing every call site to pass it.
+    init(
+        setup: [SetupEntry],
+        copy: [CopyEntry],
+        archive: [SetupEntry] = [],
+        notes: String? = nil
+    ) {
+        self.setup = setup
+        self.copy = copy
+        self.archive = archive
+        self.notes = notes
+    }
+
     /// JSON Schema passed to `claude -p --json-schema`.
     ///
     /// Kept as a compact single-line string so it fits cleanly on the
     /// command line. Must stay in sync with the Codable shape above —
     /// the `AutoSetPayloadTests` suite pins this contract.
     static let jsonSchema: String = #"""
-    {"type":"object","additionalProperties":false,"required":["setup","copy"],"properties":{"setup":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1}}}},"copy":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source","dest"],"properties":{"source":{"type":"string","minLength":1},"dest":{"type":"string","minLength":1}}}},"notes":{"type":"string"}}}
+    {"type":"object","additionalProperties":false,"required":["setup","copy","archive"],"properties":{"setup":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1}}}},"copy":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source","dest"],"properties":{"source":{"type":"string","minLength":1},"dest":{"type":"string","minLength":1}}}},"archive":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1}}}},"notes":{"type":"string"}}}
     """#
 }
 

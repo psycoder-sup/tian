@@ -18,9 +18,9 @@ struct ConfigAutoSet: ParsableCommand {
         discussion: """
             Analyzes the current repository with `claude -p` (read-only \
             tools) and writes a .tian/config.toml populated with \
-            [[setup]] and [[copy]] sections. Must be run from inside a \
-            git repository; refuses to overwrite an existing file unless \
-            --force is passed.
+            [[setup]], [[copy]], and (when applicable) [[archive]] \
+            sections. Must be run from inside a git repository; refuses \
+            to overwrite an existing file unless --force is passed.
             """
     )
 
@@ -47,8 +47,9 @@ struct ConfigAutoSet: ParsableCommand {
 
         let setupWord = result.setupCount == 1 ? "setup command" : "setup commands"
         let copyWord = result.copyCount == 1 ? "copy rule" : "copy rules"
+        let archiveWord = result.archiveCount == 1 ? "archive command" : "archive commands"
         FileHandle.standardError.write(Data(
-            "Wrote .tian/config.toml (\(result.setupCount) \(setupWord), \(result.copyCount) \(copyWord))\n".utf8
+            "Wrote .tian/config.toml (\(result.setupCount) \(setupWord), \(result.copyCount) \(copyWord), \(result.archiveCount) \(archiveWord))\n".utf8
         ))
     }
 }

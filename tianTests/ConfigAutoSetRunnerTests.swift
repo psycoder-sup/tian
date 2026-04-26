@@ -110,6 +110,51 @@ struct ConfigAutoSetRunnerTests {
         #expect(stub.calls[0].model == "sonnet")
     }
 
+    @Test func run_rendersArchiveSection_whenPresent() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        let payload = AutoSetPayload(
+            setup: [.init(command: "docker compose up -d")],
+            copy: [],
+            archive: [.init(command: "docker compose down -v")]
+        )
+        let stub = StubClaudeInvoker(output: try envelope(payload: payload))
+        let result = try ConfigAutoSetRunner(invoker: stub).run(
+            cwd: tmp, force: false, model: "sonnet"
+        )
+
+        #expect(result.archiveCount == 1)
+
+        let written = try String(
+            contentsOf: tmp.appendingPathComponent(".tian/config.toml"),
+            encoding: .utf8
+        )
+        #expect(written.contains("[[archive]]"))
+        #expect(written.contains("docker compose down -v"))
+    }
+
+    @Test func run_omitsArchiveSection_whenEmpty() throws {
+        let tmp = try makeTempDir()
+        defer { cleanup(tmp) }
+        try gitInit(at: tmp)
+
+        let payload = AutoSetPayload(setup: [.init(command: "echo hi")], copy: [])
+        let stub = StubClaudeInvoker(output: try envelope(payload: payload))
+        let result = try ConfigAutoSetRunner(invoker: stub).run(
+            cwd: tmp, force: false, model: "sonnet"
+        )
+
+        #expect(result.archiveCount == 0)
+
+        let written = try String(
+            contentsOf: tmp.appendingPathComponent(".tian/config.toml"),
+            encoding: .utf8
+        )
+        #expect(!written.contains("[[archive]]"))
+    }
+
     @Test func run_rendersNotesAsCommentBlock() throws {
         let tmp = try makeTempDir()
         defer { cleanup(tmp) }

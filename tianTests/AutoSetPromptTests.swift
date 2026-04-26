@@ -14,6 +14,7 @@ struct AutoSetPromptTests {
         #expect(prompt.contains("setup[].command"))
         #expect(prompt.contains("copy[].source"))
         #expect(prompt.contains("copy[].dest"))
+        #expect(prompt.contains("archive[].command"))
         #expect(prompt.contains("notes"))
     }
 
@@ -40,12 +41,14 @@ struct AutoSetPayloadTests {
         let required = obj?["required"] as? [String]
         #expect(required?.contains("setup") == true)
         #expect(required?.contains("copy") == true)
+        #expect(required?.contains("archive") == true)
     }
 
     @Test func payloadRoundTripsThroughJSON() throws {
         let payload = AutoSetPayload(
             setup: [.init(command: "bun install")],
             copy: [.init(source: ".env.local", dest: ".")],
+            archive: [.init(command: "docker compose down")],
             notes: "demo"
         )
         let data = try JSONEncoder().encode(payload)

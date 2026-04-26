@@ -10,8 +10,9 @@ enum AutoSetPrompt {
     static let template: String = """
     Analyze this repository and decide how a fresh `git worktree` copy of \
     it should be bootstrapped. Your response is validated against a JSON \
-    Schema: return `setup` (array of commands) and `copy` (array of files \
-    to hydrate from the main worktree), plus optional `notes`.
+    Schema: return `setup` (array of commands), `copy` (array of files \
+    to hydrate from the main worktree), and `archive` (array of cleanup \
+    commands run when the worktree is removed), plus optional `notes`.
 
     # Fields
 
@@ -28,6 +29,15 @@ enum AutoSetPrompt {
       files, and local-only secrets.
     - `copy[].dest` — path relative to repo root. A trailing `/` means \
       "place files inside this directory".
+    - `archive[].command` — a shell command run when the worktree is \
+      removed (inverse of `setup`), with the worktree root as cwd. Use \
+      ONLY to undo side effects that escape the worktree directory and \
+      that `git worktree remove` won't reclaim — e.g. \
+      `docker compose down`, `docker rm -f <name>`, killing background \
+      services started by setup, or releasing a host port reservation. \
+      Do NOT include archives for files inside the worktree (the \
+      directory is deleted) or for in-repo cleanup; leave the array \
+      empty unless `setup` actually leaves something behind.
     - `notes` — optional, short. One or two sentences the user will see \
       as a `# comment` block above the generated TOML. Leave blank if \
       nothing noteworthy.
@@ -52,8 +62,9 @@ enum AutoSetPrompt {
     "bun@1"`, a tracked `.env.example`, and a `.gitignore` that lists \
     `.env.local`, should produce:
 
-        setup: [{"command": "bun install"}, {"command": "cp .env.example .env"}]
-        copy:  [{"source": ".env.local", "dest": "."}]
+        setup:   [{"command": "bun install"}, {"command": "cp .env.example .env"}]
+        copy:    [{"source": ".env.local", "dest": "."}]
+        archive: []
 
     A Swift / XcodeGen repo with `project.yml` and a `.ghostty-src` \
     symlink in `.gitignore` should produce:
@@ -62,9 +73,18 @@ enum AutoSetPrompt {
           {"command": "xcodegen generate"},
           {"command": "MAIN=$(dirname \\"$(git rev-parse --path-format=absolute --git-common-dir)\\") && ln -sfn \\"$MAIN/.ghostty-src\\" .ghostty-src"}
         ]
-        copy:  []
+        copy:    []
+        archive: []
+
+    A repo whose `setup` runs `docker compose up -d` to start a per-\
+    worktree dev database should produce a matching `archive`:
+
+        setup:   [{"command": "docker compose up -d"}]
+        copy:    []
+        archive: [{"command": "docker compose down -v"}]
 
     Now analyze the current repository (your `cwd` is the repo root) \
-    and return the `setup`, `copy`, and optional `notes` fields.
+    and return the `setup`, `copy`, `archive`, and optional `notes` \
+    fields.
     """
 }

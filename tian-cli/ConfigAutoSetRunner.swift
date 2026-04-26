@@ -5,6 +5,7 @@ import TOMLKit
 struct ConfigAutoSetResult: Equatable {
     let setupCount: Int
     let copyCount: Int
+    let archiveCount: Int
 }
 
 /// Orchestrates `tian-cli config auto-set`: resolves the repo, invokes
@@ -112,7 +113,8 @@ struct ConfigAutoSetRunner {
 
         return ConfigAutoSetResult(
             setupCount: payload.setup.count,
-            copyCount: payload.copy.count
+            copyCount: payload.copy.count,
+            archiveCount: payload.archive.count
         )
     }
 
@@ -161,11 +163,18 @@ struct ConfigAutoSetRunner {
         // `notes` is rendered in the header only, so encode a narrower
         // shape that excludes it rather than touching `AutoSetPayload`'s
         // Codable conformance (which is also the decoder for the envelope).
+        // `archive` is omitted from the encoded body when empty so the
+        // generated TOML stays clean for repos that don't need cleanup.
         struct Body: Encodable {
             let setup: [AutoSetPayload.SetupEntry]
             let copy: [AutoSetPayload.CopyEntry]
+            let archive: [AutoSetPayload.SetupEntry]?
         }
-        let body = Body(setup: payload.setup, copy: payload.copy)
+        let body = Body(
+            setup: payload.setup,
+            copy: payload.copy,
+            archive: payload.archive.isEmpty ? nil : payload.archive
+        )
 
         let encoder = TOMLEncoder()
         let bodyTOML: String

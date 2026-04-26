@@ -228,7 +228,7 @@ struct WorktreeOrchestratorTests {
         // Schedule cancellation during creation (fires during an await suspension)
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(10))
-            orchestrator.cancelSetup()
+            orchestrator.cancelCommands()
         }
 
         let result = try await orchestrator.createWorktreeSpace(
@@ -277,6 +277,87 @@ struct WorktreeOrchestratorTests {
 
         // Space should be removed from collection
         #expect(workspace.spaceCollection.spaces.count == spaceCountBefore - 1)
+        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+    }
+
+    @Test func removeWorktreeSpace_runsArchiveCommands() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Drop a sentinel-stamping archive command. We pick a path
+        // OUTSIDE the worktree so the file survives `git worktree remove`
+        // and we can assert on it after the Space is gone.
+        let sentinel = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-archive-sentinel-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: sentinel) }
+
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+
+            [[archive]]
+            command = "pwd > \(sentinel.path)"
+            """,
+            in: repo
+        )
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "archive-me",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-me")
+        // Capture the canonical (realpath) form BEFORE removal — `pwd`
+        // inside the shell returns the canonical `/private/var/...`
+        // path on macOS, but Foundation's path normalizers don't always
+        // traverse the `/var` → `/private/var` symlink, so we lean on
+        // libc's realpath here.
+        let canonicalWorktree = realpath(worktreePath, nil).flatMap { ptr -> String? in
+            defer { free(ptr) }
+            return String(cString: ptr)
+        } ?? worktreePath
+
+        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+
+        #expect(!FileManager.default.fileExists(atPath: worktreePath))
+        #expect(FileManager.default.fileExists(atPath: sentinel.path))
+        let recordedCwd = try String(contentsOf: sentinel, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(recordedCwd == canonicalWorktree)
+        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+    }
+
+    @Test func removeWorktreeSpace_archiveFailureDoesNotBlockRemoval() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+
+            [[archive]]
+            command = "exit 1"
+            """,
+            in: repo
+        )
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "archive-fails",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-fails")
+        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+
+        #expect(!FileManager.default.fileExists(atPath: worktreePath))
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
     }
 

@@ -236,6 +236,51 @@ struct WorktreeConfigParserTests {
         #expect(config.copyRules[2] == CopyRule(source: "Makefile", dest: "Makefile"))
     }
 
+    // MARK: - Archive Commands
+
+    @Test func parseArchiveCommandsInOrder() throws {
+        let toml = """
+        [[setup]]
+        command = "docker compose up -d"
+
+        [[archive]]
+        command = "docker compose down -v"
+
+        [[archive]]
+        command = "rm -rf .cache"
+        """
+
+        let config = try WorktreeConfigParser.parse(tomlString: toml)
+
+        #expect(config.setupCommands == ["docker compose up -d"])
+        #expect(config.archiveCommands == [
+            "docker compose down -v",
+            "rm -rf .cache",
+        ])
+    }
+
+    @Test func parseArchiveCommandMissingCommandSkips() throws {
+        let toml = """
+        [[archive]]
+
+        [[archive]]
+        command = "real-cleanup"
+        """
+
+        let config = try WorktreeConfigParser.parse(tomlString: toml)
+        #expect(config.archiveCommands == ["real-cleanup"])
+    }
+
+    @Test func parseConfigWithoutArchiveDefaultsEmpty() throws {
+        let toml = """
+        [[setup]]
+        command = "echo hi"
+        """
+
+        let config = try WorktreeConfigParser.parse(tomlString: toml)
+        #expect(config.archiveCommands.isEmpty)
+    }
+
     @Test func parseCopyRulesMissingRequiredFieldsSkips() throws {
         let toml = """
         [[copy]]

@@ -16,17 +16,19 @@ final class WorktreeOrchestrator {
     /// True during creation flow; drives sidebar progress indicator.
     var isCreating: Bool = false
 
-    /// Set to true when the user cancels setup commands.
-    var setupCancelled: Bool = false
+    /// Set to true when the user cancels the in-flight setup or archive
+    /// command loop. Reset at the top of each create/remove flow.
+    var commandsCancelled: Bool = false
 
     /// Last error surfaced by the orchestrator, for UI binding.
     var lastError: WorktreeError?
 
-    /// Temporary event monitor for Ctrl+C during setup commands.
+    /// Temporary event monitor for Ctrl+C during shell command loops.
     private var ctrlCMonitor: Any?
 
-    /// Currently running setup process, if any. Used for cancellation/timeout.
-    private var currentSetupProcess: Process?
+    /// Currently running shell process (setup or archive), if any.
+    /// Used for cancellation/timeout.
+    private var currentCommandProcess: Process?
 
     // MARK: - Init
 
@@ -56,7 +58,7 @@ final class WorktreeOrchestrator {
         repoPath: String? = nil,
         workspaceID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
-        setupCancelled = false
+        commandsCancelled = false
 
         // Step 1: Resolve workspace and git repo root
         let targetWorkspace = resolveWorkspace(workspaceID: workspaceID)
@@ -149,6 +151,8 @@ final class WorktreeOrchestrator {
         force: Bool = false,
         workspaceID: UUID? = nil
     ) async throws {
+        commandsCancelled = false
+
         // Step 1: Find Space
         guard let (space, spaceCollection) = findSpace(id: spaceID) else { return }
 
@@ -160,15 +164,31 @@ final class WorktreeOrchestrator {
         }
         let worktreePath = worktreeURL.path
 
-        // Step 3: Resolve repo root
-        let repoRoot = try await WorktreeService.resolveRepoRoot(from: worktreePath)
+        // Step 3: Resolve repo roots. `git rev-parse --show-toplevel` from
+        // a linked worktree returns the linked worktree's own path, but
+        // both `.tian/config.toml` and the worktree base directory live
+        // in the *main* worktree. Resolve both so config parsing and
+        // prune use the right paths.
+        let linkedRoot = try await WorktreeService.resolveRepoRoot(from: worktreePath)
+        let mainRepoRoot = (try? await WorktreeService.resolveMainWorktreePath(repoRoot: linkedRoot))
+            ?? linkedRoot
 
-        // Step 4: Parse config for worktreeDir
-        let config = parseConfig(repoRoot: repoRoot)
+        // Step 4: Parse config from the main worktree.
+        let config = parseConfig(repoRoot: mainRepoRoot)
+
+        // Step 4.5: Run archive commands (inverse of [[setup]]). Must happen
+        // while the worktree directory still exists so commands can `cd`
+        // into it (e.g. `docker compose down`).
+        await runShellCommands(
+            commands: config.archiveCommands,
+            label: "archive",
+            worktreePath: worktreePath,
+            config: config
+        )
 
         // Step 5: Remove worktree
         try await WorktreeService.removeWorktree(
-            repoRoot: repoRoot,
+            repoRoot: mainRepoRoot,
             worktreePath: worktreePath,
             force: force
         )
@@ -181,7 +201,7 @@ final class WorktreeOrchestrator {
             try WorktreeService.pruneEmptyParents(
                 worktreePath: worktreePath,
                 worktreeDir: config.worktreeDir,
-                repoRoot: repoRoot
+                repoRoot: mainRepoRoot
             )
         } catch {
             Log.worktree.warning("Failed to prune empty parents: \(error)")
@@ -190,10 +210,11 @@ final class WorktreeOrchestrator {
 
     // MARK: - Cancellation
 
-    /// Cancels any in-progress setup commands.
-    func cancelSetup() {
-        setupCancelled = true
-        currentSetupProcess?.terminate()
+    /// Cancels the in-flight shell command loop (setup or archive).
+    /// Wired to both the SetupCancelButton and the Ctrl+C monitor.
+    func cancelCommands() {
+        commandsCancelled = true
+        currentCommandProcess?.terminate()
     }
 
     /// Stores an error for the UI alert binding to consume.
@@ -265,8 +286,9 @@ final class WorktreeOrchestrator {
         let paneViewModel = newSpace.activeTab!.paneViewModel
 
         // Step 12: Run setup commands as background processes (FR-012)
-        await runSetupCommands(
+        await runShellCommands(
             commands: config.setupCommands,
+            label: "setup",
             worktreePath: worktreePath,
             config: config
         )
@@ -287,10 +309,17 @@ final class WorktreeOrchestrator {
         return WorktreeCreateResult(spaceID: newSpace.id, existed: false)
     }
 
-    // MARK: - Setup Commands
+    // MARK: - Shell Commands
 
-    private func runSetupCommands(
+    /// Runs an ordered list of shell commands sequentially with the
+    /// worktree as cwd. Drives both `[[setup]]` (during creation) and
+    /// `[[archive]]` (during removal). Failures are logged and the loop
+    /// continues; the only early exit is user cancellation via Ctrl+C.
+    /// `label` is interpolated into log lines so the two flows are
+    /// distinguishable in `tian.log`.
+    private func runShellCommands(
         commands: [String],
+        label: String,
         worktreePath: String,
         config: WorktreeConfig
     ) async {
@@ -299,21 +328,23 @@ final class WorktreeOrchestrator {
         defer { removeCtrlCMonitor() }
 
         for (index, command) in commands.enumerated() {
-            if setupCancelled {
-                Log.worktree.info("Setup cancelled by user after \(index)/\(commands.count) commands")
+            if commandsCancelled {
+                Log.worktree.info("\(label.capitalized) cancelled by user after \(index)/\(commands.count) commands")
                 break
             }
-            Log.worktree.info("Running setup command \(index + 1)/\(commands.count): \(command)")
-            await runSetupCommand(
+            Log.worktree.info("Running \(label) command \(index + 1)/\(commands.count): \(command)")
+            await runShellCommand(
                 command,
+                label: label,
                 worktreePath: worktreePath,
                 timeout: config.setupTimeout
             )
         }
     }
 
-    private func runSetupCommand(
+    private func runShellCommand(
         _ command: String,
+        label: String,
         worktreePath: String,
         timeout: TimeInterval
     ) async {
@@ -328,20 +359,20 @@ final class WorktreeOrchestrator {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        currentSetupProcess = process
-        defer { currentSetupProcess = nil }
+        currentCommandProcess = process
+        defer { currentCommandProcess = nil }
 
         do {
             try process.run()
         } catch {
-            Log.worktree.warning("Failed to launch setup command '\(command)': \(error.localizedDescription)")
+            Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
             return
         }
 
         let timeoutTask = Task {
             try? await Task.sleep(for: .seconds(timeout))
             if process.isRunning {
-                Log.worktree.warning("Setup command timed out after \(timeout)s, terminating: \(command)")
+                Log.worktree.warning("\(label.capitalized) command timed out after \(timeout)s, terminating: \(command)")
                 process.terminate()
             }
         }
@@ -356,12 +387,12 @@ final class WorktreeOrchestrator {
         let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedStdout.isEmpty {
-            Log.worktree.info("setup stdout: \(trimmedStdout)")
+            Log.worktree.info("\(label) stdout: \(trimmedStdout)")
         }
         if !trimmedStderr.isEmpty {
-            Log.worktree.warning("setup stderr: \(trimmedStderr)")
+            Log.worktree.warning("\(label) stderr: \(trimmedStderr)")
         }
-        Log.worktree.info("Setup command exit=\(process.terminationStatus): \(command)")
+        Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
     }
 
     // MARK: - Ctrl+C Monitor
@@ -373,7 +404,7 @@ final class WorktreeOrchestrator {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             if flags == .control,
                event.charactersIgnoringModifiers?.lowercased() == "c" {
-                self?.cancelSetup()
+                self?.cancelCommands()
                 return nil
             }
             return event

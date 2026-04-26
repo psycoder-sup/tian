@@ -84,13 +84,28 @@ enum WorktreeConfigParser {
             }
         }
 
+        // [[archive]] array of tables
+        if let archiveArray = table["archive"]?.array {
+            for item in archiveArray {
+                guard let archiveTable = item.table else {
+                    Log.worktree.warning("Skipping non-table entry in [[archive]]")
+                    continue
+                }
+                guard let command = archiveTable["command"]?.string else {
+                    Log.worktree.warning("Skipping [[archive]] entry missing 'command'")
+                    continue
+                }
+                config.archiveCommands.append(command)
+            }
+        }
+
         // [layout] table
         if let layoutTable = table["layout"]?.table {
             config.layout = parseLayoutNode(layoutTable)
         }
 
         Log.worktree.info(
-            "Parsed .tian/config.toml: \(config.copyRules.count) copy rules, \(config.setupCommands.count) setup commands, layout=\(config.layout != nil ? "yes" : "no")"
+            "Parsed .tian/config.toml: \(config.copyRules.count) copy rules, \(config.setupCommands.count) setup commands, \(config.archiveCommands.count) archive commands, layout=\(config.layout != nil ? "yes" : "no")"
         )
 
         return config

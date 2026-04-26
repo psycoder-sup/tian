@@ -16,7 +16,7 @@ struct WorkspaceWindowContent: View {
             )
 
             if worktreeOrchestrator.isCreating {
-                SetupCancelButton { worktreeOrchestrator.cancelSetup() }
+                SetupCancelButton { worktreeOrchestrator.cancelCommands() }
                     .padding(12)
                     .transition(.opacity)
             }

@@ -14,6 +14,11 @@ struct WorktreeConfig: Sendable, Equatable {
     var copyRules: [CopyRule] = []
     /// Ordered shell commands to run during setup.
     var setupCommands: [String] = []
+    /// Ordered shell commands to run on worktree removal — the inverse of
+    /// `setupCommands`. Use to tear down side effects spawned by setup
+    /// (e.g. `docker compose down`). Run with the worktree root as cwd
+    /// before the worktree directory is deleted.
+    var archiveCommands: [String] = []
     /// Pane layout tree for the first tab.
     var layout: LayoutNode?
 }
