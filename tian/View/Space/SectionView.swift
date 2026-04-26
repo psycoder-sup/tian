@@ -18,43 +18,45 @@ struct SectionView: View {
     var isSectionFocused: Bool
 
     var body: some View {
-        Group {
-            if section.kind == .claude && section.tabs.isEmpty {
-                EmptyClaudePlaceholderView(
+        if section.kind == .claude && section.tabs.isEmpty {
+            EmptyClaudePlaceholderView(
+                onNewTab: {
+                    let wd = resolveWorkingDirectory()
+                    spaceModel.createTab(in: section, workingDirectory: wd)
+                },
+                onCloseSpace: {
+                    // FR-07c — explicit Cmd+W closes the Space.
+                    Task { await spaceModel.requestSpaceClose() }
+                }
+            )
+        } else if let activeTab = section.activeTab {
+            // Bar overlays terminal so its aurora glow isn't clipped by the opaque Metal layer.
+            ZStack(alignment: .top) {
+                SplitTreeView(
+                    node: activeTab.paneViewModel.splitTree.root,
+                    viewModel: activeTab.paneViewModel,
+                    isTabVisible: isSectionFocused
+                        || spaceModel.focusedSectionKind != section.kind
+                )
+                .padding(.top, SectionTabBarView.height)
+
+                SectionTabBarView(
+                    section: section,
                     onNewTab: {
                         let wd = resolveWorkingDirectory()
                         spaceModel.createTab(in: section, workingDirectory: wd)
                     },
-                    onCloseSpace: {
-                        // FR-07c — explicit Cmd+W closes the Space.
-                        Task { await spaceModel.requestSpaceClose() }
+                    trailingToolbar: {
+                        SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
                     }
                 )
-            } else if let activeTab = section.activeTab {
-                VStack(spacing: 0) {
-                    SectionTabBarView(
-                        section: section,
-                        onNewTab: {
-                            let wd = resolveWorkingDirectory()
-                            spaceModel.createTab(in: section, workingDirectory: wd)
-                        },
-                        trailingToolbar: {
-                            SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
-                        }
-                    )
-
-                    SplitTreeView(
-                        node: activeTab.paneViewModel.splitTree.root,
-                        viewModel: activeTab.paneViewModel,
-                        isTabVisible: isSectionFocused
-                            || spaceModel.focusedSectionKind != section.kind
-                    )
-                }
-            } else {
-                // Terminal section with no active tab — should not appear in
-                // practice because FR-12 auto-hides before reaching zero.
-                Color.clear
+                // Tab bar before terminal pane in VoiceOver order.
+                .accessibilitySortPriority(1)
             }
+        } else {
+            // Terminal section with no active tab — should not appear in
+            // practice because FR-12 auto-hides before reaching zero.
+            Color.clear
         }
     }
 }
