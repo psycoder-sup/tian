@@ -127,8 +127,8 @@ struct WorktreeOrchestratorTests {
         let copiedEnv = (expectedPath as NSString).appendingPathComponent(".env")
         #expect(FileManager.default.fileExists(atPath: copiedEnv))
 
-        // Verify isCreating is reset
-        #expect(!orchestrator.isCreating)
+        // Verify setupProgress is cleared
+        #expect(orchestrator.setupProgress == nil)
     }
 
     // MARK: - Create without config
@@ -210,40 +210,181 @@ struct WorktreeOrchestratorTests {
         try writeConfig("""
         worktree_dir = ".worktrees"
         shell_ready_delay = 0.01
-        setup_timeout = 0.01
+        setup_timeout = 30
 
         [[setup]]
-        command = "echo step1"
+        command = "sleep 30"
 
         [[setup]]
-        command = "echo step2"
+        command = "sleep 30"
 
         [[setup]]
-        command = "echo step3"
+        command = "sleep 30"
         """, in: repo)
 
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // Schedule cancellation during creation (fires during an await suspension)
+        // Cancel once setupProgress shows the first command running.
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(10))
+            for _ in 0..<300 {
+                if orchestrator.setupProgress?.currentCommand?.hasPrefix("sleep") == true { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
             orchestrator.cancelCommands()
         }
 
+        let start = ContinuousClock.now
         let result = try await orchestrator.createWorktreeSpace(
             branchName: "cancel-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
+        let elapsed = ContinuousClock.now - start
 
-        // Creation should still succeed (Space exists)
+        // Whole creation finishes well before any 30 s sleep would.
+        #expect(elapsed < .seconds(5))
         #expect(!result.existed)
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace != nil)
+        #expect(orchestrator.setupProgress == nil)
+    }
 
-        // isCreating should be reset
-        #expect(!orchestrator.isCreating)
+    // MARK: - SetupProgress lifecycle
+
+    @Test func setupProgress_isNilBeforeAndAfterCreation() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 0.5
+
+        [[setup]]
+        command = "true"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        #expect(orchestrator.setupProgress == nil)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "lifecycle-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(orchestrator.setupProgress == nil)
+        #expect(!result.existed)
+    }
+
+    @Test func setupProgress_carriesWorkspaceAndSpaceIDsDuringRun() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // A single command that blocks until the test releases it. While
+        // blocked, we snapshot setupProgress and assert its IDs.
+        let gate = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-setup-gate-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: gate) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "while [ ! -f \(gate) ]; do sleep 0.02; done"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let observedSpaceIDBox = Box<UUID>()
+
+        Task { @MainActor in
+            // Wait for setupProgress to appear, snapshot, then release the gate.
+            for _ in 0..<500 {
+                if orchestrator.setupProgress != nil { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            let observedWorkspaceID = orchestrator.setupProgress?.workspaceID
+            let observedSpaceID = orchestrator.setupProgress?.spaceID
+            let observedTotal = orchestrator.setupProgress?.totalCommands
+            #expect(observedWorkspaceID == workspace.id)
+            #expect(observedTotal == 1)
+            // observedSpaceID is the new Space being created. We can't compare
+            // it to a known UUID from this side (Space is created inside the
+            // orchestrator), but we can assert it's non-nil and persist it
+            // for the outer test to verify post-await.
+            #expect(observedSpaceID != nil)
+            observedSpaceIDBox.value = observedSpaceID
+            FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
+        }
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "ids-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(orchestrator.setupProgress == nil)
+        #expect(result.spaceID == workspace.spaceCollection.spaces.first { $0.id == result.spaceID }?.id)
+
+        let observedSpaceID = observedSpaceIDBox.value
+        #expect(observedSpaceID == result.spaceID,
+                "polling task should have observed the same Space ID that createWorktreeSpace returned")
+    }
+
+    @Test func setupProgress_recordsLastFailedIndex_whenCommandExitsNonZero() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Three commands; the middle one fails. We capture lastFailedIndex
+        // mid-flight via a sentinel-blocked third command.
+        let gate = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-fail-gate-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: gate) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "true"
+
+        [[setup]]
+        command = "exit 7"
+
+        [[setup]]
+        command = "while [ ! -f \(gate) ]; do sleep 0.02; done"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        Task { @MainActor in
+            // Always release the gate, even if the assertion fails — otherwise
+            // the gated `while` command spins until setup_timeout (5 s) and
+            // bloats the test's wall-clock time on slow CI.
+            defer { FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil) }
+            // Wait until both the third command is in flight (currentIndex == 2)
+            // AND the failed exit from the second has been recorded.
+            for _ in 0..<300 {
+                if orchestrator.setupProgress?.currentIndex == 2,
+                   orchestrator.setupProgress?.lastFailedIndex == 1 { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(orchestrator.setupProgress?.lastFailedIndex == 1)
+        }
+
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "fail-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        #expect(orchestrator.setupProgress == nil)
     }
 
     // MARK: - Remove worktree space
@@ -443,6 +584,81 @@ struct WorktreeOrchestratorTests {
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
     }
 
+    // MARK: - Pipe overflow
+
+    @Test func setupCommands_withLargeOutput_doNotDeadlock() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Emit ~300 KB of stdout. With the old readDataToEndOfFile() drain,
+        // the child blocks on a full pipe, terminationHandler never fires,
+        // and we hit the timeout. With incremental drain, this completes
+        // promptly under the 5 s timeout.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "yes hello | head -c 300000"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let start = ContinuousClock.now
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "loud-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        let elapsed = ContinuousClock.now - start
+
+        // Allow generous slack on busy CI; 4 s well below the 5 s timeout.
+        #expect(elapsed < .seconds(4))
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    // MARK: - SIGKILL escalation
+
+    @Test func setupCommand_ignoringSIGTERM_isKilledViaSIGKILL_escalation() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // `trap '' TERM` sets SIGTERM disposition to SIG_IGN in the shell.
+        // POSIX inherits SIG_IGN across exec, so the spawned `sleep` also
+        // ignores SIGTERM. With the SIGTERM-only kill path, this command
+        // would block until `setup_timeout`'s deadline and then continue
+        // ignoring the signal — leaving the orchestrator hung. With the
+        // SIGKILL escalation, the grace period elapses and SIGKILL (which
+        // cannot be trapped) reaps the child.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 0.1
+        setup_kill_grace = 0.2
+
+        [[setup]]
+        command = "trap '' TERM; sleep 30"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let start = ContinuousClock.now
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "trap-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        let elapsed = ContinuousClock.now - start
+
+        // Timeout (0.1) + grace (0.2) ≈ 0.3 s; allow generous slack for CI.
+        // Pre-fix this would have hung on the 30 s sleep.
+        #expect(elapsed < .seconds(3))
+        #expect(orchestrator.setupProgress == nil)
+    }
+
     // MARK: - Workspace ID targeting (Bug 1 regression)
 
     @Test func createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
@@ -485,4 +701,9 @@ struct WorktreeOrchestratorTests {
 private struct OrchestratorTestError: Error, CustomStringConvertible {
     let description: String
     init(_ description: String) { self.description = description }
+}
+
+private final class Box<T>: @unchecked Sendable {
+    var value: T?
+    init() {}
 }

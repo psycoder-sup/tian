@@ -4,6 +4,7 @@ struct SidebarSpaceRowView: View {
     let space: SpaceModel
     let isActive: Bool
     let isKeyboardSelected: Bool
+    let setupProgress: SetupProgress?
     let onSelect: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
@@ -70,33 +71,78 @@ struct SidebarSpaceRowView: View {
         return count == 1 ? "1 tab" : "\(count) tabs"
     }
 
+    private var isSettingUp: Bool { setupProgress != nil }
+
+    @ViewBuilder
+    private func setupProgressRow(progress: SetupProgress) -> some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.mini)
+
+            Text(space.name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(white: 0.85))
+                .lineLimit(1)
+
+            Text("·")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text(progress.stepText)
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+
+            if progress.didFailRun {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.red)
+                    .accessibilityLabel("a step in this run failed")
+            }
+
+            Text(progress.commandLabel)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color(white: 0.55))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 0)
+        }
+    }
+
     var body: some View {
         let sessions = PaneStatusManager.shared.sessionStates(in: space)
 
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                InlineRenameView(
-                    text: space.name,
-                    isRenaming: $isRenaming,
-                    onCommit: { space.name = $0 }
-                )
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isActive ? Color(white: 0.9) : Color(red: 0.557, green: 0.557, blue: 0.576))
+        Group {
+            if let progress = setupProgress {
+                setupProgressRow(progress: progress)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        InlineRenameView(
+                            text: space.name,
+                            isRenaming: $isRenaming,
+                            onCommit: { space.name = $0 }
+                        )
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isActive ? Color(white: 0.9) : Color(red: 0.557, green: 0.557, blue: 0.576))
 
-                Spacer()
+                        Spacer()
 
-                Text(tabCountLabel)
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color(white: 0.45))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.06))
-                    )
+                        Text(tabCountLabel)
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color(white: 0.45))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                    }
+
+                    SpaceStatusAreaView(sessions: sessions, space: space, isActive: isActive)
+                }
             }
-
-            SpaceStatusAreaView(sessions: sessions, space: space, isActive: isActive)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -121,7 +167,13 @@ struct SidebarSpaceRowView: View {
             }
         }
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
         .onTapGesture {
+            if isSettingUp {
+                lastClickTime = nil
+                onSelect()
+                return
+            }
             let now = Date()
             if let last = lastClickTime, now.timeIntervalSince(last) < 0.3 {
                 lastClickTime = nil
@@ -131,24 +183,54 @@ struct SidebarSpaceRowView: View {
                 onSelect()
             }
         }
-        .onHover { isHovering = $0 }
-        .draggable(SpaceDragItem(spaceID: space.id))
-        .contextMenu {
-            Button("Rename") { isRenaming = true }
-            Divider()
-            DefaultDirectoryMenu(
-                name: space.name,
-                currentDirectory: space.defaultWorkingDirectory,
-                onSet: onSetDirectory
-            )
-            Divider()
-            Button("Close Space", action: onClose)
-        }
+        .modifier(SidebarSpaceRowMutationGate(
+            enabled: !isSettingUp,
+            spaceID: space.id,
+            spaceName: space.name,
+            currentDirectory: space.defaultWorkingDirectory,
+            onRename: { isRenaming = true },
+            onSetDirectory: onSetDirectory,
+            onClose: onClose
+        ))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("space-row-\(space.id)")
         .accessibilityLabel(space.name)
         .accessibilityValue(accessibilityDescription(sessions: sessions))
         .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
+    }
+}
+
+/// Gates drag and context-menu interactions on the Space row. Both are
+/// disabled while the row is rendering setup-progress so the user can't
+/// rename, drag, or close a Space mid-creation. Tap-to-focus is handled
+/// separately at the call site.
+private struct SidebarSpaceRowMutationGate: ViewModifier {
+    let enabled: Bool
+    let spaceID: UUID
+    let spaceName: String
+    let currentDirectory: URL?
+    let onRename: () -> Void
+    let onSetDirectory: (URL?) -> Void
+    let onClose: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .draggable(SpaceDragItem(spaceID: spaceID))
+                .contextMenu {
+                    Button("Rename", action: onRename)
+                    Divider()
+                    DefaultDirectoryMenu(
+                        name: spaceName,
+                        currentDirectory: currentDirectory,
+                        onSet: onSetDirectory
+                    )
+                    Divider()
+                    Button("Close Space", action: onClose)
+                }
+        } else {
+            content
+        }
     }
 }

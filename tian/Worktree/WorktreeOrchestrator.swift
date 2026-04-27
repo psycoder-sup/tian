@@ -13,8 +13,10 @@ final class WorktreeOrchestrator {
 
     private let workspaceProvider: any WorkspaceProviding
 
-    /// True during creation flow; drives sidebar progress indicator.
-    var isCreating: Bool = false
+    /// Populated while `[[setup]]` commands run for a freshly-created
+    /// worktree Space. `nil` means no setup is in flight. Drives the
+    /// sidebar Space-row progress UI and the bottom-right capsule.
+    var setupProgress: SetupProgress?
 
     /// Set to true when the user cancels the in-flight setup or archive
     /// command loop. Reset at the top of each create/remove flow.
@@ -26,9 +28,10 @@ final class WorktreeOrchestrator {
     /// Temporary event monitor for Ctrl+C during shell command loops.
     private var ctrlCMonitor: Any?
 
-    /// Currently running shell process (setup or archive), if any.
-    /// Used for cancellation/timeout.
-    private var currentCommandProcess: Process?
+    /// Sendable closure that terminates the in-flight shell command, if any.
+    /// Published from the nonisolated runner just before the child starts;
+    /// cleared when it exits. Read by `cancelCommands()`.
+    private var cancellationToken: (@Sendable () -> Void)?
 
     // MARK: - Init
 
@@ -107,10 +110,6 @@ final class WorktreeOrchestrator {
         ) {
             throw WorktreeError.worktreePathExists(path: expectedPath.path)
         }
-
-        // Step 5: Begin creation
-        isCreating = true
-        defer { isCreating = false }
 
         // Step 6: Create worktree on disk
         let worktreePath = try await WorktreeService.createWorktree(
@@ -210,11 +209,12 @@ final class WorktreeOrchestrator {
 
     // MARK: - Cancellation
 
-    /// Cancels the in-flight shell command loop (setup or archive).
-    /// Wired to both the SetupCancelButton and the Ctrl+C monitor.
+    /// Cancels the in-flight shell command loop. Sets `commandsCancelled`
+    /// (loop-level early-exit) and signals the running child via the
+    /// published cancellation closure (best-effort SIGTERM through `KillGuard`).
     func cancelCommands() {
         commandsCancelled = true
-        currentCommandProcess?.terminate()
+        cancellationToken?()
     }
 
     /// Stores an error for the UI alert binding to consume.
@@ -286,12 +286,23 @@ final class WorktreeOrchestrator {
         let paneViewModel = newSpace.activeTab!.paneViewModel
 
         // Step 12: Run setup commands as background processes (FR-012)
-        await runShellCommands(
-            commands: config.setupCommands,
-            label: "setup",
-            worktreePath: worktreePath,
-            config: config
-        )
+        if !config.setupCommands.isEmpty {
+            setupProgress = SetupProgress.starting(
+                workspaceID: targetWorkspace.id,
+                spaceID: newSpace.id,
+                totalCommands: config.setupCommands.count
+            )
+        }
+        do {
+            defer { setupProgress = nil }
+            await runShellCommands(
+                commands: config.setupCommands,
+                label: "setup",
+                worktreePath: worktreePath,
+                config: config
+            )
+        }
+        // setupProgress is now guaranteed nil; layout runs cleanly below.
 
         // Step 13: Apply layout (FR-013, FR-032)
         if let layout = config.layout {
@@ -332,13 +343,23 @@ final class WorktreeOrchestrator {
                 Log.worktree.info("\(label.capitalized) cancelled by user after \(index)/\(commands.count) commands")
                 break
             }
+            // Coalesce two @Observable notifications into one per command.
+            if label == "setup", var snapshot = setupProgress {
+                snapshot.currentIndex = index
+                snapshot.currentCommand = command
+                setupProgress = snapshot
+            }
             Log.worktree.info("Running \(label) command \(index + 1)/\(commands.count): \(command)")
-            await runShellCommand(
+            let exit = await runShellCommand(
                 command,
                 label: label,
                 worktreePath: worktreePath,
-                timeout: config.setupTimeout
+                timeout: config.setupTimeout,
+                killGrace: config.setupKillGrace
             )
+            if label == "setup", exit != 0, setupProgress != nil {
+                setupProgress?.lastFailedIndex = index
+            }
         }
     }
 
@@ -346,53 +367,24 @@ final class WorktreeOrchestrator {
         _ command: String,
         label: String,
         worktreePath: String,
-        timeout: TimeInterval
-    ) async {
+        timeout: TimeInterval,
+        killGrace: TimeInterval
+    ) async -> Int32 {
         let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
-        let process = Process()
-        process.executableURL = URL(filePath: shellPath)
-        process.arguments = ["-l", "-c", command]
-        process.currentDirectoryURL = URL(filePath: worktreePath)
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        currentCommandProcess = process
-        defer { currentCommandProcess = nil }
-
-        do {
-            try process.run()
-        } catch {
-            Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
-            return
-        }
-
-        let timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(timeout))
-            if process.isRunning {
-                Log.worktree.warning("\(label.capitalized) command timed out after \(timeout)s, terminating: \(command)")
-                process.terminate()
+        return await Self.runCommandOffMain(
+            command: command,
+            label: label,
+            shellPath: shellPath,
+            worktreePath: worktreePath,
+            timeout: timeout,
+            killGrace: killGrace,
+            onStarted: { [weak self] terminate in
+                Task { @MainActor in self?.cancellationToken = terminate }
+            },
+            onEnded: { [weak self] in
+                Task { @MainActor in self?.cancellationToken = nil }
             }
-        }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            process.terminationHandler = { _ in continuation.resume() }
-        }
-        timeoutTask.cancel()
-
-        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedStdout.isEmpty {
-            Log.worktree.info("\(label) stdout: \(trimmedStdout)")
-        }
-        if !trimmedStderr.isEmpty {
-            Log.worktree.warning("\(label) stderr: \(trimmedStderr)")
-        }
-        Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
+        )
     }
 
     // MARK: - Ctrl+C Monitor
@@ -538,4 +530,131 @@ final class WorktreeOrchestrator {
                 .map { ($0, workspace.spaceCollection) }
         }
     }
+
+    /// Per-stream output cap. Anything beyond this is discarded and a
+    /// truncation marker is appended to the final log line.
+    nonisolated private static let outputBufferCap = 256 * 1024
+
+    /// Runs a single shell command without touching the main actor.
+    /// Drains pipes incrementally via `readabilityHandler` (no kernel-buffer
+    /// deadlock) and routes every `kill()` through `KillGuard` (no signal
+    /// to a recycled PID, automatic SIGKILL after `killGrace`).
+    ///
+    /// `onStarted` publishes a Sendable terminate-closure to the caller's
+    /// actor; `onEnded` clears it.
+    nonisolated private static func runCommandOffMain(
+        command: String,
+        label: String,
+        shellPath: String,
+        worktreePath: String,
+        timeout: TimeInterval,
+        killGrace: TimeInterval,
+        onStarted: @Sendable (@Sendable @escaping () -> Void) -> Void,
+        onEnded: @Sendable () -> Void
+    ) async -> Int32 {
+        let process = Process()
+        process.executableURL = URL(filePath: shellPath)
+        process.arguments = ["-l", "-c", command]
+        process.currentDirectoryURL = URL(filePath: worktreePath)
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let stdoutBuffer = LimitedBuffer(cap: outputBufferCap)
+        let stderrBuffer = LimitedBuffer(cap: outputBufferCap)
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                stdoutBuffer.append(chunk)
+            }
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                stderrBuffer.append(chunk)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
+            return -1
+        }
+
+        let killGuard = KillGuard(pid: process.processIdentifier)
+        onStarted({ killGuard.terminate(grace: killGrace) })
+        defer { onEnded() }
+
+        let timeoutItem = DispatchWorkItem { killGuard.terminate(grace: killGrace) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+
+        // Single-resume gate: the terminationHandler and the post-assignment
+        // `isRunning` check both race to claim it. Without this, a child that
+        // reaps between `process.run()` and assigning the handler below would
+        // hang the await — Foundation does not retroactively invoke a handler
+        // assigned after the process has terminated.
+        let resumed = ResumeOnce()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            process.terminationHandler = { _ in
+                if resumed.claim() {
+                    // markDead() before resume(): any kill that lost the race
+                    // (pending timeout, stale published closure) becomes a no-op.
+                    killGuard.markDead()
+                    continuation.resume()
+                }
+            }
+            if !process.isRunning, resumed.claim() {
+                killGuard.markDead()
+                continuation.resume()
+            }
+        }
+        timeoutItem.cancel()
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+        let (stdoutData, stdoutTrunc) = stdoutBuffer.snapshot()
+        let (stderrData, stderrTrunc) = stderrBuffer.snapshot()
+
+        let trimmedStdout = (String(data: stdoutData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStderr = (String(data: stderrData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stdoutSuffix = stdoutTrunc ? " … (truncated at \(outputBufferCap) bytes)" : ""
+        let stderrSuffix = stderrTrunc ? " … (truncated at \(outputBufferCap) bytes)" : ""
+        if !trimmedStdout.isEmpty {
+            Log.worktree.info("\(label) stdout: \(trimmedStdout)\(stdoutSuffix)")
+        }
+        if !trimmedStderr.isEmpty {
+            Log.worktree.warning("\(label) stderr: \(trimmedStderr)\(stderrSuffix)")
+        }
+        Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
+
+        return process.terminationStatus
+    }
 }
+
+/// One-shot resume claim. Used to gate `CheckedContinuation.resume()`
+/// when two code paths race to call it (e.g. `terminationHandler` and a
+/// post-`process.run()` `isRunning` recheck).
+private final class ResumeOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func claim() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if done { return false }
+        done = true
+        return true
+    }
+}
+

@@ -31,7 +31,6 @@ struct SidebarExpandedContentView: View {
                         isExpanded: disclosedWorkspaces.contains(workspace.id),
                         isActive: workspace.id == workspaceCollection.activeWorkspaceID,
                         isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
-                        isCreatingWorktree: worktreeOrchestrator.isCreating,
                         onToggleDisclosure: { toggleDisclosure(workspace.id) },
                         onAddSpace: { addSpace(to: workspace) },
                         onSetDirectory: { url in
@@ -48,6 +47,9 @@ struct SidebarExpandedContentView: View {
                                     isActive: workspace.id == workspaceCollection.activeWorkspaceID
                                         && space.id == workspace.spaceCollection.activeSpaceID,
                                     isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, space)),
+                                    setupProgress: worktreeOrchestrator.setupProgress?.spaceID == space.id
+                                        ? worktreeOrchestrator.setupProgress
+                                        : nil,
                                     onSelect: { selectSpace(workspace: workspace, spaceID: space.id) },
                                     onSetDirectory: { url in
                                         space.defaultWorkingDirectory = url
