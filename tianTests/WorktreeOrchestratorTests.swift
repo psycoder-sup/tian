@@ -298,14 +298,25 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
+        let observedSpaceIDBox = Box<UUID>()
+
         Task { @MainActor in
             // Wait for setupProgress to appear, snapshot, then release the gate.
-            for _ in 0..<200 {
+            for _ in 0..<500 {
                 if orchestrator.setupProgress != nil { break }
                 try? await Task.sleep(for: .milliseconds(20))
             }
-            #expect(orchestrator.setupProgress?.workspaceID == workspace.id)
-            #expect(orchestrator.setupProgress?.totalCommands == 1)
+            let observedWorkspaceID = orchestrator.setupProgress?.workspaceID
+            let observedSpaceID = orchestrator.setupProgress?.spaceID
+            let observedTotal = orchestrator.setupProgress?.totalCommands
+            #expect(observedWorkspaceID == workspace.id)
+            #expect(observedTotal == 1)
+            // observedSpaceID is the new Space being created. We can't compare
+            // it to a known UUID from this side (Space is created inside the
+            // orchestrator), but we can assert it's non-nil and persist it
+            // for the outer test to verify post-await.
+            #expect(observedSpaceID != nil)
+            observedSpaceIDBox.value = observedSpaceID
             FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
         }
 
@@ -315,9 +326,12 @@ struct WorktreeOrchestratorTests {
             workspaceID: workspace.id
         )
 
-        #expect(orchestrator.setupProgress?.spaceID == nil)        // cleared
         #expect(orchestrator.setupProgress == nil)
         #expect(result.spaceID == workspace.spaceCollection.spaces.first { $0.id == result.spaceID }?.id)
+
+        let observedSpaceID = observedSpaceIDBox.value
+        #expect(observedSpaceID == result.spaceID,
+                "polling task should have observed the same Space ID that createWorktreeSpace returned")
     }
 
     // MARK: - Remove worktree space
@@ -559,4 +573,9 @@ struct WorktreeOrchestratorTests {
 private struct OrchestratorTestError: Error, CustomStringConvertible {
     let description: String
     init(_ description: String) { self.description = description }
+}
+
+private final class Box<T>: @unchecked Sendable {
+    var value: T?
+    init() {}
 }

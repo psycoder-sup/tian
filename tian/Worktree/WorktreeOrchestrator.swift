@@ -291,13 +291,16 @@ final class WorktreeOrchestrator {
                 totalCommands: config.setupCommands.count
             )
         }
-        await runShellCommands(
-            commands: config.setupCommands,
-            label: "setup",
-            worktreePath: worktreePath,
-            config: config
-        )
-        setupProgress = nil
+        do {
+            defer { setupProgress = nil }
+            await runShellCommands(
+                commands: config.setupCommands,
+                label: "setup",
+                worktreePath: worktreePath,
+                config: config
+            )
+        }
+        // setupProgress is now guaranteed nil; layout runs cleanly below.
 
         // Step 13: Apply layout (FR-013, FR-032)
         if let layout = config.layout {
