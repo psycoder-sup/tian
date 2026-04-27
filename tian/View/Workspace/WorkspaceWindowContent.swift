@@ -15,10 +15,12 @@ struct WorkspaceWindowContent: View {
                 worktreeOrchestrator: worktreeOrchestrator
             )
 
-            if worktreeOrchestrator.setupProgress != nil {
-                SetupCancelButton { worktreeOrchestrator.cancelCommands() }
-                    .padding(12)
-                    .transition(.opacity)
+            if let progress = worktreeOrchestrator.setupProgress {
+                SetupProgressCapsule(progress: progress) {
+                    worktreeOrchestrator.cancelCommands()
+                }
+                .padding(12)
+                .transition(.opacity)
             }
 
             if showDebugOverlay {
