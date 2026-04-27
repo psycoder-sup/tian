@@ -79,9 +79,8 @@ struct SidebarSpaceRowView: View {
         let didFailRun = progress.lastFailedIndex != nil
 
         HStack(spacing: 8) {
-            Image(systemName: "hourglass")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            ProgressView()
+                .controlSize(.mini)
 
             Text(space.name)
                 .font(.system(size: 12, weight: .semibold))
@@ -174,6 +173,7 @@ struct SidebarSpaceRowView: View {
         .onHover { isHovering = $0 }
         .onTapGesture {
             if isSettingUp {
+                lastClickTime = nil
                 onSelect()
                 return
             }
