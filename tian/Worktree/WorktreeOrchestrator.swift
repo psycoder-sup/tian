@@ -342,9 +342,12 @@ final class WorktreeOrchestrator {
                 break
             }
             // Only [[setup]] populates setupProgress; archive runs silently.
-            if label == "setup", setupProgress != nil {
-                setupProgress?.currentIndex = index
-                setupProgress?.currentCommand = command
+            // Snapshot/mutate/reassign so the @Observable property fires a
+            // single change notification per command instead of two.
+            if label == "setup", var snapshot = setupProgress {
+                snapshot.currentIndex = index
+                snapshot.currentCommand = command
+                setupProgress = snapshot
             }
             Log.worktree.info("Running \(label) command \(index + 1)/\(commands.count): \(command)")
             let exit = await runShellCommand(

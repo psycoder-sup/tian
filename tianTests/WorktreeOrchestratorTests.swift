@@ -363,13 +363,18 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         Task { @MainActor in
-            // Wait for currentIndex to reach 2 (the gated command).
+            // Always release the gate, even if the assertion fails — otherwise
+            // the gated `while` command spins until setup_timeout (5 s) and
+            // bloats the test's wall-clock time on slow CI.
+            defer { FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil) }
+            // Wait until both the third command is in flight (currentIndex == 2)
+            // AND the failed exit from the second has been recorded.
             for _ in 0..<300 {
-                if orchestrator.setupProgress?.currentIndex == 2 { break }
+                if orchestrator.setupProgress?.currentIndex == 2,
+                   orchestrator.setupProgress?.lastFailedIndex == 1 { break }
                 try? await Task.sleep(for: .milliseconds(20))
             }
             #expect(orchestrator.setupProgress?.lastFailedIndex == 1)
-            FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
         }
 
         _ = try await orchestrator.createWorktreeSpace(
