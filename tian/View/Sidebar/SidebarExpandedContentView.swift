@@ -31,7 +31,6 @@ struct SidebarExpandedContentView: View {
                         isExpanded: disclosedWorkspaces.contains(workspace.id),
                         isActive: workspace.id == workspaceCollection.activeWorkspaceID,
                         isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
-                        isCreatingWorktree: worktreeOrchestrator.isCreating,
                         onToggleDisclosure: { toggleDisclosure(workspace.id) },
                         onAddSpace: { addSpace(to: workspace) },
                         onSetDirectory: { url in

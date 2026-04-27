@@ -15,7 +15,7 @@ struct WorkspaceWindowContent: View {
                 worktreeOrchestrator: worktreeOrchestrator
             )
 
-            if worktreeOrchestrator.isCreating {
+            if worktreeOrchestrator.setupProgress != nil {
                 SetupCancelButton { worktreeOrchestrator.cancelCommands() }
                     .padding(12)
                     .transition(.opacity)
@@ -83,7 +83,7 @@ struct WorkspaceWindowContent: View {
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
         .animation(.easeInOut(duration: 0.15), value: createSpaceRequest != nil)
-        .animation(.easeInOut(duration: 0.15), value: worktreeOrchestrator.isCreating)
+        .animation(.easeInOut(duration: 0.15), value: worktreeOrchestrator.setupProgress != nil)
         .onReceive(NotificationCenter.default.publisher(for: .toggleDebugOverlay)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }

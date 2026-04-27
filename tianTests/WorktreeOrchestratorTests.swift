@@ -127,8 +127,8 @@ struct WorktreeOrchestratorTests {
         let copiedEnv = (expectedPath as NSString).appendingPathComponent(".env")
         #expect(FileManager.default.fileExists(atPath: copiedEnv))
 
-        // Verify isCreating is reset
-        #expect(!orchestrator.isCreating)
+        // Verify setupProgress is cleared
+        #expect(orchestrator.setupProgress == nil)
     }
 
     // MARK: - Create without config
@@ -242,8 +242,82 @@ struct WorktreeOrchestratorTests {
         let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
         #expect(newSpace != nil)
 
-        // isCreating should be reset
-        #expect(!orchestrator.isCreating)
+        // setupProgress should be cleared
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    // MARK: - SetupProgress lifecycle
+
+    @Test func setupProgress_isNilBeforeAndAfterCreation() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 0.5
+
+        [[setup]]
+        command = "true"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        #expect(orchestrator.setupProgress == nil)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "lifecycle-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(orchestrator.setupProgress == nil)
+        #expect(!result.existed)
+    }
+
+    @Test func setupProgress_carriesWorkspaceAndSpaceIDsDuringRun() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // A single command that blocks until the test releases it. While
+        // blocked, we snapshot setupProgress and assert its IDs.
+        let gate = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-setup-gate-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: gate) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "while [ ! -f \(gate) ]; do sleep 0.02; done"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        Task { @MainActor in
+            // Wait for setupProgress to appear, snapshot, then release the gate.
+            for _ in 0..<200 {
+                if orchestrator.setupProgress != nil { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(orchestrator.setupProgress?.workspaceID == workspace.id)
+            #expect(orchestrator.setupProgress?.totalCommands == 1)
+            FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
+        }
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "ids-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(orchestrator.setupProgress?.spaceID == nil)        // cleared
+        #expect(orchestrator.setupProgress == nil)
+        #expect(result.spaceID == workspace.spaceCollection.spaces.first { $0.id == result.spaceID }?.id)
     }
 
     // MARK: - Remove worktree space

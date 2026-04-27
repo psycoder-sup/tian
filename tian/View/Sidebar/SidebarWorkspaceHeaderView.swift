@@ -5,7 +5,6 @@ struct SidebarWorkspaceHeaderView: View {
     let isExpanded: Bool
     let isActive: Bool
     let isKeyboardSelected: Bool
-    let isCreatingWorktree: Bool
     let onToggleDisclosure: () -> Void
     let onAddSpace: () -> Void
     let onSetDirectory: (URL?) -> Void
@@ -31,12 +30,6 @@ struct SidebarWorkspaceHeaderView: View {
             .foregroundStyle(.secondary)
 
             Spacer()
-
-            if isCreatingWorktree {
-                ProgressView()
-                    .controlSize(.mini)
-                    .scaleEffect(0.7)
-            }
 
             Button(action: onAddSpace) {
                 Image(systemName: "plus")

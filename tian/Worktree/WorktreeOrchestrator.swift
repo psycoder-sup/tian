@@ -13,8 +13,10 @@ final class WorktreeOrchestrator {
 
     private let workspaceProvider: any WorkspaceProviding
 
-    /// True during creation flow; drives sidebar progress indicator.
-    var isCreating: Bool = false
+    /// Populated while `[[setup]]` commands run for a freshly-created
+    /// worktree Space. `nil` means no setup is in flight. Drives the
+    /// sidebar Space-row progress UI and the bottom-right capsule.
+    var setupProgress: SetupProgress?
 
     /// Set to true when the user cancels the in-flight setup or archive
     /// command loop. Reset at the top of each create/remove flow.
@@ -107,10 +109,6 @@ final class WorktreeOrchestrator {
         ) {
             throw WorktreeError.worktreePathExists(path: expectedPath.path)
         }
-
-        // Step 5: Begin creation
-        isCreating = true
-        defer { isCreating = false }
 
         // Step 6: Create worktree on disk
         let worktreePath = try await WorktreeService.createWorktree(
@@ -286,12 +284,20 @@ final class WorktreeOrchestrator {
         let paneViewModel = newSpace.activeTab!.paneViewModel
 
         // Step 12: Run setup commands as background processes (FR-012)
+        if !config.setupCommands.isEmpty {
+            setupProgress = SetupProgress.starting(
+                workspaceID: targetWorkspace.id,
+                spaceID: newSpace.id,
+                totalCommands: config.setupCommands.count
+            )
+        }
         await runShellCommands(
             commands: config.setupCommands,
             label: "setup",
             worktreePath: worktreePath,
             config: config
         )
+        setupProgress = nil
 
         // Step 13: Apply layout (FR-013, FR-032)
         if let layout = config.layout {
