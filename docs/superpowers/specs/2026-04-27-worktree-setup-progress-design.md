@@ -119,17 +119,17 @@ Eliminates pipe-full deadlock for chatty commands.
 
 ### 3.3 Cancellation handle
 
-Replace the orchestrator's stored `currentCommandProcess: Process?` with a small `SetupCommandHandle` value the runner publishes back to the main actor while the command runs:
+Replace the orchestrator's stored `currentCommandProcess: Process?` with a `Sendable` token that the nonisolated runner publishes back to the main actor. `Process` is not `Sendable`, so the token is a closure value that captures only the child PID and signals it via `kill(2)`:
 
 ```swift
-private struct SetupCommandHandle {
-    let process: Process
+struct SetupCancellationToken: Sendable {
+    let terminate: @Sendable () -> Void
 }
 
-@MainActor private var cancellableHandle: SetupCommandHandle?
+@MainActor private var cancellationToken: SetupCancellationToken?
 ```
 
-`cancelCommands()` reads `cancellableHandle?.process.terminate()`. Set just before `process.run()`, cleared on the runner's termination path. The orchestrator continues to drive `commandsCancelled` for the loop-level early-exit check.
+`cancelCommands()` reads `cancellationToken?.terminate()`. Set just before `process.run()`, cleared on the runner's termination path. The orchestrator continues to drive `commandsCancelled` for the loop-level early-exit check.
 
 ### 3.4 What does *not* change
 
