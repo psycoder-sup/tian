@@ -47,6 +47,9 @@ struct SidebarExpandedContentView: View {
                                     isActive: workspace.id == workspaceCollection.activeWorkspaceID
                                         && space.id == workspace.spaceCollection.activeSpaceID,
                                     isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, space)),
+                                    setupProgress: worktreeOrchestrator.setupProgress?.spaceID == space.id
+                                        ? worktreeOrchestrator.setupProgress
+                                        : nil,
                                     onSelect: { selectSpace(workspace: workspace, spaceID: space.id) },
                                     onSetDirectory: { url in
                                         space.defaultWorkingDirectory = url
