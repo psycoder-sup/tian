@@ -210,7 +210,19 @@ final class WorktreeOrchestrator {
     // MARK: - Cancellation
 
     /// Cancels the in-flight shell command loop (setup or archive).
-    /// Wired to both the SetupCancelButton and the Ctrl+C monitor.
+    /// Wired to both the SetupProgressCapsule and the Ctrl+C monitor.
+    ///
+    /// Two signals fire in parallel:
+    /// 1. `commandsCancelled = true` — durable. The loop checks this at the top
+    ///    of each iteration and exits without launching the next command.
+    /// 2. `cancellationToken?.terminate()` — best-effort SIGTERM to the
+    ///    currently-running child. The token is published from a `nonisolated`
+    ///    runner via `Task { @MainActor in ... }`, so there is a brief window
+    ///    (typically <1 ms) between `Process.run()` succeeding and the token
+    ///    landing on `cancellationToken` where this call is a no-op. The
+    ///    runner's own DispatchWorkItem timeout still bounds the wait, and
+    ///    iteration cancellation via signal 1 still applies on the next loop
+    ///    turn — so the user's intent is never permanently lost.
     func cancelCommands() {
         commandsCancelled = true
         cancellationToken?.terminate()
@@ -632,7 +644,7 @@ final class WorktreeOrchestrator {
 /// Lock-protected bounded byte buffer for incremental pipe drain.
 /// Concurrent reads across both stdout and stderr handlers go through
 /// independent instances; the lock guards in-instance state.
-private final class LimitedBuffer: @unchecked Sendable {
+final class LimitedBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var data = Data()
     private var truncated = false
@@ -649,8 +661,13 @@ private final class LimitedBuffer: @unchecked Sendable {
             truncated = true
             return
         }
-        if chunk.count <= space {
+        if chunk.count < space {
             data.append(chunk)
+        } else if chunk.count == space {
+            // Filled to the cap exactly. Append and mark — any subsequent
+            // append would be dropped, so future readers must know.
+            data.append(chunk)
+            truncated = true
         } else {
             data.append(chunk.prefix(space))
             truncated = true
