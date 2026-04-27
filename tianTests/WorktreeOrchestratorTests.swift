@@ -584,6 +584,39 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - Workspace ID targeting (Bug 1 regression)
 
+    @Test func setupCommands_withLargeOutput_doNotDeadlock() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Emit ~300 KB of stdout. With the old readDataToEndOfFile() drain,
+        // the child blocks on a full pipe, terminationHandler never fires,
+        // and we hit the timeout. With incremental drain, this completes
+        // promptly under the 5 s timeout.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "yes hello | head -c 300000"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let start = ContinuousClock.now
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "loud-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        let elapsed = ContinuousClock.now - start
+
+        // Allow generous slack on busy CI; 4 s well below the 5 s timeout.
+        #expect(elapsed < .seconds(4))
+        #expect(orchestrator.setupProgress == nil)
+    }
+
     @Test func createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
         let repoA = try makeTempGitRepo()
         let repoC = try makeTempGitRepo()

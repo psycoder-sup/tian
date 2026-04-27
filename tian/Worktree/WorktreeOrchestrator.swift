@@ -28,9 +28,10 @@ final class WorktreeOrchestrator {
     /// Temporary event monitor for Ctrl+C during shell command loops.
     private var ctrlCMonitor: Any?
 
-    /// Currently running shell process (setup or archive), if any.
-    /// Used for cancellation/timeout.
-    private var currentCommandProcess: Process?
+    /// Sendable handle for terminating the in-flight shell command, if
+    /// any. Set by the nonisolated runner just before the child process
+    /// starts and cleared when it exits. Read by `cancelCommands()`.
+    private var cancellationToken: SetupCancellationToken?
 
     // MARK: - Init
 
@@ -212,7 +213,7 @@ final class WorktreeOrchestrator {
     /// Wired to both the SetupCancelButton and the Ctrl+C monitor.
     func cancelCommands() {
         commandsCancelled = true
-        currentCommandProcess?.terminate()
+        cancellationToken?.terminate()
     }
 
     /// Stores an error for the UI alert binding to consume.
@@ -369,51 +370,19 @@ final class WorktreeOrchestrator {
         timeout: TimeInterval
     ) async -> Int32 {
         let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
-        let process = Process()
-        process.executableURL = URL(filePath: shellPath)
-        process.arguments = ["-l", "-c", command]
-        process.currentDirectoryURL = URL(filePath: worktreePath)
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        currentCommandProcess = process
-        defer { currentCommandProcess = nil }
-
-        do {
-            try process.run()
-        } catch {
-            Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
-            return -1
-        }
-
-        let timeoutTask = Task {
-            try? await Task.sleep(for: .seconds(timeout))
-            if process.isRunning {
-                Log.worktree.warning("\(label.capitalized) command timed out after \(timeout)s, terminating: \(command)")
-                process.terminate()
+        return await Self.runCommandOffMain(
+            command: command,
+            label: label,
+            shellPath: shellPath,
+            worktreePath: worktreePath,
+            timeout: timeout,
+            onStarted: { [weak self] token in
+                Task { @MainActor in self?.cancellationToken = token }
+            },
+            onEnded: { [weak self] in
+                Task { @MainActor in self?.cancellationToken = nil }
             }
-        }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            process.terminationHandler = { _ in continuation.resume() }
-        }
-        timeoutTask.cancel()
-
-        let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let trimmedStdout = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedStderr = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedStdout.isEmpty {
-            Log.worktree.info("\(label) stdout: \(trimmedStdout)")
-        }
-        if !trimmedStderr.isEmpty {
-            Log.worktree.warning("\(label) stderr: \(trimmedStderr)")
-        }
-        Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
-        return process.terminationStatus
+        )
     }
 
     // MARK: - Ctrl+C Monitor
@@ -558,5 +527,139 @@ final class WorktreeOrchestrator {
                 .first(where: { $0.id == id })
                 .map { ($0, workspace.spaceCollection) }
         }
+    }
+
+    /// Per-stream output cap. Anything beyond this is discarded and a
+    /// truncation marker is appended to the final log line.
+    nonisolated private static let outputBufferCap = 256 * 1024
+
+    /// Runs a single shell command without touching the main actor.
+    ///
+    /// Uses `readabilityHandler` on each pipe to drain output incrementally
+    /// — the child can write more than the kernel pipe buffer (~16-64 KB)
+    /// without blocking, eliminating the previous deadlock for chatty
+    /// commands like `bun install`.
+    ///
+    /// `onStarted` and `onEnded` are Sendable callbacks the caller uses
+    /// to publish/clear the cancellation token on its own actor.
+    nonisolated private static func runCommandOffMain(
+        command: String,
+        label: String,
+        shellPath: String,
+        worktreePath: String,
+        timeout: TimeInterval,
+        onStarted: @Sendable (SetupCancellationToken) -> Void,
+        onEnded: @Sendable () -> Void
+    ) async -> Int32 {
+        let process = Process()
+        process.executableURL = URL(filePath: shellPath)
+        process.arguments = ["-l", "-c", command]
+        process.currentDirectoryURL = URL(filePath: worktreePath)
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let stdoutBuffer = LimitedBuffer(cap: outputBufferCap)
+        let stderrBuffer = LimitedBuffer(cap: outputBufferCap)
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                stdoutBuffer.append(chunk)
+            }
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+            } else {
+                stderrBuffer.append(chunk)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
+            return -1
+        }
+
+        let pid = process.processIdentifier
+        let token = SetupCancellationToken { kill(pid, SIGTERM) }
+        onStarted(token)
+        defer { onEnded() }
+
+        let timeoutItem = DispatchWorkItem { kill(pid, SIGTERM) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            process.terminationHandler = { _ in continuation.resume() }
+        }
+        timeoutItem.cancel()
+
+        // Detach handlers — the child has exited so further availableData
+        // reads would just return empty buffers.
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+        let (stdoutData, stdoutTrunc) = stdoutBuffer.snapshot()
+        let (stderrData, stderrTrunc) = stderrBuffer.snapshot()
+
+        let trimmedStdout = (String(data: stdoutData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedStderr = (String(data: stderrData, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stdoutSuffix = stdoutTrunc ? " … (truncated at \(outputBufferCap) bytes)" : ""
+        let stderrSuffix = stderrTrunc ? " … (truncated at \(outputBufferCap) bytes)" : ""
+        if !trimmedStdout.isEmpty {
+            Log.worktree.info("\(label) stdout: \(trimmedStdout)\(stdoutSuffix)")
+        }
+        if !trimmedStderr.isEmpty {
+            Log.worktree.warning("\(label) stderr: \(trimmedStderr)\(stderrSuffix)")
+        }
+        Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
+
+        return process.terminationStatus
+    }
+}
+
+/// Lock-protected bounded byte buffer for incremental pipe drain.
+/// Concurrent reads across both stdout and stderr handlers go through
+/// independent instances; the lock guards in-instance state.
+private final class LimitedBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private var truncated = false
+    private let cap: Int
+
+    init(cap: Int) { self.cap = cap }
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        if truncated { return }
+        let space = cap - data.count
+        if space <= 0 {
+            truncated = true
+            return
+        }
+        if chunk.count <= space {
+            data.append(chunk)
+        } else {
+            data.append(chunk.prefix(space))
+            truncated = true
+        }
+    }
+
+    func snapshot() -> (Data, Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (data, truncated)
     }
 }
