@@ -334,6 +334,52 @@ struct WorktreeOrchestratorTests {
                 "polling task should have observed the same Space ID that createWorktreeSpace returned")
     }
 
+    @Test func setupProgress_recordsLastFailedIndex_whenCommandExitsNonZero() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Three commands; the middle one fails. We capture lastFailedIndex
+        // mid-flight via a sentinel-blocked third command.
+        let gate = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-fail-gate-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: gate) }
+
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 5
+
+        [[setup]]
+        command = "true"
+
+        [[setup]]
+        command = "exit 7"
+
+        [[setup]]
+        command = "while [ ! -f \(gate) ]; do sleep 0.02; done"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        Task { @MainActor in
+            // Wait for currentIndex to reach 2 (the gated command).
+            for _ in 0..<300 {
+                if orchestrator.setupProgress?.currentIndex == 2 { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(orchestrator.setupProgress?.lastFailedIndex == 1)
+            FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
+        }
+
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "fail-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        #expect(orchestrator.setupProgress == nil)
+    }
+
     // MARK: - Remove worktree space
 
     @Test func removeWorktreeSpace() async throws {

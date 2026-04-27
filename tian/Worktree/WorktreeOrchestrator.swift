@@ -341,13 +341,21 @@ final class WorktreeOrchestrator {
                 Log.worktree.info("\(label.capitalized) cancelled by user after \(index)/\(commands.count) commands")
                 break
             }
+            // Only [[setup]] populates setupProgress; archive runs silently.
+            if label == "setup", setupProgress != nil {
+                setupProgress?.currentIndex = index
+                setupProgress?.currentCommand = command
+            }
             Log.worktree.info("Running \(label) command \(index + 1)/\(commands.count): \(command)")
-            await runShellCommand(
+            let exit = await runShellCommand(
                 command,
                 label: label,
                 worktreePath: worktreePath,
                 timeout: config.setupTimeout
             )
+            if label == "setup", exit != 0, setupProgress != nil {
+                setupProgress?.lastFailedIndex = index
+            }
         }
     }
 
@@ -356,7 +364,7 @@ final class WorktreeOrchestrator {
         label: String,
         worktreePath: String,
         timeout: TimeInterval
-    ) async {
+    ) async -> Int32 {
         let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
         let process = Process()
         process.executableURL = URL(filePath: shellPath)
@@ -375,7 +383,7 @@ final class WorktreeOrchestrator {
             try process.run()
         } catch {
             Log.worktree.warning("Failed to launch \(label) command '\(command)': \(error.localizedDescription)")
-            return
+            return -1
         }
 
         let timeoutTask = Task {
@@ -402,6 +410,7 @@ final class WorktreeOrchestrator {
             Log.worktree.warning("\(label) stderr: \(trimmedStderr)")
         }
         Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
+        return process.terminationStatus
     }
 
     // MARK: - Ctrl+C Monitor
