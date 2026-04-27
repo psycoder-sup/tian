@@ -18,15 +18,13 @@ struct SetupProgressCapsule: View {
     }
 
     private var didFailLastStep: Bool {
-        guard let failedIndex = progress.lastFailedIndex else { return false }
-        return failedIndex == progress.currentIndex
+        progress.lastFailedIndex != nil
     }
 
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
                 .controlSize(.mini)
-                .scaleEffect(0.7)
 
             Text("Setup \(stepText)")
                 .font(.system(size: 11, weight: .semibold))
@@ -42,6 +40,7 @@ struct SetupProgressCapsule: View {
 
             Text("·")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             Text(commandLabel)
                 .font(.system(size: 11, design: .monospaced))
