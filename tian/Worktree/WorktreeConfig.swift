@@ -2,6 +2,12 @@ import Foundation
 
 /// Top-level configuration parsed from `.tian/config.toml`.
 struct WorktreeConfig: Sendable, Equatable {
+    /// Default grace period (seconds) between SIGTERM and SIGKILL.
+    static let defaultKillGrace: TimeInterval = 2.0
+    /// Lower / upper bounds applied to the parsed `setup_kill_grace` value
+    /// to keep a misconfigured config from hanging the orchestrator.
+    static let killGraceBounds: ClosedRange<TimeInterval> = 0.1...60.0
+
     /// Worktree base directory. Tilde-expanded or absolute paths (e.g. `~/.worktrees`)
     /// place worktrees at `<dir>/<repo-name>/<branch>`. Relative paths are resolved
     /// from the repo root (e.g. `.worktrees` → `<repo>/.worktrees/<branch>`).
@@ -13,7 +19,7 @@ struct WorktreeConfig: Sendable, Equatable {
     /// user-cancel). A child that traps or ignores SIGTERM is force-killed
     /// after this interval so the awaiting flow can never hang
     /// indefinitely.
-    var setupKillGrace: TimeInterval = 2.0
+    var setupKillGrace: TimeInterval = WorktreeConfig.defaultKillGrace
     /// Fallback delay in seconds for shell readiness when OSC 7 is not received.
     var shellReadyDelay: TimeInterval = 0.5
     /// Files to copy from main worktree to new worktree.

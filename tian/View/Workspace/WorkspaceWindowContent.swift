@@ -7,6 +7,14 @@ struct WorkspaceWindowContent: View {
     @State private var showDebugOverlay = false
     @State private var createSpaceRequest: CreateSpaceRequest?
     @State private var pendingResolveTask: Task<Void, Never>?
+    /// Tracks the capsule's *displayed* progress, distinct from the
+    /// orchestrator's source-of-truth `setupProgress`. When a run ends with
+    /// a recorded failure, we hold this for `setupCapsuleLingerSeconds` so
+    /// the failure indication is observable before the capsule disappears.
+    @State private var displayedProgress: SetupProgress?
+    @State private var lingerTask: Task<Void, Never>?
+
+    private static let setupCapsuleLingerSeconds: Duration = .seconds(3)
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -15,7 +23,7 @@ struct WorkspaceWindowContent: View {
                 worktreeOrchestrator: worktreeOrchestrator
             )
 
-            if let progress = worktreeOrchestrator.setupProgress {
+            if let progress = displayedProgress {
                 SetupProgressCapsule(progress: progress) {
                     worktreeOrchestrator.cancelCommands()
                 }
@@ -85,7 +93,28 @@ struct WorkspaceWindowContent: View {
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
         .animation(.easeInOut(duration: 0.15), value: createSpaceRequest != nil)
-        .animation(.easeInOut(duration: 0.15), value: worktreeOrchestrator.setupProgress != nil)
+        .animation(.easeInOut(duration: 0.15), value: displayedProgress != nil)
+        .onChange(of: worktreeOrchestrator.setupProgress) { _, new in
+            if let new {
+                lingerTask?.cancel()
+                lingerTask = nil
+                displayedProgress = new
+            } else if let prev = displayedProgress, prev.didFailRun {
+                // Hold the capsule with its failure glyph visible briefly so
+                // the user can register that something went wrong.
+                lingerTask?.cancel()
+                lingerTask = Task { @MainActor in
+                    try? await Task.sleep(for: Self.setupCapsuleLingerSeconds)
+                    if !Task.isCancelled {
+                        displayedProgress = nil
+                    }
+                }
+            } else {
+                lingerTask?.cancel()
+                lingerTask = nil
+                displayedProgress = nil
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleDebugOverlay)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }

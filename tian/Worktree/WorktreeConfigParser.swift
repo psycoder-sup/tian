@@ -50,10 +50,10 @@ enum WorktreeConfigParser {
             Log.worktree.warning("shell_ready_delay has invalid type, using default")
         }
 
-        if let value = table["setup_kill_grace"]?.double {
-            config.setupKillGrace = value
-        } else if let value = table["setup_kill_grace"]?.int {
-            config.setupKillGrace = TimeInterval(value)
+        if let raw = table["setup_kill_grace"]?.double {
+            config.setupKillGrace = clampKillGrace(raw)
+        } else if let raw = table["setup_kill_grace"]?.int {
+            config.setupKillGrace = clampKillGrace(TimeInterval(raw))
         } else if table["setup_kill_grace"] != nil {
             Log.worktree.warning("setup_kill_grace has invalid type, using default")
         }
@@ -120,6 +120,11 @@ enum WorktreeConfigParser {
     }
 
     // MARK: - Private
+
+    private static func clampKillGrace(_ value: TimeInterval) -> TimeInterval {
+        let bounds = WorktreeConfig.killGraceBounds
+        return Swift.min(Swift.max(value, bounds.lowerBound), bounds.upperBound)
+    }
 
     private static func parseLayoutNode(_ table: TOMLTable) -> LayoutNode? {
         if let directionStr = table["direction"]?.string {

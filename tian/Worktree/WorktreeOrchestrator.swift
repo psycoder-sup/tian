@@ -28,10 +28,10 @@ final class WorktreeOrchestrator {
     /// Temporary event monitor for Ctrl+C during shell command loops.
     private var ctrlCMonitor: Any?
 
-    /// Sendable handle for terminating the in-flight shell command, if
-    /// any. Set by the nonisolated runner just before the child process
-    /// starts and cleared when it exits. Read by `cancelCommands()`.
-    private var cancellationToken: SetupCancellationToken?
+    /// Sendable closure that terminates the in-flight shell command, if any.
+    /// Published from the nonisolated runner just before the child starts;
+    /// cleared when it exits. Read by `cancelCommands()`.
+    private var cancellationToken: (@Sendable () -> Void)?
 
     // MARK: - Init
 
@@ -209,23 +209,12 @@ final class WorktreeOrchestrator {
 
     // MARK: - Cancellation
 
-    /// Cancels the in-flight shell command loop (setup or archive).
-    /// Wired to both the SetupProgressCapsule and the Ctrl+C monitor.
-    ///
-    /// Two signals fire in parallel:
-    /// 1. `commandsCancelled = true` — durable. The loop checks this at the top
-    ///    of each iteration and exits without launching the next command.
-    /// 2. `cancellationToken?.terminate()` — best-effort SIGTERM to the
-    ///    currently-running child. The token is published from a `nonisolated`
-    ///    runner via `Task { @MainActor in ... }`, so there is a brief window
-    ///    (typically <1 ms) between `Process.run()` succeeding and the token
-    ///    landing on `cancellationToken` where this call is a no-op. The
-    ///    runner's own DispatchWorkItem timeout still bounds the wait, and
-    ///    iteration cancellation via signal 1 still applies on the next loop
-    ///    turn — so the user's intent is never permanently lost.
+    /// Cancels the in-flight shell command loop. Sets `commandsCancelled`
+    /// (loop-level early-exit) and signals the running child via the
+    /// published cancellation closure (best-effort SIGTERM through `KillGuard`).
     func cancelCommands() {
         commandsCancelled = true
-        cancellationToken?.terminate()
+        cancellationToken?()
     }
 
     /// Stores an error for the UI alert binding to consume.
@@ -354,9 +343,7 @@ final class WorktreeOrchestrator {
                 Log.worktree.info("\(label.capitalized) cancelled by user after \(index)/\(commands.count) commands")
                 break
             }
-            // Only [[setup]] populates setupProgress; archive runs silently.
-            // Snapshot/mutate/reassign so the @Observable property fires a
-            // single change notification per command instead of two.
+            // Coalesce two @Observable notifications into one per command.
             if label == "setup", var snapshot = setupProgress {
                 snapshot.currentIndex = index
                 snapshot.currentCommand = command
@@ -391,8 +378,8 @@ final class WorktreeOrchestrator {
             worktreePath: worktreePath,
             timeout: timeout,
             killGrace: killGrace,
-            onStarted: { [weak self] token in
-                Task { @MainActor in self?.cancellationToken = token }
+            onStarted: { [weak self] terminate in
+                Task { @MainActor in self?.cancellationToken = terminate }
             },
             onEnded: { [weak self] in
                 Task { @MainActor in self?.cancellationToken = nil }
@@ -549,23 +536,12 @@ final class WorktreeOrchestrator {
     nonisolated private static let outputBufferCap = 256 * 1024
 
     /// Runs a single shell command without touching the main actor.
+    /// Drains pipes incrementally via `readabilityHandler` (no kernel-buffer
+    /// deadlock) and routes every `kill()` through `KillGuard` (no signal
+    /// to a recycled PID, automatic SIGKILL after `killGrace`).
     ///
-    /// Uses `readabilityHandler` on each pipe to drain output incrementally
-    /// — the child can write more than the kernel pipe buffer (~16-64 KB)
-    /// without blocking, eliminating the previous deadlock for chatty
-    /// commands like `bun install`.
-    ///
-    /// Kill safety: the cancellation token and timeout work-item route all
-    /// `kill()` calls through a `KillGuard` whose state is flipped to
-    /// `.dead` synchronously inside `terminationHandler` before the
-    /// continuation resumes. After that point, any in-flight or stale
-    /// kill request becomes a no-op — closing the PID-reuse window where
-    /// a recycled PID could otherwise be signaled. A child that traps
-    /// SIGTERM is escalated to SIGKILL after `killGrace` seconds so the
-    /// await on `terminationHandler` can never hang indefinitely.
-    ///
-    /// `onStarted` and `onEnded` are Sendable callbacks the caller uses
-    /// to publish/clear the cancellation token on its own actor.
+    /// `onStarted` publishes a Sendable terminate-closure to the caller's
+    /// actor; `onEnded` clears it.
     nonisolated private static func runCommandOffMain(
         command: String,
         label: String,
@@ -573,7 +549,7 @@ final class WorktreeOrchestrator {
         worktreePath: String,
         timeout: TimeInterval,
         killGrace: TimeInterval,
-        onStarted: @Sendable (SetupCancellationToken) -> Void,
+        onStarted: @Sendable (@Sendable @escaping () -> Void) -> Void,
         onEnded: @Sendable () -> Void
     ) async -> Int32 {
         let process = Process()
@@ -615,33 +591,35 @@ final class WorktreeOrchestrator {
             return -1
         }
 
-        let pid = process.processIdentifier
-        let killGuard = KillGuard(pid: pid)
-        let token = SetupCancellationToken { killGuard.terminate(grace: killGrace) }
-        onStarted(token)
+        let killGuard = KillGuard(pid: process.processIdentifier)
+        onStarted({ killGuard.terminate(grace: killGrace) })
         defer { onEnded() }
 
         let timeoutItem = DispatchWorkItem { killGuard.terminate(grace: killGrace) }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
 
+        // Single-resume gate: the terminationHandler and the post-assignment
+        // `isRunning` check both race to claim it. Without this, a child that
+        // reaps between `process.run()` and assigning the handler below would
+        // hang the await — Foundation does not retroactively invoke a handler
+        // assigned after the process has terminated.
+        let resumed = ResumeOnce()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             process.terminationHandler = { _ in
-                // Order matters: flipping the guard to `.dead` BEFORE
-                // resuming the continuation guarantees that any kill
-                // request that lost the race with this handler — the
-                // pending timeout work-item, or a stale token left on
-                // `cancellationToken` — is now a no-op. Cancelling the
-                // work-item itself is done after the await as
-                // belt-and-braces (`DispatchWorkItem` isn't `Sendable`,
-                // so it can't be captured in this `@Sendable` closure).
+                if resumed.claim() {
+                    // markDead() before resume(): any kill that lost the race
+                    // (pending timeout, stale published closure) becomes a no-op.
+                    killGuard.markDead()
+                    continuation.resume()
+                }
+            }
+            if !process.isRunning, resumed.claim() {
                 killGuard.markDead()
                 continuation.resume()
             }
         }
         timeoutItem.cancel()
 
-        // Detach handlers — the child has exited so further availableData
-        // reads would just return empty buffers.
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
 
@@ -666,113 +644,17 @@ final class WorktreeOrchestrator {
     }
 }
 
-/// Atomic kill-eligibility gate for a child process.
-///
-/// Foundation's `Process` exposes only the bare PID for termination, and
-/// macOS recycles PIDs — so a `kill()` call that arrives after the child
-/// has reaped can land on an unrelated process owned by the user. This
-/// class closes that window:
-///
-/// - `terminate(grace:)` sends SIGTERM exactly once (idempotent across
-///   competing callers — e.g. user cancel + timeout work-item firing
-///   together) and schedules a SIGKILL escalation after `grace`.
-/// - `markDead()` is called from `terminationHandler` BEFORE the
-///   continuation resumes; it cancels the pending escalation and flips
-///   state to `.dead`. After this point, every entry-point becomes a
-///   no-op, so any stale token left on the orchestrator's
-///   `cancellationToken` property — or any in-flight escalation
-///   work-item — cannot signal a recycled PID.
-final class KillGuard: @unchecked Sendable {
-    enum State { case alive, terminating, dead }
-
+/// One-shot resume claim. Used to gate `CheckedContinuation.resume()`
+/// when two code paths race to call it (e.g. `terminationHandler` and a
+/// post-`process.run()` `isRunning` recheck).
+private final class ResumeOnce: @unchecked Sendable {
     private let lock = NSLock()
-    private let pid: pid_t
-    private var state: State = .alive
-    private var sigkillItem: DispatchWorkItem?
-
-    init(pid: pid_t) { self.pid = pid }
-
-    /// Sends SIGTERM (idempotent) and schedules SIGKILL after `grace`.
-    /// No-op once the process has been marked dead.
-    func terminate(grace: TimeInterval) {
-        lock.lock()
-        guard state == .alive else { lock.unlock(); return }
-        state = .terminating
-        let item = DispatchWorkItem { [weak self] in self?.escalate() }
-        sigkillItem = item
-        let pidLocal = pid
-        lock.unlock()
-
-        kill(pidLocal, SIGTERM)
-        DispatchQueue.global().asyncAfter(deadline: .now() + grace, execute: item)
-    }
-
-    /// Force-kill if the process is still in the `terminating` state when
-    /// the grace period elapses. No-op if `markDead()` has been called.
-    private func escalate() {
-        lock.lock()
-        guard state == .terminating else { lock.unlock(); return }
-        let pidLocal = pid
-        lock.unlock()
-        kill(pidLocal, SIGKILL)
-    }
-
-    /// Mark the process as dead. Cancels any pending SIGKILL escalation
-    /// and prevents any further `kill()` calls. Must be called from the
-    /// process's `terminationHandler` BEFORE resuming the awaiting
-    /// continuation.
-    func markDead() {
-        lock.lock()
-        state = .dead
-        let item = sigkillItem
-        sigkillItem = nil
-        lock.unlock()
-        item?.cancel()
-    }
-
-    /// Test-only: read current state for assertions.
-    var currentState: State {
+    private var done = false
+    func claim() -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return state
+        if done { return false }
+        done = true
+        return true
     }
 }
 
-/// Lock-protected bounded byte buffer for incremental pipe drain.
-/// Concurrent reads across both stdout and stderr handlers go through
-/// independent instances; the lock guards in-instance state.
-final class LimitedBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var data = Data()
-    private var truncated = false
-    private let cap: Int
-
-    init(cap: Int) { self.cap = cap }
-
-    func append(_ chunk: Data) {
-        lock.lock()
-        defer { lock.unlock() }
-        if truncated { return }
-        let space = cap - data.count
-        if space <= 0 {
-            truncated = true
-            return
-        }
-        if chunk.count < space {
-            data.append(chunk)
-        } else if chunk.count == space {
-            // Filled to the cap exactly. Append and mark — any subsequent
-            // append would be dropped, so future readers must know.
-            data.append(chunk)
-            truncated = true
-        } else {
-            data.append(chunk.prefix(space))
-            truncated = true
-        }
-    }
-
-    func snapshot() -> (Data, Bool) {
-        lock.lock()
-        defer { lock.unlock() }
-        return (data, truncated)
-    }
-}

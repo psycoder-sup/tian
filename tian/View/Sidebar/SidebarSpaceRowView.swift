@@ -75,9 +75,6 @@ struct SidebarSpaceRowView: View {
 
     @ViewBuilder
     private func setupProgressRow(progress: SetupProgress) -> some View {
-        let displayed = max(progress.currentIndex + 1, 1)
-        let didFailRun = progress.lastFailedIndex != nil
-
         HStack(spacing: 8) {
             ProgressView()
                 .controlSize(.mini)
@@ -91,19 +88,19 @@ struct SidebarSpaceRowView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            Text("\(displayed)/\(progress.totalCommands)")
+            Text(progress.stepText)
                 .font(.system(size: 11, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
 
-            if didFailRun {
+            if progress.didFailRun {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.red)
                     .accessibilityLabel("a step in this run failed")
             }
 
-            Text(progress.currentCommand ?? "starting…")
+            Text(progress.commandLabel)
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(white: 0.55))
                 .lineLimit(1)
@@ -186,12 +183,12 @@ struct SidebarSpaceRowView: View {
                 onSelect()
             }
         }
-        .modifier(SidebarSpaceRowConditionalDraggable(spaceID: space.id, enabled: !isSettingUp))
-        .modifier(SidebarSpaceRowConditionalContextMenu(
+        .modifier(SidebarSpaceRowMutationGate(
             enabled: !isSettingUp,
-            onRename: { isRenaming = true },
-            currentDirectory: space.defaultWorkingDirectory,
+            spaceID: space.id,
             spaceName: space.name,
+            currentDirectory: space.defaultWorkingDirectory,
+            onRename: { isRenaming = true },
             onSetDirectory: onSetDirectory,
             onClose: onClose
         ))
@@ -204,40 +201,34 @@ struct SidebarSpaceRowView: View {
     }
 }
 
-private struct SidebarSpaceRowConditionalDraggable: ViewModifier {
+/// Gates drag and context-menu interactions on the Space row. Both are
+/// disabled while the row is rendering setup-progress so the user can't
+/// rename, drag, or close a Space mid-creation. Tap-to-focus is handled
+/// separately at the call site.
+private struct SidebarSpaceRowMutationGate: ViewModifier {
+    let enabled: Bool
     let spaceID: UUID
-    let enabled: Bool
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.draggable(SpaceDragItem(spaceID: spaceID))
-        } else {
-            content
-        }
-    }
-}
-
-private struct SidebarSpaceRowConditionalContextMenu: ViewModifier {
-    let enabled: Bool
-    let onRename: () -> Void
-    let currentDirectory: URL?
     let spaceName: String
+    let currentDirectory: URL?
+    let onRename: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
 
     func body(content: Content) -> some View {
         if enabled {
-            content.contextMenu {
-                Button("Rename", action: onRename)
-                Divider()
-                DefaultDirectoryMenu(
-                    name: spaceName,
-                    currentDirectory: currentDirectory,
-                    onSet: onSetDirectory
-                )
-                Divider()
-                Button("Close Space", action: onClose)
-            }
+            content
+                .draggable(SpaceDragItem(spaceID: spaceID))
+                .contextMenu {
+                    Button("Rename", action: onRename)
+                    Divider()
+                    DefaultDirectoryMenu(
+                        name: spaceName,
+                        currentDirectory: currentDirectory,
+                        onSet: onSetDirectory
+                    )
+                    Divider()
+                    Button("Close Space", action: onClose)
+                }
         } else {
             content
         }

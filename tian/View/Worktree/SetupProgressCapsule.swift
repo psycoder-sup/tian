@@ -1,37 +1,23 @@
 import SwiftUI
 
 /// Bottom-right overlay shown while `[[setup]]` commands run for a
-/// freshly-created worktree Space. Displays the step counter, current
-/// command, a failure glyph if the most recent step failed, and a
-/// cancel button. Replaces the older cancel-only `SetupCancelButton`.
+/// freshly-created worktree Space. Step counter, current command,
+/// failure glyph, and a cancel button.
 struct SetupProgressCapsule: View {
     let progress: SetupProgress
     let onCancel: () -> Void
-
-    private var stepText: String {
-        let displayed = max(progress.currentIndex + 1, 1)
-        return "\(displayed)/\(progress.totalCommands)"
-    }
-
-    private var commandLabel: String {
-        progress.currentCommand ?? "starting…"
-    }
-
-    private var didFailLastStep: Bool {
-        progress.lastFailedIndex != nil
-    }
 
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
                 .controlSize(.mini)
 
-            Text("Setup \(stepText)")
+            Text("Setup \(progress.stepText)")
                 .font(.system(size: 11, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
 
-            if didFailLastStep {
+            if progress.didFailRun {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.red)
@@ -42,7 +28,7 @@ struct SetupProgressCapsule: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            Text(commandLabel)
+            Text(progress.commandLabel)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
