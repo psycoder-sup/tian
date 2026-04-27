@@ -584,7 +584,7 @@ struct WorktreeOrchestratorTests {
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
     }
 
-    // MARK: - Workspace ID targeting (Bug 1 regression)
+    // MARK: - Pipe overflow
 
     @Test func setupCommands_withLargeOutput_doNotDeadlock() async throws {
         let repo = try makeTempGitRepo()
@@ -618,6 +618,48 @@ struct WorktreeOrchestratorTests {
         #expect(elapsed < .seconds(4))
         #expect(orchestrator.setupProgress == nil)
     }
+
+    // MARK: - SIGKILL escalation
+
+    @Test func setupCommand_ignoringSIGTERM_isKilledViaSIGKILL_escalation() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // `trap '' TERM` sets SIGTERM disposition to SIG_IGN in the shell.
+        // POSIX inherits SIG_IGN across exec, so the spawned `sleep` also
+        // ignores SIGTERM. With the SIGTERM-only kill path, this command
+        // would block until `setup_timeout`'s deadline and then continue
+        // ignoring the signal — leaving the orchestrator hung. With the
+        // SIGKILL escalation, the grace period elapses and SIGKILL (which
+        // cannot be trapped) reaps the child.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 0.1
+        setup_kill_grace = 0.2
+
+        [[setup]]
+        command = "trap '' TERM; sleep 30"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let start = ContinuousClock.now
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "trap-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        let elapsed = ContinuousClock.now - start
+
+        // Timeout (0.1) + grace (0.2) ≈ 0.3 s; allow generous slack for CI.
+        // Pre-fix this would have hung on the 30 s sleep.
+        #expect(elapsed < .seconds(3))
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    // MARK: - Workspace ID targeting (Bug 1 regression)
 
     @Test func createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
         let repoA = try makeTempGitRepo()

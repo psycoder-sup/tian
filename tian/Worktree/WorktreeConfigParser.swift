@@ -50,6 +50,14 @@ enum WorktreeConfigParser {
             Log.worktree.warning("shell_ready_delay has invalid type, using default")
         }
 
+        if let value = table["setup_kill_grace"]?.double {
+            config.setupKillGrace = value
+        } else if let value = table["setup_kill_grace"]?.int {
+            config.setupKillGrace = TimeInterval(value)
+        } else if table["setup_kill_grace"] != nil {
+            Log.worktree.warning("setup_kill_grace has invalid type, using default")
+        }
+
         // [[copy]] array of tables
         if let copyArray = table["copy"]?.array {
             for item in copyArray {

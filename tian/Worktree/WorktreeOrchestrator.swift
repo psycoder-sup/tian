@@ -367,7 +367,8 @@ final class WorktreeOrchestrator {
                 command,
                 label: label,
                 worktreePath: worktreePath,
-                timeout: config.setupTimeout
+                timeout: config.setupTimeout,
+                killGrace: config.setupKillGrace
             )
             if label == "setup", exit != 0, setupProgress != nil {
                 setupProgress?.lastFailedIndex = index
@@ -379,7 +380,8 @@ final class WorktreeOrchestrator {
         _ command: String,
         label: String,
         worktreePath: String,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        killGrace: TimeInterval
     ) async -> Int32 {
         let shellPath = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/sh"
         return await Self.runCommandOffMain(
@@ -388,6 +390,7 @@ final class WorktreeOrchestrator {
             shellPath: shellPath,
             worktreePath: worktreePath,
             timeout: timeout,
+            killGrace: killGrace,
             onStarted: { [weak self] token in
                 Task { @MainActor in self?.cancellationToken = token }
             },
@@ -552,6 +555,15 @@ final class WorktreeOrchestrator {
     /// without blocking, eliminating the previous deadlock for chatty
     /// commands like `bun install`.
     ///
+    /// Kill safety: the cancellation token and timeout work-item route all
+    /// `kill()` calls through a `KillGuard` whose state is flipped to
+    /// `.dead` synchronously inside `terminationHandler` before the
+    /// continuation resumes. After that point, any in-flight or stale
+    /// kill request becomes a no-op — closing the PID-reuse window where
+    /// a recycled PID could otherwise be signaled. A child that traps
+    /// SIGTERM is escalated to SIGKILL after `killGrace` seconds so the
+    /// await on `terminationHandler` can never hang indefinitely.
+    ///
     /// `onStarted` and `onEnded` are Sendable callbacks the caller uses
     /// to publish/clear the cancellation token on its own actor.
     nonisolated private static func runCommandOffMain(
@@ -560,6 +572,7 @@ final class WorktreeOrchestrator {
         shellPath: String,
         worktreePath: String,
         timeout: TimeInterval,
+        killGrace: TimeInterval,
         onStarted: @Sendable (SetupCancellationToken) -> Void,
         onEnded: @Sendable () -> Void
     ) async -> Int32 {
@@ -603,15 +616,27 @@ final class WorktreeOrchestrator {
         }
 
         let pid = process.processIdentifier
-        let token = SetupCancellationToken { kill(pid, SIGTERM) }
+        let killGuard = KillGuard(pid: pid)
+        let token = SetupCancellationToken { killGuard.terminate(grace: killGrace) }
         onStarted(token)
         defer { onEnded() }
 
-        let timeoutItem = DispatchWorkItem { kill(pid, SIGTERM) }
+        let timeoutItem = DispatchWorkItem { killGuard.terminate(grace: killGrace) }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            process.terminationHandler = { _ in continuation.resume() }
+            process.terminationHandler = { _ in
+                // Order matters: flipping the guard to `.dead` BEFORE
+                // resuming the continuation guarantees that any kill
+                // request that lost the race with this handler — the
+                // pending timeout work-item, or a stale token left on
+                // `cancellationToken` — is now a no-op. Cancelling the
+                // work-item itself is done after the await as
+                // belt-and-braces (`DispatchWorkItem` isn't `Sendable`,
+                // so it can't be captured in this `@Sendable` closure).
+                killGuard.markDead()
+                continuation.resume()
+            }
         }
         timeoutItem.cancel()
 
@@ -638,6 +663,77 @@ final class WorktreeOrchestrator {
         Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
 
         return process.terminationStatus
+    }
+}
+
+/// Atomic kill-eligibility gate for a child process.
+///
+/// Foundation's `Process` exposes only the bare PID for termination, and
+/// macOS recycles PIDs — so a `kill()` call that arrives after the child
+/// has reaped can land on an unrelated process owned by the user. This
+/// class closes that window:
+///
+/// - `terminate(grace:)` sends SIGTERM exactly once (idempotent across
+///   competing callers — e.g. user cancel + timeout work-item firing
+///   together) and schedules a SIGKILL escalation after `grace`.
+/// - `markDead()` is called from `terminationHandler` BEFORE the
+///   continuation resumes; it cancels the pending escalation and flips
+///   state to `.dead`. After this point, every entry-point becomes a
+///   no-op, so any stale token left on the orchestrator's
+///   `cancellationToken` property — or any in-flight escalation
+///   work-item — cannot signal a recycled PID.
+final class KillGuard: @unchecked Sendable {
+    enum State { case alive, terminating, dead }
+
+    private let lock = NSLock()
+    private let pid: pid_t
+    private var state: State = .alive
+    private var sigkillItem: DispatchWorkItem?
+
+    init(pid: pid_t) { self.pid = pid }
+
+    /// Sends SIGTERM (idempotent) and schedules SIGKILL after `grace`.
+    /// No-op once the process has been marked dead.
+    func terminate(grace: TimeInterval) {
+        lock.lock()
+        guard state == .alive else { lock.unlock(); return }
+        state = .terminating
+        let item = DispatchWorkItem { [weak self] in self?.escalate() }
+        sigkillItem = item
+        let pidLocal = pid
+        lock.unlock()
+
+        kill(pidLocal, SIGTERM)
+        DispatchQueue.global().asyncAfter(deadline: .now() + grace, execute: item)
+    }
+
+    /// Force-kill if the process is still in the `terminating` state when
+    /// the grace period elapses. No-op if `markDead()` has been called.
+    private func escalate() {
+        lock.lock()
+        guard state == .terminating else { lock.unlock(); return }
+        let pidLocal = pid
+        lock.unlock()
+        kill(pidLocal, SIGKILL)
+    }
+
+    /// Mark the process as dead. Cancels any pending SIGKILL escalation
+    /// and prevents any further `kill()` calls. Must be called from the
+    /// process's `terminationHandler` BEFORE resuming the awaiting
+    /// continuation.
+    func markDead() {
+        lock.lock()
+        state = .dead
+        let item = sigkillItem
+        sigkillItem = nil
+        lock.unlock()
+        item?.cancel()
+    }
+
+    /// Test-only: read current state for assertions.
+    var currentState: State {
+        lock.lock(); defer { lock.unlock() }
+        return state
     }
 }
 

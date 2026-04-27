@@ -8,6 +8,12 @@ struct WorktreeConfig: Sendable, Equatable {
     var worktreeDir: String = "~/.worktrees"
     /// Timeout in seconds per setup command.
     var setupTimeout: TimeInterval = 300
+    /// Grace period in seconds between SIGTERM and SIGKILL when a
+    /// `[[setup]]` or `[[archive]]` command must be killed (timeout or
+    /// user-cancel). A child that traps or ignores SIGTERM is force-killed
+    /// after this interval so the awaiting flow can never hang
+    /// indefinitely.
+    var setupKillGrace: TimeInterval = 2.0
     /// Fallback delay in seconds for shell readiness when OSC 7 is not received.
     var shellReadyDelay: TimeInterval = 0.5
     /// Files to copy from main worktree to new worktree.
