@@ -35,7 +35,7 @@ struct SetupProgressCapsule: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.red)
-                    .accessibilityLabel("last step failed")
+                    .accessibilityLabel("a step in this run failed")
             }
 
             Text("·")
