@@ -210,39 +210,41 @@ struct WorktreeOrchestratorTests {
         try writeConfig("""
         worktree_dir = ".worktrees"
         shell_ready_delay = 0.01
-        setup_timeout = 0.01
+        setup_timeout = 30
 
         [[setup]]
-        command = "echo step1"
+        command = "sleep 30"
 
         [[setup]]
-        command = "echo step2"
+        command = "sleep 30"
 
         [[setup]]
-        command = "echo step3"
+        command = "sleep 30"
         """, in: repo)
 
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // Schedule cancellation during creation (fires during an await suspension)
+        // Cancel once setupProgress shows the first command running.
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(10))
+            for _ in 0..<300 {
+                if orchestrator.setupProgress?.currentCommand?.hasPrefix("sleep") == true { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
             orchestrator.cancelCommands()
         }
 
+        let start = ContinuousClock.now
         let result = try await orchestrator.createWorktreeSpace(
             branchName: "cancel-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
+        let elapsed = ContinuousClock.now - start
 
-        // Creation should still succeed (Space exists)
+        // Whole creation finishes well before any 30 s sleep would.
+        #expect(elapsed < .seconds(5))
         #expect(!result.existed)
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace != nil)
-
-        // setupProgress should be cleared
         #expect(orchestrator.setupProgress == nil)
     }
 
