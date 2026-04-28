@@ -17,7 +17,7 @@ struct AuroraCapsuleFill: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
-        TimelineView(reduceMotion ? .animation(minimumInterval: nil, paused: true) : .animation(minimumInterval: 0.033)) { timeline in
+        TimelineView(reduceMotion ? .animation(minimumInterval: nil, paused: true) : .animation(minimumInterval: 1.0 / 12.0)) { timeline in
             let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let phase = CGFloat(t) * 0.18
             let breathe = reduceMotion ? 1.0 : rainbowBreathe(t)
