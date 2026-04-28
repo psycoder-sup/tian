@@ -554,13 +554,21 @@ final class WorktreeOrchestrator {
     ) async -> Int32 {
         let process = Process()
         process.executableURL = URL(filePath: shellPath)
-        process.arguments = ["-l", "-c", command]
+        // -i so zsh sources ~/.zshrc — most users put dev-tool PATH (pnpm,
+        // nvm, mise, …) there, not in ~/.zprofile. Without -i, `pnpm install`
+        // and similar setup commands exit 127 (command not found).
+        process.arguments = ["-l", "-i", "-c", command]
         process.currentDirectoryURL = URL(filePath: worktreePath)
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
+        // Redirect stdin to /dev/null so `-i` zsh doesn't block on read
+        // (e.g. plugins gated on `[[ -t 0 ]]`, stale compinit prompts, or
+        // shell integrations issuing terminal queries). /dev/null always
+        // exists on macOS, so force-unwrap is safe.
+        process.standardInput = FileHandle(forReadingAtPath: "/dev/null")!
 
         let stdoutBuffer = LimitedBuffer(cap: outputBufferCap)
         let stderrBuffer = LimitedBuffer(cap: outputBufferCap)
@@ -636,7 +644,14 @@ final class WorktreeOrchestrator {
             Log.worktree.info("\(label) stdout: \(trimmedStdout)\(stdoutSuffix)")
         }
         if !trimmedStderr.isEmpty {
-            Log.worktree.warning("\(label) stderr: \(trimmedStderr)\(stderrSuffix)")
+            // Interactive shells routinely write success-path chatter to
+            // stderr (gitstatusd, p10k, nvm, compinit). Only surface as a
+            // warning when the command actually failed.
+            if process.terminationStatus == 0 {
+                Log.worktree.info("\(label) stderr: \(trimmedStderr)\(stderrSuffix)")
+            } else {
+                Log.worktree.warning("\(label) stderr: \(trimmedStderr)\(stderrSuffix)")
+            }
         }
         Log.worktree.info("\(label.capitalized) command exit=\(process.terminationStatus): \(command)")
 
