@@ -32,7 +32,11 @@ final class PaneViewModel {
     /// `sessionState(forPane:)`.
     var sessionStates: [UUID: ClaudeSessionState] = [:]
 
-    /// Per-pane status label mirror; same scoping rationale as `sessionStates`.
+    /// Per-pane status label mirror, written by `PaneStatusManager` via the
+    /// pane registry. Like `sessionStates`, this is mutated only by the manager
+    /// — readers should go through `paneStatus(forPane:)`. The plain `var` is
+    /// intentional so the manager (in the same module) can dual-write; treat
+    /// external mutation as a bug.
     var paneStatuses: [UUID: PaneStatus] = [:]
 
     /// The container size for the split tree view, updated from the view layer.

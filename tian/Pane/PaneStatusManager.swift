@@ -120,7 +120,14 @@ final class PaneStatusManager {
     }
 
     private func owner(of paneID: UUID) -> PaneViewModel? {
-        ownersByPane[paneID]?.value
+        guard let box = ownersByPane[paneID] else { return nil }
+        if let value = box.value {
+            return value
+        }
+        // The PVM was freed without calling unregisterPane (e.g. test scenarios).
+        // Drop the dead entry to prevent registry bloat over a long session.
+        ownersByPane.removeValue(forKey: paneID)
+        return nil
     }
 }
 
