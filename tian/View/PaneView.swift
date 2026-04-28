@@ -19,7 +19,7 @@ struct PaneView: View {
     }
 
     private var sessionState: ClaudeSessionState? {
-        PaneStatusManager.shared.sessionState(for: paneID)
+        viewModel.sessionState(forPane: paneID)
     }
 
     var body: some View {

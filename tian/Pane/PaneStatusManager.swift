@@ -25,19 +25,29 @@ final class PaneStatusManager {
 
     func setStatus(paneID: UUID, label: String) {
         nextSequence += 1
-        statuses[paneID] = PaneStatus(label: label, sequence: nextSequence)
+        let status = PaneStatus(label: label, sequence: nextSequence)
+        statuses[paneID] = status
+        owner(of: paneID)?.paneStatuses[paneID] = status   // dual-write
     }
 
     /// Clears both the free-form status label and session state for the pane.
     func clearStatus(paneID: UUID) {
         statuses.removeValue(forKey: paneID)
         sessionStates.removeValue(forKey: paneID)
+        if let pvm = owner(of: paneID) {
+            pvm.paneStatuses.removeValue(forKey: paneID)
+            pvm.sessionStates.removeValue(forKey: paneID)
+        }
     }
 
     func clearAll(for paneIDs: Set<UUID>) {
         for id in paneIDs {
             statuses.removeValue(forKey: id)
             sessionStates.removeValue(forKey: id)
+            if let pvm = owner(of: id) {
+                pvm.paneStatuses.removeValue(forKey: id)
+                pvm.sessionStates.removeValue(forKey: id)
+            }
         }
     }
 
@@ -60,11 +70,13 @@ final class PaneStatusManager {
     func setSessionState(paneID: UUID, state: ClaudeSessionState) {
         let oldState = sessionStates[paneID]
         sessionStates[paneID] = state
+        owner(of: paneID)?.sessionStates[paneID] = state   // dual-write
         Log.ipc.debug("Session state changed for pane \(paneID): \(oldState?.rawValue ?? "nil") → \(state.rawValue)")
     }
 
     func clearSessionState(paneID: UUID) {
         sessionStates.removeValue(forKey: paneID)
+        owner(of: paneID)?.sessionStates.removeValue(forKey: paneID)
     }
 
     func sessionState(for paneID: UUID) -> ClaudeSessionState? {
@@ -92,4 +104,27 @@ final class PaneStatusManager {
         }
         return result.sorted { $0.state > $1.state }
     }
+
+    // MARK: - Pane Registry
+
+    private var ownersByPane: [UUID: WeakBox<PaneViewModel>] = [:]
+
+    /// Register a pane → its owning PVM so writes can mirror per-pane.
+    func registerPane(_ paneID: UUID, owner: PaneViewModel) {
+        ownersByPane[paneID] = WeakBox(owner)
+    }
+
+    /// Unregister a pane (e.g., on close or PVM deinit).
+    func unregisterPane(_ paneID: UUID) {
+        ownersByPane.removeValue(forKey: paneID)
+    }
+
+    private func owner(of paneID: UUID) -> PaneViewModel? {
+        ownersByPane[paneID]?.value
+    }
+}
+
+private final class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
 }

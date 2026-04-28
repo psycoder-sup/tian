@@ -317,4 +317,43 @@ struct PaneStatusManagerTests {
         let result = manager.sessionStates(in: space)
         #expect(result.isEmpty)
     }
+
+    // MARK: - Per-PVM mirror (dual-write via pane registry)
+
+    @Test func dualWritesMirrorToOwnerPaneViewModel() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let pvm = tab.paneViewModel
+        let paneID = pvm.splitTree.focusedPaneID
+
+        // Use the shared registry path: register, set, read from PVM.
+        manager.registerPane(paneID, owner: pvm)
+
+        manager.setSessionState(paneID: paneID, state: .busy)
+        #expect(pvm.sessionState(forPane: paneID) == .busy)
+
+        manager.clearSessionState(paneID: paneID)
+        #expect(pvm.sessionState(forPane: paneID) == nil)
+
+        manager.setStatus(paneID: paneID, label: "Hello")
+        #expect(pvm.paneStatus(forPane: paneID)?.label == "Hello")
+
+        manager.clearStatus(paneID: paneID)
+        #expect(pvm.paneStatus(forPane: paneID) == nil)
+    }
+
+    @Test func unregisterStopsMirroring() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let pvm = tab.paneViewModel
+        let paneID = pvm.splitTree.focusedPaneID
+
+        manager.registerPane(paneID, owner: pvm)
+        manager.unregisterPane(paneID)
+
+        manager.setSessionState(paneID: paneID, state: .busy)
+
+        #expect(manager.sessionState(for: paneID) == .busy)  // manager still has it
+        #expect(pvm.sessionState(forPane: paneID) == nil)    // mirror NOT updated
+    }
 }

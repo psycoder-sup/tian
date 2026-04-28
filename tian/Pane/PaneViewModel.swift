@@ -22,6 +22,19 @@ final class PaneViewModel {
     /// Panes that have an active bell notification (glow indicator).
     private(set) var bellNotifications: Set<UUID> = []
 
+    /// Per-pane session state mirror, written by `PaneStatusManager` via the
+    /// pane registry. Reading `viewModel.sessionState(forPane:)` from a SwiftUI
+    /// body subscribes only to this PVM's observation registrar — so a write
+    /// to a pane in a *different* PVM does not invalidate views observing this
+    /// PVM, eliminating the singleton-Observable cascade.
+    ///
+    /// Mutated only by `PaneStatusManager`; readers should go through
+    /// `sessionState(forPane:)`.
+    var sessionStates: [UUID: ClaudeSessionState] = [:]
+
+    /// Per-pane status label mirror; same scoping rationale as `sessionStates`.
+    var paneStatuses: [UUID: PaneStatus] = [:]
+
     /// The container size for the split tree view, updated from the view layer.
     /// Used to compute pane frames for spatial navigation.
     var containerSize: CGSize = .zero
@@ -85,6 +98,9 @@ final class PaneViewModel {
         self.surfaceViews[initialID] = surfaceView
         self.paneStates[initialID] = .running
         installObservers()
+        for paneID in splitTree.allLeaves() {
+            PaneStatusManager.shared.registerPane(paneID, owner: self)
+        }
     }
 
     static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, sectionKind: SectionKind = .terminal) -> PaneViewModel {
@@ -114,6 +130,9 @@ final class PaneViewModel {
         self.sectionKind = sectionKind
         self.paneStates = Dictionary(uniqueKeysWithValues: surfaces.keys.map { ($0, PaneState.running) })
         installObservers()
+        for paneID in splitTree.allLeaves() {
+            PaneStatusManager.shared.registerPane(paneID, owner: self)
+        }
     }
 
     private func installObservers() {
@@ -250,6 +269,16 @@ final class PaneViewModel {
         paneStates[paneID] ?? .running
     }
 
+    /// Returns the mirrored session state for a leaf in this PVM's split tree.
+    func sessionState(forPane id: UUID) -> ClaudeSessionState? {
+        sessionStates[id]
+    }
+
+    /// Returns the mirrored status label for a leaf in this PVM's split tree.
+    func paneStatus(forPane id: UUID) -> PaneStatus? {
+        paneStatuses[id]
+    }
+
     // MARK: - Operations
 
     @discardableResult
@@ -284,6 +313,7 @@ final class PaneViewModel {
         surfaces[newPaneID] = newSurface
         surfaceViews[newPaneID] = newSurfaceView
         paneStates[newPaneID] = .running
+        PaneStatusManager.shared.registerPane(newPaneID, owner: self)
         return newPaneID
     }
 
@@ -299,6 +329,7 @@ final class PaneViewModel {
         bellNotifications.remove(paneID)
         restoreCommands.removeValue(forKey: paneID)
         PaneStatusManager.shared.clearStatus(paneID: paneID)
+        PaneStatusManager.shared.unregisterPane(paneID)
         onPaneRemoved?(paneID)
 
         if result == .lastPane {
@@ -402,6 +433,7 @@ final class PaneViewModel {
 
         for paneID in paneIDs {
             PaneStatusManager.shared.clearStatus(paneID: paneID)
+            PaneStatusManager.shared.unregisterPane(paneID)
             onPaneRemoved?(paneID)
         }
     }
