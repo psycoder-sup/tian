@@ -250,6 +250,42 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - SetupProgress lifecycle
 
+    // Regression for the setup-shell interactivity fix in
+    // WorktreeOrchestrator.runCommandOffMain. POSIX: $- contains 'i' iff
+    // the shell is interactive — touch a marker file only in that case
+    // and assert it exists.
+    @Test func setupCommands_runInInteractiveShell() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let marker = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-interactive-\(UUID().uuidString).flag").path
+        defer { try? FileManager.default.removeItem(atPath: marker) }
+
+        // Generous timeout: interactive zsh startup (.zshrc + plugins like
+        // p10k, gitstatus, nvm) can take several seconds on heavy configs.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+        setup_timeout = 30
+
+        [[setup]]
+        command = "case $- in *i*) touch '\(marker)';; esac"
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        _ = try await orchestrator.createWorktreeSpace(
+            branchName: "interactive-shell-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(FileManager.default.fileExists(atPath: marker),
+                "setup command did not see an interactive shell ($- lacked 'i') — `-i` flag may have been removed from WorktreeOrchestrator shell args")
+    }
+
     @Test func setupProgress_isNilBeforeAndAfterCreation() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
