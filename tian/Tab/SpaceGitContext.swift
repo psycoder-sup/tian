@@ -180,6 +180,9 @@ final class SpaceGitContext {
     func refresh() {
         for repoID in pinnedRepoOrder {
             guard let directory = repoDirectories[repoID] else { continue }
+            // Drop any pending scheduler debounce so it can't race-cancel the
+            // manual refresh we're about to start.
+            refreshScheduler.cancel(key: repoID)
             refreshRepo(repoID: repoID, directory: directory)
         }
     }
