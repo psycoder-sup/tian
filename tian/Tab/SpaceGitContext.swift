@@ -26,6 +26,11 @@ final class SpaceGitContext {
     /// Tracks in-flight refresh tasks per repo for cancellation on rapid re-triggers.
     private var inFlightTasks: [GitRepoID: Task<Void, Never>] = [:]
 
+    /// Set to true by `teardown()`. Guards `refreshRepo` against late-firing
+    /// scheduled refreshes that pass through `await semaphore.acquire()` after
+    /// the Space has been torn down.
+    private var isTornDown = false
+
     /// Trailing-debounce + global concurrency cap for git refresh during
     /// FSEvents storms (e.g., active dev server churning files across many
     /// pinned repos). The scheduler dispatches to `refreshRepo` after the
@@ -181,6 +186,7 @@ final class SpaceGitContext {
 
     /// Cancels all in-flight tasks and clears state. Called on Space close.
     func teardown() {
+        isTornDown = true
         for task in inFlightTasks.values { task.cancel() }
         inFlightTasks.removeAll()
         for inner in prFetchTasks.values {
@@ -219,6 +225,7 @@ final class SpaceGitContext {
             for task in inner.values { task.cancel() }
         }
         prFetchTasks.removeValue(forKey: repoID)
+        refreshScheduler.cancel(key: repoID)
         repoStatuses.removeValue(forKey: repoID)
         repoDirectories.removeValue(forKey: repoID)
         repoRoots.removeValue(forKey: repoID)
@@ -283,6 +290,7 @@ final class SpaceGitContext {
     /// per-call UUID so its completion removes only its own entry, even
     /// when a later refresh spawned a fresh fetch after an `evict`.
     private func refreshRepo(repoID: GitRepoID, directory: String) {
+        guard !isTornDown else { return }
         inFlightTasks[repoID]?.cancel()
 
         let task = Task { [weak self] in

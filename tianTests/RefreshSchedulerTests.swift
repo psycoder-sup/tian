@@ -69,4 +69,40 @@ struct RefreshSchedulerTests {
 
         #expect(fired.isEmpty)
     }
+
+    @Test func cancelKeyPreventsThatKeyOnly() async throws {
+        var fired: [String] = []
+        let scheduler = RefreshScheduler<String>(
+            debounce: .milliseconds(20),
+            maxConcurrent: 4
+        ) { key in
+            await MainActor.run { fired.append(key) }
+        }
+
+        scheduler.schedule(key: "a")
+        scheduler.schedule(key: "b")
+        scheduler.cancel(key: "a")
+
+        try await Task.sleep(for: .milliseconds(80))
+
+        #expect(fired == ["b"])
+    }
+
+    @Test func scheduleAfterCancelStillFires() async throws {
+        var fired: [String] = []
+        let scheduler = RefreshScheduler<String>(
+            debounce: .milliseconds(20),
+            maxConcurrent: 4
+        ) { key in
+            await MainActor.run { fired.append(key) }
+        }
+
+        scheduler.schedule(key: "a")
+        scheduler.cancel(key: "a")
+        scheduler.schedule(key: "a")
+
+        try await Task.sleep(for: .milliseconds(80))
+
+        #expect(fired == ["a"])
+    }
 }
