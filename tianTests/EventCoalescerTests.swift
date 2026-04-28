@@ -57,4 +57,18 @@ struct EventCoalescerTests {
         try await Task.sleep(for: .milliseconds(40))
         #expect(delivered == ["v2"])
     }
+
+    @Test func cancelPreventsDelivery() async throws {
+        var delivered: [String] = []
+        let coalescer = EventCoalescer<String, String>(interval: .milliseconds(20)) { _, value in
+            delivered.append(value)
+        }
+
+        coalescer.submit(key: "k", value: "v")
+        coalescer.cancel(key: "k")
+
+        try await Task.sleep(for: .milliseconds(60))
+
+        #expect(delivered.isEmpty)
+    }
 }

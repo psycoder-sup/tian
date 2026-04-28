@@ -35,6 +35,13 @@ final class GhosttyApp: @unchecked Sendable {
         )
     }
 
+    @MainActor
+    private func cancelPendingCoalescedEvents(surfaceId: UUID) {
+        titleCoalescer.cancel(key: surfaceId)
+        pwdCoalescer.cancel(key: surfaceId)
+        bellCoalescer.cancel(key: surfaceId)
+    }
+
     // MARK: - Notifications
 
     /// Posted when a surface should close (shell exited).
@@ -166,6 +173,7 @@ final class GhosttyApp: @unchecked Sendable {
                     object: nil,
                     userInfo: ["surfaceId": surfaceId]
                 )
+                GhosttyApp.shared.cancelPendingCoalescedEvents(surfaceId: surfaceId)
             }
         }
 
@@ -302,9 +310,7 @@ final class GhosttyApp: @unchecked Sendable {
                     object: nil,
                     userInfo: ["surfaceId": surfaceId, "exitCode": exitCode]
                 )
-                self?.titleCoalescer.cancel(key: surfaceId)
-                self?.pwdCoalescer.cancel(key: surfaceId)
-                self?.bellCoalescer.cancel(key: surfaceId)
+                self?.cancelPendingCoalescedEvents(surfaceId: surfaceId)
             }
             return true  // Return true to suppress "Press any key..." fallback
 
