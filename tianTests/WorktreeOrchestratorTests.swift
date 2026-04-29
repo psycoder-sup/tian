@@ -508,7 +508,49 @@ struct WorktreeOrchestratorTests {
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
     }
 
-    @Test func removeWorktreeSpace_archiveFailureDoesNotBlockRemoval() async throws {
+    // MARK: - Archive close flow (FR-007, FR-010-013, FR-040-041, FR-050-053)
+
+    /// Polls `setupProgress` on the main actor at ~5ms intervals while the
+    /// supplied async operation runs, capturing every distinct phase that
+    /// passes through. Stops as soon as the operation returns.
+    @MainActor
+    private func observingProgressPhases<T>(
+        on orchestrator: WorktreeOrchestrator,
+        during operation: () async throws -> T
+    ) async rethrows -> (T, [SetupProgress.Phase]) {
+        let phasesBox = Box<[SetupProgress.Phase]>()
+        phasesBox.value = []
+        let stopBox = Box<Bool>()
+        stopBox.value = false
+
+        let pollerTask = Task { @MainActor in
+            while stopBox.value == false {
+                if let snapshot = orchestrator.setupProgress {
+                    var current = phasesBox.value ?? []
+                    if current.last != snapshot.phase {
+                        current.append(snapshot.phase)
+                        phasesBox.value = current
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+        }
+
+        do {
+            let result = try await operation()
+            stopBox.value = true
+            _ = await pollerTask.value
+            return (result, phasesBox.value ?? [])
+        } catch {
+            stopBox.value = true
+            _ = await pollerTask.value
+            throw error
+        }
+    }
+
+    /// FR-007, FR-010, FR-011: archive flow publishes phase=.cleanup and the
+    /// per-command progress index advances 0→1 with 2 archive commands.
+    @Test func archiveFlowPublishesCleanupPhase() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -517,7 +559,10 @@ struct WorktreeOrchestratorTests {
             worktree_dir = ".worktrees"
 
             [[archive]]
-            command = "exit 1"
+            command = "echo one"
+
+            [[archive]]
+            command = "echo two"
             """,
             in: repo
         )
@@ -526,16 +571,193 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         let result = try await orchestrator.createWorktreeSpace(
-            branchName: "archive-fails",
+            branchName: "cleanup-flow",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
-        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-fails")
+        // Capture every distinct phase observed while removeWorktreeSpace runs.
+        let (_, phases) = try await observingProgressPhases(on: orchestrator) {
+            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        }
+
+        #expect(phases.contains(.cleanup))
+        #expect(orchestrator.setupProgress == nil)
+        // Space should be gone (clean archive success path).
+        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+    }
+
+    /// FR-040, FR-041, FR-050: archive failure halts the cleanup pipeline,
+    /// the worktree directory stays on disk, the Space stays open, and
+    /// setupProgress is nil after the call returns.
+    @Test func archiveFailureHaltsPipeline() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+
+            [[archive]]
+            command = "false"
+            """,
+            in: repo
+        )
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "archive-halt",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-halt")
+        // The orchestrator must NOT throw on archive failure — failure is
+        // captured via setupProgress.lastFailedIndex and the linger-capsule.
         try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
 
-        #expect(!FileManager.default.fileExists(atPath: worktreePath))
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Worktree directory still on disk.
+        #expect(FileManager.default.fileExists(atPath: worktreePath))
+        // Space still in the collection.
+        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // setupProgress nil after call.
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    /// FR-040, FR-041: user cancel during archive halts the pipeline before
+    /// `git worktree remove`. Worktree and Space are preserved.
+    @Test func userCancelDuringArchivePreservesWorktree() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+
+            [[archive]]
+            command = "sleep 5"
+            """,
+            in: repo
+        )
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "archive-cancel",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-cancel")
+
+        // Launch the cancel after the archive command has begun.
+        Task { @MainActor in
+            for _ in 0..<300 {
+                if orchestrator.setupProgress?.currentCommand?.hasPrefix("sleep") == true { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            orchestrator.cancelCommands()
+        }
+
+        let start = ContinuousClock.now
+        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        let elapsed = ContinuousClock.now - start
+
+        // Should return well before the 5s sleep completes.
+        #expect(elapsed < .seconds(4))
+        // Worktree directory preserved on disk.
+        #expect(FileManager.default.fileExists(atPath: worktreePath))
+        // Space preserved.
+        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // setupProgress nil after call.
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    /// FR-012, FR-022: when no archive commands are configured, the
+    /// orchestrator briefly publishes phase=.removing while `git worktree
+    /// remove` + pruning run.
+    @Test func noArchiveCaseShowsRemovingPhase() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // No archive section.
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "no-archive",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let (_, phases) = try await observingProgressPhases(on: orchestrator) {
+            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        }
+
+        #expect(phases.contains(.removing))
+        // Cleanup phase must NOT appear when there are no archive commands.
+        #expect(!phases.contains(.cleanup))
+        #expect(orchestrator.setupProgress == nil)
+    }
+
+    /// FR-053: when `git worktree remove` throws WorktreeError.uncommittedChanges
+    /// after archive succeeds, the orchestrator must nil setupProgress
+    /// synchronously (on the MainActor) before the throw, so the modal
+    /// alert never overlaps with the progress capsule.
+    @Test func setupProgressNilOnUncommittedChanges() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+
+            [[archive]]
+            command = "true"
+            """,
+            in: repo
+        )
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "uncommitted-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Add uncommitted index changes inside the worktree to force
+        // `git worktree remove` to fail with .uncommittedChanges.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/uncommitted-branch")
+        let dirtyFile = (worktreePath as NSString).appendingPathComponent("uncommitted.txt")
+        try "dirty content".write(toFile: dirtyFile, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "uncommitted.txt"], in: worktreePath)
+
+        // Expect uncommittedChanges thrown; check setupProgress is nil at
+        // the catch site.
+        var caughtUncommitted = false
+        do {
+            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID, force: false)
+        } catch let error as WorktreeError {
+            if case .uncommittedChanges = error {
+                caughtUncommitted = true
+            }
+            // FR-053: setupProgress must be nil at the moment the alert
+            // would consume the thrown error.
+            #expect(orchestrator.setupProgress == nil)
+        }
+        #expect(caughtUncommitted)
+        #expect(orchestrator.setupProgress == nil)
+        // Space and worktree still preserved (uncommitted changes were
+        // not force-removed).
+        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        #expect(FileManager.default.fileExists(atPath: worktreePath))
     }
 
     // MARK: - Remote ref
