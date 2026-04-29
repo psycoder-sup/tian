@@ -954,6 +954,152 @@ struct WorktreeOrchestratorTests {
         #expect(workspaceC.spaceCollection.spaces.contains { $0.id == result.spaceID })
         #expect(!workspaceA.spaceCollection.spaces.contains { $0.id == result.spaceID })
     }
+
+    // MARK: - In-flight guard (FR-061)
+
+    /// FR-061: Concurrent `removeWorktreeSpace` on a *different* Space is
+    /// rejected with `WorktreeError.closeInFlight` while the first removal
+    /// is still in flight.
+    @Test func concurrentCloseOnDifferentSpaceIsRejected() async throws {
+        let repoA = try makeTempGitRepo()
+        let repoB = try makeTempGitRepo()
+        defer {
+            cleanup(repoA)
+            cleanup(repoB)
+        }
+
+        // Space A: configure a slow archive command so the first removal
+        // stays in flight long enough for the second call to race.
+        try writeConfig(
+            """
+            worktree_dir = ".worktrees"
+            setup_timeout = 10
+
+            [[archive]]
+            command = "sleep 5"
+            """,
+            in: repoA
+        )
+        // Space B: no archive commands — fast removal so the in-flight
+        // guard is the only thing stopping it.
+        try writeConfig("worktree_dir = \".worktrees\"", in: repoB)
+
+        // Both Spaces live in the same orchestrator / provider.
+        let collectionA = WorkspaceCollection(workingDirectory: repoA)
+        let collectionB = WorkspaceCollection(workingDirectory: repoB)
+        let workspaceA = collectionA.activeWorkspace!
+        let workspaceB = collectionB.activeWorkspace!
+
+        let provider = MockWorkspaceProvider()
+        provider.collections = [collectionA, collectionB]
+        provider.keyWindowWorkspace = workspaceA
+
+        let orch = WorktreeOrchestrator(workspaceProvider: provider)
+
+        // Create both worktree Spaces first.
+        let resultA = try await orch.createWorktreeSpace(
+            branchName: "close-guard-a",
+            repoPath: repoA,
+            workspaceID: workspaceA.id
+        )
+        let resultB = try await orch.createWorktreeSpace(
+            branchName: "close-guard-b",
+            repoPath: repoB,
+            workspaceID: workspaceB.id
+        )
+
+        // Cancel Space A's slow archive command after it starts, so the
+        // test doesn't hang for 5 s.
+        let cancelTask = Task { @MainActor in
+            for _ in 0..<500 {
+                if orch.isCloseInFlight { break }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            orch.cancelCommands()
+        }
+
+        // Start Space A removal in background — it will block on `sleep 5`.
+        let removeATask = Task { @MainActor in
+            try await orch.removeWorktreeSpace(spaceID: resultA.spaceID)
+        }
+
+        // Wait until the in-flight guard is raised.
+        for _ in 0..<500 {
+            if orch.isCloseInFlight { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(orch.isCloseInFlight, "isCloseInFlight should be true while Space A removal is running")
+
+        // Attempt to remove Space B while Space A removal is still in flight.
+        var caughtCloseInFlight = false
+        do {
+            try await orch.removeWorktreeSpace(spaceID: resultB.spaceID)
+        } catch WorktreeError.closeInFlight {
+            caughtCloseInFlight = true
+        }
+        #expect(caughtCloseInFlight, "Expected WorktreeError.closeInFlight when removing a different Space concurrently")
+
+        // Let Space A's removal finish (cancel already signalled above).
+        _ = await cancelTask.value
+        _ = try? await removeATask.value
+
+        // After both calls complete, the guard must be cleared.
+        #expect(!orch.isCloseInFlight, "isCloseInFlight should be false after all removals complete")
+    }
+
+    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSpace`
+    /// returns normally (success path).
+    @Test func isCloseInFlight_isClearedOnSuccess() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orch = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orch.createWorktreeSpace(
+            branchName: "inflight-success",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        #expect(!orch.isCloseInFlight)
+        try await orch.removeWorktreeSpace(spaceID: result.spaceID)
+        #expect(!orch.isCloseInFlight)
+    }
+
+    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSpace`
+    /// throws (error path, e.g. uncommittedChanges).
+    @Test func isCloseInFlight_isClearedOnFailure() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orch = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orch.createWorktreeSpace(
+            branchName: "inflight-failure",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Dirty the worktree so removal throws.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/inflight-failure")
+        let dirtyFile = (worktreePath as NSString).appendingPathComponent("dirty.txt")
+        try "dirty".write(toFile: dirtyFile, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "dirty.txt"], in: worktreePath)
+
+        #expect(!orch.isCloseInFlight)
+        do {
+            try await orch.removeWorktreeSpace(spaceID: result.spaceID, force: false)
+        } catch WorktreeError.uncommittedChanges {
+            // expected
+        }
+        #expect(!orch.isCloseInFlight, "isCloseInFlight should be false after a throwing removal")
+    }
 }
 
 private struct OrchestratorTestError: Error, CustomStringConvertible {
