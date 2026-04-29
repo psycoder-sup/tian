@@ -11,6 +11,37 @@ final class GhosttyApp: @unchecked Sendable {
     private var appObservers: [NSObjectProtocol] = []
     private let notificationManager = NotificationManager()
 
+    @MainActor private lazy var titleCoalescer = EventCoalescer<UUID, String>(interval: .milliseconds(75)) { surfaceId, title in
+        NotificationCenter.default.post(
+            name: GhosttyApp.surfaceTitleNotification,
+            object: nil,
+            userInfo: ["surfaceId": surfaceId, "title": title]
+        )
+    }
+
+    @MainActor private lazy var pwdCoalescer = EventCoalescer<UUID, String>(interval: .milliseconds(75)) { surfaceId, pwd in
+        NotificationCenter.default.post(
+            name: GhosttyApp.surfacePwdNotification,
+            object: nil,
+            userInfo: ["surfaceId": surfaceId, "pwd": pwd]
+        )
+    }
+
+    @MainActor private lazy var bellCoalescer = EventCoalescer<UUID, Void>(interval: .milliseconds(200)) { surfaceId, _ in
+        NotificationCenter.default.post(
+            name: GhosttyApp.surfaceBellNotification,
+            object: nil,
+            userInfo: ["surfaceId": surfaceId]
+        )
+    }
+
+    @MainActor
+    private func cancelPendingCoalescedEvents(surfaceId: UUID) {
+        titleCoalescer.cancel(key: surfaceId)
+        pwdCoalescer.cancel(key: surfaceId)
+        bellCoalescer.cancel(key: surfaceId)
+    }
+
     // MARK: - Notifications
 
     /// Posted when a surface should close (shell exited).
@@ -142,6 +173,7 @@ final class GhosttyApp: @unchecked Sendable {
                     object: nil,
                     userInfo: ["surfaceId": surfaceId]
                 )
+                GhosttyApp.shared.cancelPendingCoalescedEvents(surfaceId: surfaceId)
             }
         }
 
@@ -253,12 +285,9 @@ final class GhosttyApp: @unchecked Sendable {
         case GHOSTTY_ACTION_SET_TITLE:
             if let titlePtr = action.action.set_title.title {
                 let title = String(cString: titlePtr)
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: GhosttyApp.surfaceTitleNotification,
-                        object: nil,
-                        userInfo: ["surfaceId": ctx.surfaceId, "title": title]
-                    )
+                let surfaceId = ctx.surfaceId
+                DispatchQueue.main.async { [weak self] in
+                    self?.titleCoalescer.submit(key: surfaceId, value: title)
                 }
             }
             return true
@@ -266,12 +295,8 @@ final class GhosttyApp: @unchecked Sendable {
         case GHOSTTY_ACTION_RING_BELL:
             NSSound.beep()
             let surfaceId = ctx.surfaceId
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(
-                    name: GhosttyApp.surfaceBellNotification,
-                    object: nil,
-                    userInfo: ["surfaceId": surfaceId]
-                )
+            DispatchQueue.main.async { [weak self] in
+                self?.bellCoalescer.submit(key: surfaceId, value: ())
             }
             return true
 
@@ -279,12 +304,13 @@ final class GhosttyApp: @unchecked Sendable {
             // Must dispatch async to avoid re-entrant close during callback
             let surfaceId = ctx.surfaceId
             let exitCode = action.action.child_exited.exit_code
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 NotificationCenter.default.post(
                     name: GhosttyApp.surfaceExitedNotification,
                     object: nil,
                     userInfo: ["surfaceId": surfaceId, "exitCode": exitCode]
                 )
+                self?.cancelPendingCoalescedEvents(surfaceId: surfaceId)
             }
             return true  // Return true to suppress "Press any key..." fallback
 
@@ -314,12 +340,8 @@ final class GhosttyApp: @unchecked Sendable {
             if let pwdPtr = action.action.pwd.pwd {
                 let pwd = String(cString: pwdPtr)
                 let surfaceId = ctx.surfaceId
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: GhosttyApp.surfacePwdNotification,
-                        object: nil,
-                        userInfo: ["surfaceId": surfaceId, "pwd": pwd]
-                    )
+                DispatchQueue.main.async { [weak self] in
+                    self?.pwdCoalescer.submit(key: surfaceId, value: pwd)
                 }
             }
             return true

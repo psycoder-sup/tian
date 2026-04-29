@@ -8,7 +8,7 @@ struct BusyDotView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
-        TimelineView(reduceMotion ? .animation(minimumInterval: nil, paused: true) : .animation(minimumInterval: 0.033)) { timeline in
+        TimelineView(reduceMotion ? .animation(minimumInterval: nil, paused: true) : .animation(minimumInterval: 1.0 / 12.0)) { timeline in
             let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let s = CGFloat(t) * 0.8
 

@@ -10,49 +10,84 @@ struct KeyBinding: Equatable {
     let keyCode: UInt16?
     /// Required modifier flags (device-independent).
     let modifiers: NSEvent.ModifierFlags
+}
 
-    func matches(event: NSEvent) -> Bool {
-        let eventFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        // For arrow keys, flags include .numericPad and .function — use .contains()
-        guard eventFlags.contains(modifiers) else { return false }
-        // Strip out numericPad and function for non-arrow comparisons
-        let extraFlags = eventFlags.subtracting(modifiers).subtracting([.numericPad, .function])
-        if !extraFlags.isEmpty { return false }
+/// Hashable lookup key for character-based bindings (e.g. Cmd+T).
+/// `modifiers` is stored as the raw `UInt` because `NSEvent.ModifierFlags`
+/// (an `OptionSet`) does not synthesise `Hashable`.
+private struct CharacterChord: Hashable {
+    let characters: String
+    let modifiers: UInt
 
-        if let keyCode {
-            return event.keyCode == keyCode
-        }
-        if let characters {
-            return event.charactersIgnoringModifiers?.lowercased() == characters
-        }
-        return false
+    init(characters: String, modifiers: NSEvent.ModifierFlags) {
+        self.characters = characters
+        self.modifiers = modifiers.rawValue
     }
 }
 
+/// Hashable lookup key for keyCode-based bindings (e.g. arrow keys).
+private struct KeyCodeChord: Hashable {
+    let keyCode: UInt16
+    let modifiers: UInt
+
+    init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers.rawValue
+    }
+}
+
+/// Modifier flags considered significant for chord matching. Other flags
+/// (`.numericPad`, `.function`, etc.) carried by `NSEvent` are stripped at
+/// both seed and lookup time.
+private let chordModifierMask: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+
 struct KeyBindingRegistry {
     private var bindings: [KeyAction: [KeyBinding]] = [:]
+
+    /// O(1) lookup index for character-based bindings, rebuilt by `rebuildIndex()`.
+    private var bindingsByCharacters: [CharacterChord: KeyAction] = [:]
+    /// O(1) lookup index for keyCode-based bindings, rebuilt by `rebuildIndex()`.
+    private var bindingsByKeyCode: [KeyCodeChord: KeyAction] = [:]
 
     static let shared = KeyBindingRegistry.defaults()
 
     /// Look up which action an event maps to, if any.
     func action(for event: NSEvent) -> KeyAction? {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let modifiers = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection(chordModifierMask)
 
-        // Check Cmd+digit (special case: multiple actions share similar modifiers)
-        if flags == [.command],
+        // Cmd+digit special case (must come before the dict lookup so it shadows
+        // any hypothetical future binding on Cmd+0..9). `.goToTab(n)` carries an
+        // associated value and cannot be precomputed in a chord dict.
+        if modifiers == [.command],
            let chars = event.charactersIgnoringModifiers,
            let digit = Int(chars), digit >= 0, digit <= 9 {
             return digit == 0 ? .focusSidebar : .goToTab(digit)
         }
 
-        for (action, actionBindings) in bindings {
-            for binding in actionBindings {
-                if binding.matches(event: event) {
-                    return action
+        if let chars = event.charactersIgnoringModifiers?.lowercased(),
+           let action = bindingsByCharacters[CharacterChord(characters: chars, modifiers: modifiers)] {
+            return action
+        }
+        return bindingsByKeyCode[KeyCodeChord(keyCode: event.keyCode, modifiers: modifiers)]
+    }
+
+    /// Rebuilds `bindingsByCharacters` and `bindingsByKeyCode` from `bindings`.
+    /// Must be called after every mutation to `bindings`.
+    private mutating func rebuildIndex() {
+        bindingsByCharacters.removeAll(keepingCapacity: true)
+        bindingsByKeyCode.removeAll(keepingCapacity: true)
+        for (action, list) in bindings {
+            for binding in list {
+                let mods = binding.modifiers.intersection(chordModifierMask)
+                if let chars = binding.characters {
+                    bindingsByCharacters[CharacterChord(characters: chars, modifiers: mods)] = action
+                } else if let code = binding.keyCode {
+                    bindingsByKeyCode[KeyCodeChord(keyCode: code, modifiers: mods)] = action
                 }
             }
         }
-        return nil
     }
 
     // MARK: - Defaults
@@ -101,6 +136,7 @@ struct KeyBindingRegistry {
         registry.bindings[.toggleDebugOverlay] = [KeyBinding(
             characters: "p", keyCode: nil, modifiers: [.command, .shift])]
 
+        registry.rebuildIndex()
         return registry
     }
 }

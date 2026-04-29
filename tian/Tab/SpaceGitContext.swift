@@ -26,6 +26,31 @@ final class SpaceGitContext {
     /// Tracks in-flight refresh tasks per repo for cancellation on rapid re-triggers.
     private var inFlightTasks: [GitRepoID: Task<Void, Never>] = [:]
 
+    /// Set to true by `teardown()`. Guards `refreshRepo` against late-firing
+    /// scheduled refreshes that pass through `await semaphore.acquire()` after
+    /// the Space has been torn down.
+    private var isTornDown = false
+
+    /// Trailing-debounce + global concurrency cap for git refresh during
+    /// FSEvents storms (e.g., active dev server churning files across many
+    /// pinned repos). The scheduler dispatches to `refreshRepo` after the
+    /// debounce window, throttling at most 2 concurrent git pipelines.
+    ///
+    /// `@ObservationIgnored` because the scheduler is internal mutation
+    /// plumbing, not observable model state — and `lazy` is incompatible
+    /// with the `@ObservationTracked` accessor the macro otherwise emits.
+    @ObservationIgnored
+    private lazy var refreshScheduler = RefreshScheduler<GitRepoID>(
+        debounce: .milliseconds(250),
+        maxConcurrent: 2
+    ) { [weak self] repoID in
+        await MainActor.run { [weak self] in
+            guard let self else { return }
+            guard let dir = self.repoDirectories[repoID] else { return }
+            self.refreshRepo(repoID: repoID, directory: dir)
+        }
+    }
+
     /// Last-known working directory per pane.
     private var paneDirectories: [UUID: String] = [:]
 
@@ -82,9 +107,11 @@ final class SpaceGitContext {
         if let existingRepoID = paneRepoAssignments[paneID],
            let repoRoot = repoRoots[existingRepoID],
            newDirectory == repoRoot || newDirectory.hasPrefix(repoRoot.hasSuffix("/") ? repoRoot : repoRoot + "/") {
-            // Same repo — just refresh branch info without re-detecting
-            refreshRepo(repoID: existingRepoID, directory: newDirectory)
+            // Same repo — just refresh branch info without re-detecting.
+            // Set repoDirectories BEFORE scheduling so the scheduler's
+            // handler resolves the latest directory when it fires.
             repoDirectories[existingRepoID] = newDirectory
+            refreshScheduler.schedule(key: existingRepoID)
             return
         }
 
@@ -116,7 +143,7 @@ final class SpaceGitContext {
                     Log.git.debug("Pinned new repo: \(newRepoID.path)")
                 }
 
-                self.refreshRepo(repoID: newRepoID, directory: newDirectory)
+                self.refreshScheduler.schedule(key: newRepoID)
 
                 // Garbage collect previous repo if pane moved to a different repo
                 if let previousRepoID, newRepoID != previousRepoID {
@@ -153,18 +180,23 @@ final class SpaceGitContext {
     func refresh() {
         for repoID in pinnedRepoOrder {
             guard let directory = repoDirectories[repoID] else { continue }
+            // Drop any pending scheduler debounce so it can't race-cancel the
+            // manual refresh we're about to start.
+            refreshScheduler.cancel(key: repoID)
             refreshRepo(repoID: repoID, directory: directory)
         }
     }
 
     /// Cancels all in-flight tasks and clears state. Called on Space close.
     func teardown() {
+        isTornDown = true
         for task in inFlightTasks.values { task.cancel() }
         inFlightTasks.removeAll()
         for inner in prFetchTasks.values {
             for task in inner.values { task.cancel() }
         }
         prFetchTasks.removeAll()
+        refreshScheduler.cancelAll()
         repoStatuses.removeAll()
         paneRepoAssignments.removeAll()
         pinnedRepoOrder.removeAll()
@@ -196,6 +228,7 @@ final class SpaceGitContext {
             for task in inner.values { task.cancel() }
         }
         prFetchTasks.removeValue(forKey: repoID)
+        refreshScheduler.cancel(key: repoID)
         repoStatuses.removeValue(forKey: repoID)
         repoDirectories.removeValue(forKey: repoID)
         repoRoots.removeValue(forKey: repoID)
@@ -260,6 +293,7 @@ final class SpaceGitContext {
     /// per-call UUID so its completion removes only its own entry, even
     /// when a later refresh spawned a fresh fetch after an `evict`.
     private func refreshRepo(repoID: GitRepoID, directory: String) {
+        guard !isTornDown else { return }
         inFlightTasks[repoID]?.cancel()
 
         let task = Task { [weak self] in
@@ -367,11 +401,11 @@ final class SpaceGitContext {
             )
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                guard let dir = self.repoDirectories[repoID] else { return }
+                guard self.repoDirectories[repoID] != nil else { return }
                 if affectsPR {
                     self.prCache.evict(repoID: repoID)
                 }
-                self.refreshRepo(repoID: repoID, directory: dir)
+                self.refreshScheduler.schedule(key: repoID)
             }
         }
 
