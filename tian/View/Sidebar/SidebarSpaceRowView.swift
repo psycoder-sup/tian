@@ -84,27 +84,39 @@ struct SidebarSpaceRowView: View {
                 .foregroundStyle(Color(white: 0.85))
                 .lineLimit(1)
 
-            Text("·")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            switch progress.phase {
+            case .setup, .cleanup:
+                Text("·")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
-            Text(progress.stepText)
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
+                Text("\(progress.labelPrefix) \(progress.stepText)")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
 
-            if progress.didFailRun {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.red)
-                    .accessibilityLabel("a step in this run failed")
+                if progress.didFailRun {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("a step in this run failed")
+                }
+
+                Text(progress.commandLabel)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Color(white: 0.55))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+            case .removing:
+                Text("·")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                Text(progress.labelPrefix)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
-
-            Text(progress.commandLabel)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(Color(white: 0.55))
-                .lineLimit(1)
-                .truncationMode(.tail)
 
             Spacer(minLength: 0)
         }
