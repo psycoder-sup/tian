@@ -167,7 +167,20 @@ struct SidebarExpandedContentView: View {
             case .removeWorktreeAndClose:
                 Task { await removeWorktree(space: space, force: false) }
             case .closeOnly:
-                workspace.spaceCollection.removeSpace(id: space.id)
+                let repoRoot = workspace.defaultWorkingDirectory?.path ?? wtPath.path
+                let archiveCount = WorktreeService.archiveCommandCount(repoRoot: repoRoot)
+                if archiveCount > 0 {
+                    SkipTeardownConfirmationDialog.show(
+                        on: window,
+                        archiveCommandCount: archiveCount
+                    ) { skipResponse in
+                        if skipResponse == .skipTeardown {
+                            workspace.spaceCollection.removeSpace(id: space.id)
+                        }
+                    }
+                } else {
+                    workspace.spaceCollection.removeSpace(id: space.id)
+                }
             case .cancel:
                 break
             }

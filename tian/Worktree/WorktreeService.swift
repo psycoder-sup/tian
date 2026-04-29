@@ -286,6 +286,25 @@ enum WorktreeService {
         return FileManager.default.fileExists(atPath: configURL.path) ? configURL : nil
     }
 
+    /// Returns the number of `[[archive]]` commands configured in `.tian/config.toml`
+    /// at the given repo root. Returns 0 if the file does not exist, has no
+    /// `[[archive]]` section, or fails to parse.
+    static func archiveCommandCount(repoRoot: String) -> Int {
+        let configURL = URL(filePath: repoRoot)
+            .appendingPathComponent(".tian")
+            .appendingPathComponent("config.toml")
+        guard FileManager.default.fileExists(atPath: configURL.path) else {
+            return 0
+        }
+        do {
+            let config = try WorktreeConfigParser.parse(fileURL: configURL)
+            return config.archiveCommands.count
+        } catch {
+            Log.worktree.info("archiveCommandCount: failed to parse config at \(configURL.path): \(error)")
+            return 0
+        }
+    }
+
     // MARK: - Private
 
     private static func runGit(
