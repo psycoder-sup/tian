@@ -290,6 +290,7 @@ final class WorktreeOrchestrator {
             setupProgress = SetupProgress.starting(
                 workspaceID: targetWorkspace.id,
                 spaceID: newSpace.id,
+                phase: .setup,
                 totalCommands: config.setupCommands.count
             )
         }
