@@ -63,6 +63,12 @@ enum SpaceCloseFlow {
             mainRepoRoot = workspace.defaultWorkingDirectory?.path ?? wtPath.path
         }
 
+        // Guard: the workspace window may have been closed during the two awaits
+        // above (resolveRepoRoot / resolveMainWorktreePath). If windowShouldClose
+        // already tore down the SpaceCollection, bail out to avoid operating on
+        // stale state or triggering double-cleanup.
+        guard workspace.spaceCollection.spaces.contains(where: { $0.id == space.id }) else { return }
+
         let archiveCount = WorktreeService.archiveCommandCount(repoRoot: mainRepoRoot)
         if archiveCount > 0 {
             SkipTeardownConfirmationDialog.show(
