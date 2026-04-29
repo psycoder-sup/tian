@@ -368,6 +368,65 @@ struct WorktreeServiceTests {
         #expect(content.contains("# tian worktree directory"))
     }
 
+    // MARK: - archiveCommandCount
+
+    @Test func archiveCommandCount_returnsCorrectCountWithMultipleEntries() throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let configDir = (repo as NSString).appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        let configPath = (configDir as NSString).appendingPathComponent("config.toml")
+        try """
+        [[archive]]
+        command = "docker compose down"
+
+        [[archive]]
+        command = "echo done"
+        """.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let count = WorktreeService.archiveCommandCount(repoRoot: repo)
+        #expect(count == 2)
+    }
+
+    @Test func archiveCommandCount_returnsZeroWhenConfigFileMissing() throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // No .tian/config.toml written
+        let count = WorktreeService.archiveCommandCount(repoRoot: repo)
+        #expect(count == 0)
+    }
+
+    @Test func archiveCommandCount_returnsZeroWhenNoArchiveSection() throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let configDir = (repo as NSString).appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        let configPath = (configDir as NSString).appendingPathComponent("config.toml")
+        try """
+        [[setup]]
+        command = "npm install"
+        """.write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let count = WorktreeService.archiveCommandCount(repoRoot: repo)
+        #expect(count == 0)
+    }
+
+    @Test func archiveCommandCount_returnsZeroOnMalformedConfig() throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let configDir = (repo as NSString).appendingPathComponent(".tian")
+        try FileManager.default.createDirectory(atPath: configDir, withIntermediateDirectories: true)
+        let configPath = (configDir as NSString).appendingPathComponent("config.toml")
+        try "this = [[[invalid toml".write(toFile: configPath, atomically: true, encoding: .utf8)
+
+        let count = WorktreeService.archiveCommandCount(repoRoot: repo)
+        #expect(count == 0)
+    }
+
     // MARK: - Remote-only tracking
 
     @Test
