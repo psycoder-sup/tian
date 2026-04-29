@@ -205,6 +205,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             return false
         }
 
+        worktreeOrchestrator.cancelCommands()  // fire-and-forget per FR-062
+
         for workspace in workspaceCollection.workspaces {
             workspace.cleanup()
         }
