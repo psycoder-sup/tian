@@ -16,6 +16,10 @@ extension Notification {
 struct SidebarContainerView: View {
     let workspaceCollection: WorkspaceCollection
     let worktreeOrchestrator: WorktreeOrchestrator
+    /// Bottom padding applied only to the space-content area so it leaves
+    /// room for an overlapping status bar. The sidebar panel keeps its full
+    /// height and visually extends over the status bar on the left.
+    var bottomContentInset: CGFloat = 0
 
     @State private var sidebarState = SidebarState()
     @State private var lastContainerSize: CGSize = .zero
@@ -48,6 +52,7 @@ struct SidebarContainerView: View {
 
             spaceContentStack
                 .padding(.leading, toggleGutterWidth)
+                .padding(.bottom, bottomContentInset)
 
             HStack(spacing: 6) {
                 Color.clear.frame(width: 80)
