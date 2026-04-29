@@ -152,6 +152,15 @@ final class WorktreeOrchestrator {
     ) async throws {
         commandsCancelled = false
 
+        // Synchronous nil-out covers ALL exit paths (success, archive
+        // failure, cancel, throw). Pairs with the explicit pre-throw
+        // nil-out in the uncommitted-changes branch (FR-053): even
+        // though `defer` fires before the throw is observed by the
+        // caller, the explicit pre-throw assignment guarantees the
+        // ordering on the @MainActor with respect to any subsequent
+        // alert presentation.
+        defer { setupProgress = nil }
+
         // Step 1: Find Space
         guard let (space, spaceCollection) = findSpace(id: spaceID) else { return }
 
@@ -175,22 +184,66 @@ final class WorktreeOrchestrator {
         // Step 4: Parse config from the main worktree.
         let config = parseConfig(repoRoot: mainRepoRoot)
 
+        // Resolve the workspace ID for progress publishing. The Space lives
+        // in some workspace's collection; find it so the sidebar row picks
+        // up `setupProgress`.
+        let resolvedWorkspaceID: UUID? = findInHierarchy { _, workspace in
+            workspace.spaceCollection.spaces.contains(where: { $0.id == spaceID })
+                ? workspace.id
+                : nil
+        }
+
         // Step 4.5: Run archive commands (inverse of [[setup]]). Must happen
         // while the worktree directory still exists so commands can `cd`
         // into it (e.g. `docker compose down`).
-        await runShellCommands(
-            commands: config.archiveCommands,
-            label: "archive",
-            worktreePath: worktreePath,
-            config: config
-        )
+        if !config.archiveCommands.isEmpty, let wsID = resolvedWorkspaceID {
+            setupProgress = SetupProgress.starting(
+                workspaceID: wsID,
+                spaceID: spaceID,
+                phase: .cleanup,
+                totalCommands: config.archiveCommands.count
+            )
+            await runShellCommands(
+                commands: config.archiveCommands,
+                label: "archive",
+                worktreePath: worktreePath,
+                config: config
+            )
+            // Halt the cleanup pipeline before `git worktree remove` if
+            // the user cancelled (FR-040, FR-041) or any archive command
+            // exited non-zero (FR-050). The defer nils setupProgress.
+            if commandsCancelled {
+                Log.worktree.info("Archive cancelled by user; preserving worktree at \(worktreePath)")
+                return
+            }
+            if setupProgress?.didFailRun == true {
+                Log.worktree.warning("Archive failed; preserving worktree at \(worktreePath)")
+                return
+            }
+        }
 
-        // Step 5: Remove worktree
-        try await WorktreeService.removeWorktree(
-            repoRoot: mainRepoRoot,
-            worktreePath: worktreePath,
-            force: force
-        )
+        // Pre-remove transition: brief "Removing..." snapshot covers
+        // `git worktree remove` + pruning even when no archive ran (FR-012).
+        if let wsID = resolvedWorkspaceID {
+            setupProgress = SetupProgress.removingPlaceholder(
+                workspaceID: wsID,
+                spaceID: spaceID
+            )
+        }
+
+        // Step 5: Remove worktree. If this throws (e.g. uncommitted
+        // changes), nil setupProgress synchronously *before* the throw
+        // so the modal alert never overlaps the progress capsule (FR-053).
+        do {
+            try await WorktreeService.removeWorktree(
+                repoRoot: mainRepoRoot,
+                worktreePath: worktreePath,
+                force: force
+            )
+        } catch {
+            setupProgress = nil
+            throw error
+        }
 
         // Worktree is gone — Space must be removed regardless of pruning outcome.
         defer { spaceCollection.removeSpace(id: spaceID) }
@@ -345,7 +398,9 @@ final class WorktreeOrchestrator {
                 break
             }
             // Coalesce two @Observable notifications into one per command.
-            if label == "setup", var snapshot = setupProgress {
+            // Generalized from a `label == "setup"` guard to "publish whenever
+            // setupProgress is non-nil" so [[archive]] runs drive the same UI.
+            if var snapshot = setupProgress {
                 snapshot.currentIndex = index
                 snapshot.currentCommand = command
                 setupProgress = snapshot
@@ -358,8 +413,17 @@ final class WorktreeOrchestrator {
                 timeout: config.setupTimeout,
                 killGrace: config.setupKillGrace
             )
-            if label == "setup", exit != 0, setupProgress != nil {
+            if exit != 0, setupProgress != nil {
                 setupProgress?.lastFailedIndex = index
+                // Archive halts on first failure (FR-050) — preserve the
+                // worktree on disk by short-circuiting the loop. Setup
+                // continues past failures so subsequent independent steps
+                // still run; downstream UI surfaces the failure via
+                // `didFailRun`.
+                if setupProgress?.phase == .cleanup {
+                    Log.worktree.warning("Archive command \(index + 1)/\(commands.count) failed (exit=\(exit)); halting cleanup pipeline")
+                    break
+                }
             }
         }
     }

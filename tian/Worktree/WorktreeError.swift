@@ -18,6 +18,8 @@ enum WorktreeError: Error, CustomStringConvertible {
     case setupCancelled
     /// A setup command exceeded the timeout.
     case setupTimeout(command: String)
+    /// A worktree close is already in flight; the caller must wait.
+    case closeInFlight
 
     var description: String {
         switch self {
@@ -37,6 +39,8 @@ enum WorktreeError: Error, CustomStringConvertible {
             "Setup cancelled by user"
         case .setupTimeout(let command):
             "Setup command timed out: \(command)"
+        case .closeInFlight:
+            "Another worktree close is in progress. Try again in a moment."
         }
     }
 }
