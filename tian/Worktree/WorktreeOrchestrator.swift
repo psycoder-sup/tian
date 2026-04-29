@@ -226,7 +226,8 @@ final class WorktreeOrchestrator {
                 commands: config.archiveCommands,
                 label: "archive",
                 worktreePath: worktreePath,
-                config: config
+                config: config,
+                haltOnFirstFailure: true
             )
             // Halt the cleanup pipeline before `git worktree remove` if
             // the user cancelled (FR-040, FR-041) or any archive command
@@ -397,15 +398,20 @@ final class WorktreeOrchestrator {
 
     /// Runs an ordered list of shell commands sequentially with the
     /// worktree as cwd. Drives both `[[setup]]` (during creation) and
-    /// `[[archive]]` (during removal). Failures are logged and the loop
-    /// continues; the only early exit is user cancellation via Ctrl+C.
-    /// `label` is interpolated into log lines so the two flows are
-    /// distinguishable in `tian.log`.
+    /// `[[archive]]` (during removal). `label` is interpolated into log
+    /// lines so the two flows are distinguishable in `tian.log`.
+    ///
+    /// - Parameters:
+    ///   - haltOnFirstFailure: When `true`, the loop breaks immediately after
+    ///     the first non-zero exit (used by the archive/cleanup path so the
+    ///     worktree is preserved on disk). When `false` (default), the loop
+    ///     continues past failures so subsequent independent steps still run.
     private func runShellCommands(
         commands: [String],
         label: String,
         worktreePath: String,
-        config: WorktreeConfig
+        config: WorktreeConfig,
+        haltOnFirstFailure: Bool = false
     ) async {
         guard !commands.isEmpty else { return }
         installCtrlCMonitor()
@@ -434,15 +440,15 @@ final class WorktreeOrchestrator {
             )
             if exit != 0, setupProgress != nil {
                 setupProgress?.lastFailedIndex = index
-                // Archive halts on first failure (FR-050) — preserve the
-                // worktree on disk by short-circuiting the loop. Setup
-                // continues past failures so subsequent independent steps
-                // still run; downstream UI surfaces the failure via
-                // `didFailRun`.
-                if setupProgress?.phase == .cleanup {
-                    Log.worktree.warning("Archive command \(index + 1)/\(commands.count) failed (exit=\(exit)); halting cleanup pipeline")
+                if haltOnFirstFailure {
+                    // Halt on first failure (FR-050) — preserve the worktree
+                    // on disk by short-circuiting the loop. Downstream UI
+                    // surfaces the failure via `didFailRun`.
+                    Log.worktree.warning("\(label.capitalized) command \(index + 1)/\(commands.count) failed (exit=\(exit)); halting pipeline")
                     break
                 }
+                // Otherwise continue: subsequent independent steps still run;
+                // downstream UI surfaces the failure via `didFailRun`.
             }
         }
     }

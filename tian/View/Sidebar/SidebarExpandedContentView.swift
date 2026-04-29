@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct SidebarExpandedContentView: View {
     let workspaceCollection: WorkspaceCollection
@@ -157,54 +156,7 @@ struct SidebarExpandedContentView: View {
     // MARK: - Close Space
 
     private func closeSpace(_ space: SpaceModel, in workspace: Workspace) {
-        guard let wtPath = space.worktreePath else {
-            workspace.spaceCollection.removeSpace(id: space.id)
-            return
-        }
-        guard let window = NSApp.keyWindow else { return }
-        WorktreeCloseDialog.show(on: window, worktreePath: wtPath.path) { response in
-            switch response {
-            case .removeWorktreeAndClose:
-                Task { await removeWorktree(space: space, force: false) }
-            case .closeOnly:
-                let repoRoot = workspace.defaultWorkingDirectory?.path ?? wtPath.path
-                let archiveCount = WorktreeService.archiveCommandCount(repoRoot: repoRoot)
-                if archiveCount > 0 {
-                    SkipTeardownConfirmationDialog.show(
-                        on: window,
-                        archiveCommandCount: archiveCount
-                    ) { skipResponse in
-                        if skipResponse == .skipTeardown {
-                            workspace.spaceCollection.removeSpace(id: space.id)
-                        }
-                    }
-                } else {
-                    workspace.spaceCollection.removeSpace(id: space.id)
-                }
-            case .cancel:
-                break
-            }
-        }
-    }
-
-    private func removeWorktree(space: SpaceModel, force: Bool) async {
-        do {
-            try await worktreeOrchestrator.removeWorktreeSpace(
-                spaceID: space.id, force: force
-            )
-        } catch let error as WorktreeError {
-            if case .uncommittedChanges(let path) = error, let window = NSApp.keyWindow {
-                WorktreeForceRemoveDialog.show(on: window, worktreePath: path) { response in
-                    if response == .forceRemove {
-                        Task { await removeWorktree(space: space, force: true) }
-                    }
-                }
-            } else {
-                worktreeOrchestrator.presentError(error)
-            }
-        } catch {
-            worktreeOrchestrator.presentError(error)
-        }
+        SpaceCloseFlow.run(space: space, in: workspace, worktreeOrchestrator: worktreeOrchestrator)
     }
 
     // MARK: - Space Selection
