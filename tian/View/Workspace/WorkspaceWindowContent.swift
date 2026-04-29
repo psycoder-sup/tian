@@ -17,24 +17,29 @@ struct WorkspaceWindowContent: View {
     private static let setupCapsuleLingerSeconds: Duration = .seconds(3)
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            SidebarContainerView(
-                workspaceCollection: workspaceCollection,
-                worktreeOrchestrator: worktreeOrchestrator
-            )
+        ZStack(alignment: .bottom) {
+            StatusBarView()
 
-            if let progress = displayedProgress {
-                SetupProgressCapsule(progress: progress) {
-                    worktreeOrchestrator.cancelCommands()
-                }
-                .padding(12)
-                .transition(.opacity)
-            }
+            ZStack(alignment: .bottomTrailing) {
+                SidebarContainerView(
+                    workspaceCollection: workspaceCollection,
+                    worktreeOrchestrator: worktreeOrchestrator,
+                    bottomContentInset: StatusBarView.height
+                )
 
-            if showDebugOverlay {
-                DebugOverlayView()
+                if let progress = displayedProgress {
+                    SetupProgressCapsule(progress: progress) {
+                        worktreeOrchestrator.cancelCommands()
+                    }
                     .padding(12)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    .transition(.opacity)
+                }
+
+                if showDebugOverlay {
+                    DebugOverlayView()
+                        .padding(12)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
             }
         }
         .overlay {
