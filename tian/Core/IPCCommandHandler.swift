@@ -568,6 +568,8 @@ final class IPCCommandHandler {
             return .success()
         } catch WorktreeError.uncommittedChanges(let path) {
             return .failure(code: 3, message: "Worktree at '\(path)' has uncommitted changes. Use --force to remove anyway.")
+        } catch WorktreeError.closeInFlight {
+            return .failure(code: 5, message: WorktreeError.closeInFlight.description)
         } catch let error as WorktreeError {
             return .failure(code: 1, message: error.description)
         } catch {

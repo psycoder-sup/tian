@@ -22,6 +22,14 @@ final class WorktreeOrchestrator {
     /// command loop. Reset at the top of each create/remove flow.
     var commandsCancelled: Bool = false
 
+    /// True while a `removeWorktreeSpace` invocation is between its first
+    /// line and its final cleanup. Concurrent removal of a *different*
+    /// Space is rejected with `WorktreeError.closeInFlight`. Concurrent
+    /// removal of the *same* Space is filtered out at the UI layer by
+    /// `SidebarSpaceRowMutationGate` (which hides "Close Space" while
+    /// `setupProgress != nil`).
+    private(set) var isCloseInFlight: Bool = false
+
     /// Last error surfaced by the orchestrator, for UI binding.
     var lastError: WorktreeError?
 
@@ -150,6 +158,14 @@ final class WorktreeOrchestrator {
         force: Bool = false,
         workspaceID: UUID? = nil
     ) async throws {
+        // In-flight guard (FR-061): reject concurrent close requests for
+        // a *different* Space. Same-Space double-close is prevented at
+        // the UI layer by `SidebarSpaceRowMutationGate`.
+        if isCloseInFlight {
+            throw WorktreeError.closeInFlight
+        }
+        isCloseInFlight = true
+
         commandsCancelled = false
 
         // Synchronous nil-out covers ALL exit paths (success, archive
@@ -159,7 +175,10 @@ final class WorktreeOrchestrator {
         // caller, the explicit pre-throw assignment guarantees the
         // ordering on the @MainActor with respect to any subsequent
         // alert presentation.
-        defer { setupProgress = nil }
+        defer {
+            isCloseInFlight = false
+            setupProgress = nil
+        }
 
         // Step 1: Find Space
         guard let (space, spaceCollection) = findSpace(id: spaceID) else { return }

@@ -9,6 +9,8 @@ enum CLIError: Error, LocalizedError {
     case processSafety(String)
     /// Exit code 4: Notification permission denied
     case permissionDenied(String)
+    /// Exit code 5: Another worktree close is already in flight
+    case closeInFlight(String)
 
     var exitCode: Int32 {
         switch self {
@@ -16,6 +18,7 @@ enum CLIError: Error, LocalizedError {
         case .connection: 2
         case .processSafety: 3
         case .permissionDenied: 4
+        case .closeInFlight: 5
         }
     }
 
@@ -24,7 +27,8 @@ enum CLIError: Error, LocalizedError {
         case .general(let msg),
              .connection(let msg),
              .processSafety(let msg),
-             .permissionDenied(let msg):
+             .permissionDenied(let msg),
+             .closeInFlight(let msg):
             return msg
         }
     }

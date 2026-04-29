@@ -7,6 +7,7 @@ extension CLIError {
         case 2: .connection(error.message)
         case 3: .processSafety(error.message)
         case 4: .permissionDenied(error.message)
+        case 5: .closeInFlight(error.message)
         default: .general(error.message)
         }
     }
