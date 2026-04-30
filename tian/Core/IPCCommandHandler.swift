@@ -68,6 +68,9 @@ final class IPCCommandHandler {
         case "worktree.create": return await handleWorktreeCreate(request)
         case "worktree.remove": return await handleWorktreeRemove(request)
 
+        // Git
+        case "git.refresh": return handleGitRefresh(request)
+
         default:
             return .failure(code: 1, message: "Unknown command: \(request.command)")
         }
@@ -575,6 +578,23 @@ final class IPCCommandHandler {
         } catch {
             return .failure(code: 1, message: error.localizedDescription)
         }
+    }
+
+    // MARK: - Git Commands
+
+    /// Evicts the PR cache for every repo in the calling pane's Space and
+    /// refreshes git status. Used by external tooling (e.g. a Claude
+    /// PostToolUse hook after `gh pr create`) to update the sidebar badge
+    /// without waiting for the 60s PR-cache TTL — `gh pr create` against an
+    /// already-pushed branch makes no local file change, so the
+    /// FSEvents-based eviction path doesn't fire.
+    private func handleGitRefresh(_ request: IPCRequest) -> IPCResponse {
+        guard let spaceID = UUID(uuidString: request.env.spaceId),
+              let (_, space) = resolveSpace(id: spaceID, workspaceId: nil) else {
+            return .failure(code: 1, message: "Space not found from environment.")
+        }
+        space.gitContext.refreshPR()
+        return .success()
     }
 
     // MARK: - Hierarchy Resolution

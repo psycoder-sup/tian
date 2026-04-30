@@ -678,3 +678,28 @@ struct WorktreeRemove: ParsableCommand {
         try handleVoidResponse(response)
     }
 }
+
+// MARK: - Git
+
+struct GitGroup: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "git",
+        abstract: "Refresh git-derived sidebar state.",
+        subcommands: [
+            GitRefresh.self,
+        ]
+    )
+}
+
+struct GitRefresh: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "refresh",
+        abstract: "Evict the PR cache and refresh git status for the current Space.",
+        discussion: "Intended to run after commands that change PR or branch state without modifying local refs (e.g. `gh pr create` against an already-pushed branch), so the sidebar badge updates without waiting for the cache TTL."
+    )
+
+    func run() throws {
+        let response = try sendRequest(command: "git.refresh")
+        try handleVoidResponse(response)
+    }
+}
