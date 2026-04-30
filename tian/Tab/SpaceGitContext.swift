@@ -157,6 +157,20 @@ final class SpaceGitContext {
         }
     }
 
+    /// Evicts cached PR status for every pinned repo and triggers a refresh.
+    /// Used by the `git.refresh` IPC so callers (e.g. a Claude PostToolUse
+    /// hook after `gh pr create`) can update the badge without waiting for
+    /// the 60s cache TTL to expire — `gh pr create` against an already-pushed
+    /// branch makes no local file change, so the FSEvents-based eviction
+    /// path doesn't fire.
+    func refreshPR() {
+        for repoID in pinnedRepoOrder {
+            prCache.evict(repoID: repoID)
+            guard let directory = repoDirectories[repoID] else { continue }
+            refreshRepo(repoID: repoID, directory: directory)
+        }
+    }
+
     /// Cancels all in-flight tasks and clears state. Called on Space close.
     func teardown() {
         for task in inFlightTasks.values { task.cancel() }

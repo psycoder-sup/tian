@@ -44,6 +44,15 @@
             "command": "tian-hook-log.sh PostToolUse busy"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-pr-refresh.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
