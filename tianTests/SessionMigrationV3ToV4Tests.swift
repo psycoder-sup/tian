@@ -39,7 +39,8 @@ struct SessionMigrationV3ToV4Tests {
 
         let migrated = try SessionStateMigrator.migrateIfNeeded(data: v3)!
         let json = try JSONSerialization.jsonObject(with: migrated) as! [String: Any]
-        #expect((json["version"] as? Int) == 4)
+        // Migration chain runs v3→v4→v5, so the result is the current version.
+        #expect((json["version"] as? Int) == SessionStateMigrator.currentVersion)
 
         let ws = (json["workspaces"] as! [[String: Any]])[0]
         let space = (ws["spaces"] as! [[String: Any]])[0]

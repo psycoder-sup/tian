@@ -2,12 +2,14 @@ import Foundation
 import Observation
 
 /// Serializable snapshot of a workspace's persisted fields.
-/// Used for encoding (M4) and will be extended for full persistence in M5.
 struct WorkspaceSnapshot: Sendable, Codable {
     let id: UUID
     let name: String
     let defaultWorkingDirectory: URL?
     let createdAt: Date
+    /// Added in schema v5. Optional for back-compat with older snapshots.
+    let inspectPanelVisible: Bool?
+    let inspectPanelWidth: Double?
 }
 
 /// The top-level organizational unit in tian's 4-level hierarchy
@@ -27,6 +29,9 @@ final class Workspace: Identifiable {
 
     let spaceCollection: SpaceCollection
 
+    /// Inspect panel visibility and width for this workspace's window.
+    let inspectPanelState: InspectPanelState
+
     /// Called when the workspace's last space is closed.
     var onEmpty: (() -> Void)?
 
@@ -37,7 +42,8 @@ final class Workspace: Identifiable {
             id: UUID(),
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
-            createdAt: Date()
+            createdAt: Date(),
+            inspectPanelState: InspectPanelState()
         )
     }
 
@@ -45,12 +51,14 @@ final class Workspace: Identifiable {
         id: UUID,
         name: String,
         defaultWorkingDirectory: URL?,
-        createdAt: Date
+        createdAt: Date,
+        inspectPanelState: InspectPanelState = InspectPanelState()
     ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = createdAt
+        self.inspectPanelState = inspectPanelState
 
         let workingDir = defaultWorkingDirectory?.path
             ?? ProcessInfo.processInfo.environment["HOME"]
@@ -65,11 +73,18 @@ final class Workspace: Identifiable {
     }
 
     /// Restore a workspace with a pre-built SpaceCollection.
-    init(id: UUID, name: String, defaultWorkingDirectory: URL?, spaceCollection: SpaceCollection) {
+    init(
+        id: UUID,
+        name: String,
+        defaultWorkingDirectory: URL?,
+        spaceCollection: SpaceCollection,
+        inspectPanelState: InspectPanelState = InspectPanelState()
+    ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = Date()
+        self.inspectPanelState = inspectPanelState
         self.spaceCollection = spaceCollection
         self.spaceCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
         self.spaceCollection.propagateWorkspaceID(id)
@@ -111,16 +126,40 @@ final class Workspace: Identifiable {
             id: id,
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
-            createdAt: createdAt
+            createdAt: createdAt,
+            inspectPanelVisible: inspectPanelState.isVisible,
+            inspectPanelWidth: Double(inspectPanelState.width)
         )
     }
 
     static func from(snapshot: WorkspaceSnapshot) -> Workspace {
-        Workspace(
+        let panelState = InspectPanelState(
+            isVisible: snapshot.inspectPanelVisible ?? true,
+            width: snapshot.inspectPanelWidth.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
+        )
+        return Workspace(
             id: snapshot.id,
             name: snapshot.name,
             defaultWorkingDirectory: snapshot.defaultWorkingDirectory,
-            createdAt: snapshot.createdAt
+            createdAt: snapshot.createdAt,
+            inspectPanelState: panelState
+        )
+    }
+
+    /// Restore a workspace from its persisted WorkspaceState, applying runtime
+    /// defaults for any optional fields added in newer schema versions.
+    /// Note: this creates a fresh SpaceCollection; use SessionRestorer for full restore.
+    static func from(workspaceState ws: WorkspaceState) -> Workspace {
+        let panelState = InspectPanelState(
+            isVisible: ws.inspectPanelVisible ?? true,
+            width: ws.inspectPanelWidth.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
+        )
+        return Workspace(
+            id: ws.id,
+            name: ws.name,
+            defaultWorkingDirectory: ws.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
+            createdAt: Date(),
+            inspectPanelState: panelState
         )
     }
 }

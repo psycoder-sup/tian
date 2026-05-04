@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 4
+    static let currentVersion = 5
 
     static var stateDirectory: URL {
         FileManager.default
@@ -49,7 +49,9 @@ enum SessionSerializer {
                     )
                 },
                 windowFrame: windowFrame,
-                isFullscreen: isFullscreen
+                isFullscreen: isFullscreen,
+                inspectPanelVisible: workspace.inspectPanelState.isVisible,
+                inspectPanelWidth: Double(workspace.inspectPanelState.width)
             )
         }
 

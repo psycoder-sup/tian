@@ -40,8 +40,8 @@ struct SessionRoundTripV4Tests {
         #expect(view?.initialInput == "claude\n")
     }
 
-    // Schema version bumped to 4.
-    @Test func snapshotEmitsVersion4() {
-        #expect(SessionSerializer.currentVersion == 4)
+    // Schema version bumped to 5 (v5 adds inspect-panel fields).
+    @Test func snapshotEmitsCurrentVersion() {
+        #expect(SessionSerializer.currentVersion == 5)
     }
 }
