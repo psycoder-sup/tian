@@ -110,6 +110,21 @@ enum GitStatusService {
     static func diffStatus(
         directory: String
     ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
+        await parseDiffStatus(directory: directory, maxFiles: 100)
+    }
+
+    /// Same shape as `diffStatus` but returns the full file list (no 100-cap).
+    /// Used by the inspect panel where every changed entry must badge.
+    static func diffStatusFull(
+        directory: String
+    ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
+        await parseDiffStatus(directory: directory, maxFiles: nil)
+    }
+
+    private static func parseDiffStatus(
+        directory: String,
+        maxFiles: Int?
+    ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
         do {
             let result = try await runGit(
                 ["status", "--porcelain=v1", "--ignore-submodules"],
@@ -129,7 +144,6 @@ enum GitStatusService {
 
             var summary = GitDiffSummary()
             var files: [GitChangedFile] = []
-            let maxFiles = 100
 
             let unmergedPairs: Set<String> = ["DD", "AU", "UD", "UA", "DU", "AA", "UU"]
 
@@ -168,7 +182,7 @@ enum GitStatusService {
                     path = rawPath
                 }
 
-                // Update summary counts (always)
+                // Update summary counts (always, regardless of cap)
                 switch status {
                 case .modified: summary.modified += 1
                 case .added:    summary.added += 1
@@ -177,16 +191,15 @@ enum GitStatusService {
                 case .unmerged: summary.unmerged += 1
                 }
 
-                // Cap files array at maxFiles
-                if files.count < maxFiles {
+                if maxFiles.map({ files.count < $0 }) ?? true {
                     files.append(GitChangedFile(status: status, path: path))
                 }
             }
 
-            Log.git.debug("diffStatus \(directory): \(summary.totalCount) changes (\(files.count) files captured)")
+            Log.git.debug("parseDiffStatus \(directory): \(summary.totalCount) changes (\(files.count) files captured)")
             return (summary, files)
         } catch {
-            Log.git.error("diffStatus failed for \(directory): \(error)")
+            Log.git.error("parseDiffStatus failed for \(directory): \(error)")
             return (.empty, [])
         }
     }
