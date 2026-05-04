@@ -63,6 +63,7 @@ struct InspectPanelHeader: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Hide inspect panel")
     }
 
     // MARK: - Body

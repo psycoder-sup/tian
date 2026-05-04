@@ -32,6 +32,8 @@ struct InspectPanelRail: View {
         .onHover { isHovering = $0 }
         .onTapGesture { onShow() }
         .animation(.easeInOut(duration: 0.15), value: isHovering)
+        .accessibilityLabel("Show inspect panel")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

@@ -85,6 +85,15 @@ struct InspectPanelFileRow: View {
         return false
     }
 
+    // MARK: - Accessibility label (FR-36)
+
+    private var accessibilityLabelText: String {
+        guard !node.isDirectory, let status else {
+            return node.name
+        }
+        return "\(node.name), \(status.accessibilityLabel)"
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -151,6 +160,8 @@ struct InspectPanelFileRow: View {
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture { onTap() }
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityElement(children: .ignore)
     }
 
     // MARK: - Styling helpers
