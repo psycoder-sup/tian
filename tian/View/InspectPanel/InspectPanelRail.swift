@@ -3,8 +3,7 @@ import SwiftUI
 /// 22 px collapsed rail along the right edge (FR-07).
 ///
 /// Shows the word `inspect` rotated 90° (so it reads bottom-to-top).
-/// Tapping the rail calls `onShow` — the wiring task will set
-/// `panelState.isVisible = true`.
+/// Tap fires `onShow`.
 struct InspectPanelRail: View {
     static let width: CGFloat = 22
 

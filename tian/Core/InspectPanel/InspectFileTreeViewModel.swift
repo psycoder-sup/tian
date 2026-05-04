@@ -31,7 +31,6 @@ final class InspectFileTreeViewModel {
     private(set) var statusByRelativePath: [String: GitFileStatus] = [:]
     private(set) var isInitialScanInFlight: Bool = false
     private(set) var isInitialScanSlow: Bool = false
-    private(set) var hasContent: Bool = false   // true once first scan finished and rows non-empty
 
     var expandedPaths: Set<String> = []   // by canonical absolute path
     var selectedPath: String?
@@ -61,7 +60,6 @@ final class InspectFileTreeViewModel {
             visibleRows = []
             worktreeKind = .noWorkingDirectory
             isInitialScanInFlight = false
-            hasContent = false
             return
         }
 
@@ -129,6 +127,9 @@ final class InspectFileTreeViewModel {
         watcher = nil
     }
 
+    // MARK: - Test seams (Debug only)
+
+    #if DEBUG
     /// Test affordance: awaits completion of the most recently kicked-off scan.
     /// Returns immediately if no scan is currently in flight.
     func waitForFirstScan() async {
@@ -143,6 +144,7 @@ final class InspectFileTreeViewModel {
 
     /// Test affordance: exposes the unfiltered tree for assertions.
     var allNodesForTest: [FileTreeNode] { allNodes }
+    #endif
 
     // MARK: - Construction
 
@@ -185,6 +187,10 @@ final class InspectFileTreeViewModel {
         // Bail if cancelled while classifying.
         if Task.isCancelled { return }
 
+        // Set worktreeKind immediately so the panel header can render the
+        // worktree label even during slow scans (before the file list arrives).
+        self.worktreeKind = kind
+
         // Pick the right scanner method based on kind.
         let paths: [String]
         do {
@@ -208,28 +214,29 @@ final class InspectFileTreeViewModel {
         // landing during the scan must not let us write stale results.
         if Task.isCancelled { return }
 
-        // Build the tree. Heavy-ish loop, but stays on MainActor — paths come
-        // from a process pipeline (small) or FileManager (already off-main).
-        let (nodes, childrenIndex) = Self.buildNodes(rootPath: url.path, paths: paths)
+        // Build the tree off the MainActor — at 10k+ entries this loop is
+        // non-trivial and would visibly stall the UI if run inline.
+        let urlPath = url.path
+        let result = await Task.detached(priority: .userInitiated) {
+            InspectFileTreeViewModel.buildNodes(rootPath: urlPath, paths: paths)
+        }.value
+        if Task.isCancelled { return }
 
-        // Apply on the main actor.
-        allNodes = nodes
-        childrenByParent = childrenIndex
-        worktreeKind = kind
+        allNodes = result.nodes
+        childrenByParent = result.childrenByParent
 
         // FR-26: clear selection if it points at a path that no longer exists.
-        if let selected = selectedPath, !nodes.contains(where: { $0.id == selected }) {
+        if let selected = selectedPath, !result.nodes.contains(where: { $0.id == selected }) {
             selectedPath = nil
         }
 
         // FR-28: prune expanded paths that no longer correspond to a directory
         // in the tree. (Keeps the set bounded, and matches the spec's "when
         // those still exist" semantics.)
-        let nodeIDs = Set(nodes.map(\.id))
+        let nodeIDs = Set(result.nodes.map(\.id))
         expandedPaths = expandedPaths.intersection(nodeIDs)
 
         recomputeVisibleRows()
-        hasContent = !visibleRows.isEmpty
 
         isInitialScanInFlight = false
         slowFlagTask?.cancel()
@@ -263,7 +270,7 @@ final class InspectFileTreeViewModel {
     ///            directories-first, alphabetical within each level.
     ///   - childrenByParent: parent-id → ordered children, used by the
     ///                       expansion walker in `recomputeVisibleRows()`.
-    private static func buildNodes(
+    private nonisolated static func buildNodes(
         rootPath: String,
         paths: [String]
     ) -> (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]]) {
@@ -288,20 +295,25 @@ final class InspectFileTreeViewModel {
         // Build nodes (directories + files), keyed by relativePath.
         var nodesByRelative: [String: FileTreeNode] = [:]
         for rel in dirRelative {
+            // depth = number of "/" separators in the relative path
+            let depth = rel.filter { $0 == "/" }.count
             let node = FileTreeNode(
                 id: absoluteJoin(rootPath, rel),
                 name: lastComponent(rel),
                 kind: .directory(canRead: true),
-                relativePath: rel
+                relativePath: rel,
+                depth: depth
             )
             nodesByRelative[rel] = node
         }
         for rel in fileRelative {
+            let depth = rel.filter { $0 == "/" }.count
             let node = FileTreeNode(
                 id: absoluteJoin(rootPath, rel),
                 name: lastComponent(rel),
                 kind: .file(ext: fileExtension(rel)),
-                relativePath: rel
+                relativePath: rel,
+                depth: depth
             )
             nodesByRelative[rel] = node
         }
@@ -358,26 +370,26 @@ final class InspectFileTreeViewModel {
 
     // MARK: - Helpers
 
-    private static func absoluteJoin(_ root: String, _ relative: String) -> String {
+    private nonisolated static func absoluteJoin(_ root: String, _ relative: String) -> String {
         if root.hasSuffix("/") { return root + relative }
         return root + "/" + relative
     }
 
-    private static func lastComponent(_ relative: String) -> String {
+    private nonisolated static func lastComponent(_ relative: String) -> String {
         if let slash = relative.lastIndex(of: "/") {
             return String(relative[relative.index(after: slash)...])
         }
         return relative
     }
 
-    private static func parentRelative(_ relative: String) -> String {
+    private nonisolated static func parentRelative(_ relative: String) -> String {
         if let slash = relative.lastIndex(of: "/") {
             return String(relative[..<slash])
         }
         return ""
     }
 
-    private static func fileExtension(_ relative: String) -> String? {
+    private nonisolated static func fileExtension(_ relative: String) -> String? {
         let name = lastComponent(relative)
         if let dot = name.lastIndex(of: "."), dot != name.startIndex {
             return String(name[name.index(after: dot)...])
@@ -385,7 +397,7 @@ final class InspectFileTreeViewModel {
         return nil
     }
 
-    private static func nodeOrder(_ a: FileTreeNode, _ b: FileTreeNode) -> Bool {
+    private nonisolated static func nodeOrder(_ a: FileTreeNode, _ b: FileTreeNode) -> Bool {
         switch (a.isDirectory, b.isDirectory) {
         case (true, false): return true
         case (false, true): return false

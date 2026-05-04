@@ -162,33 +162,15 @@ final class Workspace: Identifiable {
     }
 
     static func from(snapshot: WorkspaceSnapshot) -> Workspace {
-        let panelState = InspectPanelState(
-            isVisible: snapshot.inspectPanelVisible ?? true,
-            width: snapshot.inspectPanelWidth.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
-        )
         return Workspace(
             id: snapshot.id,
             name: snapshot.name,
             defaultWorkingDirectory: snapshot.defaultWorkingDirectory,
             createdAt: snapshot.createdAt,
-            inspectPanelState: panelState
-        )
-    }
-
-    /// Restore a workspace from its persisted WorkspaceState, applying runtime
-    /// defaults for any optional fields added in newer schema versions.
-    /// Note: this creates a fresh SpaceCollection; use SessionRestorer for full restore.
-    static func from(workspaceState ws: WorkspaceState) -> Workspace {
-        let panelState = InspectPanelState(
-            isVisible: ws.inspectPanelVisible ?? true,
-            width: ws.inspectPanelWidth.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
-        )
-        return Workspace(
-            id: ws.id,
-            name: ws.name,
-            defaultWorkingDirectory: ws.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
-            createdAt: Date(),
-            inspectPanelState: panelState
+            inspectPanelState: InspectPanelState.restore(
+                visible: snapshot.inspectPanelVisible,
+                width: snapshot.inspectPanelWidth
+            )
         )
     }
 }

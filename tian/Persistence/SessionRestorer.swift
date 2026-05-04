@@ -211,9 +211,9 @@ enum SessionRestorer {
                 workspaceDefaultDirectory: wdURL
             )
 
-            let inspectPanelState = InspectPanelState(
-                isVisible: ws.inspectPanelVisible ?? true,
-                width: ws.inspectPanelWidth.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
+            let inspectPanelState = InspectPanelState.restore(
+                visible: ws.inspectPanelVisible,
+                width: ws.inspectPanelWidth
             )
             return Workspace(
                 id: ws.id,

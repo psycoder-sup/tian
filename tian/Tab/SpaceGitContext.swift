@@ -354,7 +354,7 @@ final class SpaceGitContext {
             // Skip the Observable write when nothing visible changed — avoids
             // sidebar re-renders on every FSEvents batch during noisy activity
             // like an active build.
-            if self.repoStatuses[repoID]?.contentMatches(status) != true {
+            if self.repoStatuses[repoID] != status {
                 self.repoStatuses[repoID] = status
             }
             self.inFlightTasks.removeValue(forKey: repoID)

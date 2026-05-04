@@ -41,17 +41,18 @@ struct InspectPanelResizeHandle: View {
         }
         .gesture(
             DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                .updating($dragStart) { value, state, _ in
+                .updating($dragStart) { _, state, _ in
+                    // Anchor purely on the panel width at drag start; do not
+                    // include the first-sample translation here (that caused a
+                    // ~1 pt jump because the anchor shifted with the gesture).
                     if state == nil {
-                        // Record the panel width at drag start
-                        state = panelState.width + value.translation.width
+                        state = panelState.width
                     }
                 }
                 .onChanged { value in
                     // translation.width is negative when dragging left (widening the panel)
                     // The handle sits on the leading edge, so dragging left increases width.
-                    let startWidth = (dragStart ?? panelState.width)
-                    let proposed = startWidth - value.translation.width
+                    let proposed = (dragStart ?? panelState.width) - value.translation.width
                     panelState.width = panelState.clampedWidth(proposed)
                 }
         )

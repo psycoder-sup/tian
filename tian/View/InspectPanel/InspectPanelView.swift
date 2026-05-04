@@ -2,17 +2,15 @@ import SwiftUI
 
 /// Root inspect panel view (FR-01 / FR-02).
 ///
-/// Switches between the collapsed 22 px rail (FR-07) and the full panel.
+/// Always renders the full panel; visibility toggling (showing the 22 px rail
+/// vs the full panel) is handled by the call site (`SidebarContainerView.inspectColumn`).
 /// Full panel: leading resize handle + VStack { header · body · status strip }.
 /// Body switches on view-model state:
 ///   - noWorkingDirectory  → `InspectPanelNoDirectoryView`
 ///   - initial scan, fast  → `InspectPanelLoadingView`
 ///   - initial scan, slow  → `InspectPanelSlowLoadingView`
 ///   - scan done, no rows  → `InspectPanelEmptyContentView`
-///   - else                → `InspectPanelFileBrowser`
-///
-/// No live wire-up to a workspace/space yet — task 7 plugs in `spaceName`
-/// and `viewModel`. Pass them via init parameters for now.
+///   - else                → `InspectPanelFileBrowser`.
 struct InspectPanelView: View {
     @Bindable var panelState: InspectPanelState
     @Bindable var viewModel: InspectFileTreeViewModel
@@ -21,13 +19,7 @@ struct InspectPanelView: View {
     // MARK: - Body
 
     var body: some View {
-        if panelState.isVisible {
-            fullPanel
-        } else {
-            InspectPanelRail {
-                panelState.isVisible = true
-            }
-        }
+        fullPanel
     }
 
     // MARK: - Full panel
@@ -103,11 +95,9 @@ struct InspectPanelView: View {
 }
 
 #Preview("Hidden – rail") {
-    let panelState = InspectPanelState(isVisible: false, width: 320)
-    let vm = InspectFileTreeViewModel()
     HStack(spacing: 0) {
         Color.gray.opacity(0.2).frame(maxWidth: .infinity)
-        InspectPanelView(panelState: panelState, viewModel: vm, spaceName: "tian")
+        InspectPanelRail(onShow: {})
     }
     .frame(height: 600)
     .background(Color.black)

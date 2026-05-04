@@ -201,19 +201,22 @@ private struct Spacing: View {
         id: "/repo/src/main.ts",
         name: "main.ts",
         kind: .file(ext: "ts"),
-        relativePath: "src/main.ts"
+        relativePath: "src/main.ts",
+        depth: 1
     )
     let dirNode = FileTreeNode(
         id: "/repo/src",
         name: "src",
         kind: .directory(canRead: true),
-        relativePath: "src"
+        relativePath: "src",
+        depth: 0
     )
     let unreadNode = FileTreeNode(
         id: "/repo/private",
         name: "private",
         kind: .directory(canRead: false),
-        relativePath: "private"
+        relativePath: "private",
+        depth: 0
     )
 
     VStack(spacing: 0) {
@@ -234,7 +237,7 @@ private struct Spacing: View {
             onTap: {}
         )
         InspectPanelFileRow(
-            node: FileTreeNode(id: "/repo/src/app.tsx", name: "app.tsx", kind: .file(ext: "tsx"), relativePath: "src/app.tsx"),
+            node: FileTreeNode(id: "/repo/src/app.tsx", name: "app.tsx", kind: .file(ext: "tsx"), relativePath: "src/app.tsx", depth: 1),
             depth: 1,
             isExpanded: false,
             isSelected: false,
@@ -242,7 +245,7 @@ private struct Spacing: View {
             onTap: {}
         )
         InspectPanelFileRow(
-            node: FileTreeNode(id: "/repo/src/old.ts", name: "old.ts", kind: .file(ext: "ts"), relativePath: "src/old.ts"),
+            node: FileTreeNode(id: "/repo/src/old.ts", name: "old.ts", kind: .file(ext: "ts"), relativePath: "src/old.ts", depth: 1),
             depth: 1,
             isExpanded: false,
             isSelected: false,
@@ -250,7 +253,7 @@ private struct Spacing: View {
             onTap: {}
         )
         InspectPanelFileRow(
-            node: FileTreeNode(id: "/repo/src/moved.ts", name: "moved.ts", kind: .file(ext: "ts"), relativePath: "src/moved.ts"),
+            node: FileTreeNode(id: "/repo/src/moved.ts", name: "moved.ts", kind: .file(ext: "ts"), relativePath: "src/moved.ts", depth: 1),
             depth: 1,
             isExpanded: false,
             isSelected: false,

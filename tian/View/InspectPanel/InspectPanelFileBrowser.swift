@@ -45,13 +45,6 @@ struct InspectPanelFileBrowser: View {
         }
     }
 
-    // MARK: - Depth helper
-
-    /// Computes the display depth of a node from its relativePath slash count.
-    private func depth(of node: FileTreeNode) -> Int {
-        node.relativePath.filter { $0 == "/" }.count
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -63,7 +56,7 @@ struct InspectPanelFileBrowser: View {
                     ForEach(viewModel.visibleRows) { node in
                         InspectPanelFileRow(
                             node: node,
-                            depth: depth(of: node),
+                            depth: node.depth,
                             isExpanded: viewModel.expandedPaths.contains(node.id),
                             isSelected: viewModel.selectedPath == node.id,
                             status: viewModel.statusByRelativePath[node.relativePath],

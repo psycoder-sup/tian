@@ -20,3 +20,14 @@ final class InspectPanelState {
         min(max(proposed, Self.minWidth), Self.maxWidth)
     }
 }
+
+extension InspectPanelState {
+    /// Restores an `InspectPanelState` from persisted optional values,
+    /// applying defaults when either field was absent in older schema versions.
+    static func restore(visible: Bool?, width: Double?) -> InspectPanelState {
+        InspectPanelState(
+            isVisible: visible ?? true,
+            width: width.map { CGFloat($0) } ?? InspectPanelState.defaultWidth
+        )
+    }
+}

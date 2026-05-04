@@ -9,7 +9,7 @@ import OSLog
 ///
 /// Trailing debounce coalesces event storms into a single callback per quiet
 /// window (default 250 ms) — necessary because dev servers can emit 100+ events
-/// per second (plan §6 risk).
+/// per second.
 ///
 /// Thread safety: All mutable state is guarded by `queue`. The FSEventStream
 /// callback fires on `queue`, debounce work runs on `queue`, and `stop()`

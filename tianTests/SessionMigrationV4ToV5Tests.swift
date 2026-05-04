@@ -79,23 +79,11 @@ struct SessionMigrationV4ToV5Tests {
 
     // PRD §7 — runtime restorer applies defaults when fields are nil.
     @MainActor
-    @Test func runtimeAppliesDefaultsForNilInspectPanelFields() throws {
-        let wsState = WorkspaceState(
-            id: UUID(),
-            name: "test",
-            activeSpaceId: UUID(),
-            defaultWorkingDirectory: nil,
-            spaces: [],
-            windowFrame: nil,
-            isFullscreen: nil,
-            inspectPanelVisible: nil,
-            inspectPanelWidth: nil
-        )
-
-        // Simulate runtime default application via Workspace.from(state:).
-        let workspace = Workspace.from(workspaceState: wsState)
-        #expect(workspace.inspectPanelState.isVisible == true)
-        #expect(workspace.inspectPanelState.width == InspectPanelState.defaultWidth)
+    @Test func runtimeAppliesDefaultsForNilInspectPanelFields() {
+        // Verify InspectPanelState.restore applies correct defaults when both fields are nil.
+        let state = InspectPanelState.restore(visible: nil, width: nil)
+        #expect(state.isVisible == true)
+        #expect(state.width == InspectPanelState.defaultWidth)
     }
 
     // PRD §7 — v5 round-trip: encode non-default values, decode, verify preservation.

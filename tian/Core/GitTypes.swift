@@ -32,12 +32,6 @@ struct GitRepoStatus: Sendable, Equatable {
             && lhs.prStatus == rhs.prStatus
     }
 
-    /// True when every observable field except `lastUpdated` matches `other`.
-    /// Used to skip Observable writes that would re-render the sidebar with
-    /// no visible change (FSEvents fires constantly during builds).
-    func contentMatches(_ other: GitRepoStatus) -> Bool {
-        self == other
-    }
 }
 
 struct GitDiffSummary: Sendable, Equatable {
