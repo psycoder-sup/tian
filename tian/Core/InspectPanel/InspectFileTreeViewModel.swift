@@ -3,8 +3,8 @@ import Observation
 import SwiftUI
 
 /// Test seam: anything that can produce a path list given a working tree or
-/// filesystem root. The default `.live` value forwards to `InspectFileScanner`.
-/// Tests inject blocking / fixed-result implementations.
+/// filesystem root. The default `LiveInspectFileScanner` forwards to
+/// `InspectFileScanner`. Tests inject blocking / fixed-result implementations.
 protocol InspectFileScanning: Sendable {
     func scanGitTracked(workingTree: String) async throws -> [String]
     func scanFileSystem(root: URL) async throws -> [String]
@@ -40,23 +40,100 @@ final class InspectFileTreeViewModel {
 
     /// Switches the tree to a new root. Any in-flight scan for the previous
     /// root is cancelled (FR-28a). Pass `nil` to enter the empty state.
-    func setRoot(_ url: URL?) {}
+    func setRoot(_ url: URL?) {
+        // Cancel previous scan + slow-flag timer (FR-28a).
+        scanTask?.cancel()
+        scanTask = nil
+        slowFlagTask?.cancel()
+        slowFlagTask = nil
+        isInitialScanSlow = false
+
+        // Tear down old watcher.
+        watcher?.stop()
+        watcher = nil
+
+        rootDirectory = url
+
+        guard let url else {
+            // Empty state.
+            allNodes = []
+            childrenByParent = [:]
+            visibleRows = []
+            worktreeKind = .noWorkingDirectory
+            isInitialScanInFlight = false
+            hasContent = false
+            return
+        }
+
+        isInitialScanInFlight = true
+
+        // Slow-flag timer: flips after `slowFlagDelay` if we're still in flight.
+        let slowDelay = slowFlagDelay
+        slowFlagTask = Task { [weak self] in
+            try? await Task.sleep(for: slowDelay)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                if self.isInitialScanInFlight {
+                    self.isInitialScanSlow = true
+                }
+            }
+        }
+
+        // Scan task. Keep the URL captured so `runScan` knows what root we
+        // expected — protects against races where `setRoot` is called again
+        // before our task completes.
+        let target = url
+        let scanner = self.scanner
+        let classify = self.classify
+        scanTask = Task { [weak self] in
+            await self?.runScan(url: target, scanner: scanner, classify: classify)
+        }
+    }
 
     /// Toggles directory expansion (FR-13).
-    func toggle(_ path: String) {}
+    func toggle(_ path: String) {
+        if expandedPaths.contains(path) {
+            expandedPaths.remove(path)
+        } else {
+            expandedPaths.insert(path)
+        }
+        recomputeVisibleRows()
+    }
 
     /// Updates the row selection (FR-23).
-    func select(_ path: String?) {}
+    func select(_ path: String?) {
+        selectedPath = path
+    }
 
     /// Pushes a fresh `git status` result into the tree so badges re-render.
-    func updateStatus(_ files: [GitChangedFile]) {}
+    /// FR-21: directory rows do NOT receive a badge — the map only holds
+    /// file paths. FR-19b: rename's `path` is the new path; we set R there.
+    /// (Old-path "D if still present" requires upstream parser changes; with
+    /// today's `GitChangedFile` shape we only see the new path.)
+    func updateStatus(_ files: [GitChangedFile]) {
+        var map: [String: GitFileStatus] = [:]
+        for file in files {
+            map[file.path] = file.status
+        }
+        statusByRelativePath = map
+    }
 
     /// Tears down the watcher and cancels the scan (called on workspace close).
-    func teardown() {}
+    func teardown() {
+        scanTask?.cancel()
+        scanTask = nil
+        slowFlagTask?.cancel()
+        slowFlagTask = nil
+        watcher?.stop()
+        watcher = nil
+    }
 
     /// Test affordance: awaits completion of the most recently kicked-off scan.
     /// Returns immediately if no scan is currently in flight.
-    func waitForFirstScan() async {}
+    func waitForFirstScan() async {
+        await scanTask?.value
+    }
 
     /// Test affordance: replaces the scanner. Called between scans when a
     /// test wants subsequent `setRoot`s to use different scanner behavior.
@@ -93,4 +170,226 @@ final class InspectFileTreeViewModel {
     /// this + `expandedPaths` to produce `visibleRows`.
     private var allNodes: [FileTreeNode] = []
     private var childrenByParent: [String: [FileTreeNode]] = [:]
+
+    // MARK: - Scan flow
+
+    private func runScan(
+        url: URL,
+        scanner: InspectFileScanning,
+        classify: @Sendable (String?) async -> WorktreeKind
+    ) async {
+        // Resolve worktree kind first so the panel can render its label even
+        // if the scan is slow.
+        let kind = await classify(url.path)
+
+        // Bail if cancelled while classifying.
+        if Task.isCancelled { return }
+
+        // Pick the right scanner method based on kind.
+        let paths: [String]
+        do {
+            switch kind {
+            case .linkedWorktree, .mainCheckout:
+                paths = try await scanner.scanGitTracked(workingTree: url.path)
+            case .notARepo:
+                paths = try await scanner.scanFileSystem(root: url)
+            case .noWorkingDirectory:
+                paths = []
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            // Treat scan failures as empty results — view will show the empty
+            // state. The error is already logged by the scanner.
+            paths = []
+        }
+
+        // After awaiting the scan, re-check cancellation. A second `setRoot`
+        // landing during the scan must not let us write stale results.
+        if Task.isCancelled { return }
+
+        // Build the tree. Heavy-ish loop, but stays on MainActor — paths come
+        // from a process pipeline (small) or FileManager (already off-main).
+        let (nodes, childrenIndex) = Self.buildNodes(rootPath: url.path, paths: paths)
+
+        // Apply on the main actor.
+        allNodes = nodes
+        childrenByParent = childrenIndex
+        worktreeKind = kind
+
+        // FR-26: clear selection if it points at a path that no longer exists.
+        if let selected = selectedPath, !nodes.contains(where: { $0.id == selected }) {
+            selectedPath = nil
+        }
+
+        // FR-28: prune expanded paths that no longer correspond to a directory
+        // in the tree. (Keeps the set bounded, and matches the spec's "when
+        // those still exist" semantics.)
+        let nodeIDs = Set(nodes.map(\.id))
+        expandedPaths = expandedPaths.intersection(nodeIDs)
+
+        recomputeVisibleRows()
+        hasContent = !visibleRows.isEmpty
+
+        isInitialScanInFlight = false
+        slowFlagTask?.cancel()
+        slowFlagTask = nil
+        isInitialScanSlow = false
+
+        // Start the working-tree watcher so subsequent FS changes refresh.
+        startWatcher(for: url)
+    }
+
+    private func startWatcher(for url: URL) {
+        // Each refresh re-runs `setRoot(url)` for the same root. The
+        // FSEventStream coalesces events; setRoot's own cancel-and-restart
+        // logic handles overlapping triggers.
+        watcher = WorkingTreeWatcher(root: url.path) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard self.rootDirectory == url else { return }
+                self.setRoot(url)
+            }
+        }
+    }
+
+    // MARK: - Tree construction
+
+    /// Builds the unfiltered node list from a flat list of POSIX-relative
+    /// paths. Directories are derived from path prefixes.
+    ///
+    /// Returns:
+    ///   - nodes: every directory + file under root, depth-first ordered with
+    ///            directories-first, alphabetical within each level.
+    ///   - childrenByParent: parent-id → ordered children, used by the
+    ///                       expansion walker in `recomputeVisibleRows()`.
+    private static func buildNodes(
+        rootPath: String,
+        paths: [String]
+    ) -> (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]]) {
+        // Collect directory relative paths (every prefix of every file path).
+        var dirRelative = Set<String>()
+        var fileRelative = Set<String>()
+        for raw in paths {
+            // Defensive: some scanners might emit "" for an empty root —
+            // skip them.
+            guard !raw.isEmpty else { continue }
+            fileRelative.insert(raw)
+            // Each path component except the last contributes a directory.
+            var components = raw.split(separator: "/").map(String.init)
+            _ = components.popLast()
+            var prefix = ""
+            for c in components {
+                prefix = prefix.isEmpty ? c : prefix + "/" + c
+                dirRelative.insert(prefix)
+            }
+        }
+
+        // Build nodes (directories + files), keyed by relativePath.
+        var nodesByRelative: [String: FileTreeNode] = [:]
+        for rel in dirRelative {
+            let node = FileTreeNode(
+                id: absoluteJoin(rootPath, rel),
+                name: lastComponent(rel),
+                kind: .directory(canRead: true),
+                relativePath: rel
+            )
+            nodesByRelative[rel] = node
+        }
+        for rel in fileRelative {
+            let node = FileTreeNode(
+                id: absoluteJoin(rootPath, rel),
+                name: lastComponent(rel),
+                kind: .file(ext: fileExtension(rel)),
+                relativePath: rel
+            )
+            nodesByRelative[rel] = node
+        }
+
+        // Index by parent relative path.
+        var childrenIndex: [String: [FileTreeNode]] = [:]
+        for (rel, node) in nodesByRelative {
+            let parentRel = parentRelative(rel)
+            childrenIndex[parentRel, default: []].append(node)
+        }
+        // Sort each child list: directories first (alphabetical), files
+        // alphabetical.
+        for (k, v) in childrenIndex {
+            childrenIndex[k] = v.sorted(by: nodeOrder)
+        }
+
+        // Depth-first ordered list, starting from root's children.
+        var ordered: [FileTreeNode] = []
+        var stack: [FileTreeNode] = (childrenIndex[""] ?? []).reversed()
+        while let next = stack.popLast() {
+            ordered.append(next)
+            if next.isDirectory, let children = childrenIndex[next.relativePath] {
+                // Push reversed so the stack pops them in order.
+                for child in children.reversed() {
+                    stack.append(child)
+                }
+            }
+        }
+
+        // Re-key childrenIndex by absolute id for consumers (recompute uses
+        // the relative-path index internally so we keep relative keys).
+        // We only return relative-keyed for the recompute step.
+        return (ordered, childrenIndex)
+    }
+
+    private func recomputeVisibleRows() {
+        // Walk the relative-path index from the root's children, prune at
+        // directories not present in `expandedPaths`. The set holds absolute
+        // paths (= node.id), so compare by id.
+        var ordered: [FileTreeNode] = []
+        let rootChildren = childrenByParent[""] ?? []
+        var stack: [FileTreeNode] = rootChildren.reversed()
+        while let next = stack.popLast() {
+            ordered.append(next)
+            if next.isDirectory, expandedPaths.contains(next.id),
+               let children = childrenByParent[next.relativePath] {
+                for child in children.reversed() {
+                    stack.append(child)
+                }
+            }
+        }
+        visibleRows = ordered
+    }
+
+    // MARK: - Helpers
+
+    private static func absoluteJoin(_ root: String, _ relative: String) -> String {
+        if root.hasSuffix("/") { return root + relative }
+        return root + "/" + relative
+    }
+
+    private static func lastComponent(_ relative: String) -> String {
+        if let slash = relative.lastIndex(of: "/") {
+            return String(relative[relative.index(after: slash)...])
+        }
+        return relative
+    }
+
+    private static func parentRelative(_ relative: String) -> String {
+        if let slash = relative.lastIndex(of: "/") {
+            return String(relative[..<slash])
+        }
+        return ""
+    }
+
+    private static func fileExtension(_ relative: String) -> String? {
+        let name = lastComponent(relative)
+        if let dot = name.lastIndex(of: "."), dot != name.startIndex {
+            return String(name[name.index(after: dot)...])
+        }
+        return nil
+    }
+
+    private static func nodeOrder(_ a: FileTreeNode, _ b: FileTreeNode) -> Bool {
+        switch (a.isDirectory, b.isDirectory) {
+        case (true, false): return true
+        case (false, true): return false
+        default: return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
+    }
 }

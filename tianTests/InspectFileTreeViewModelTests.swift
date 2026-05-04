@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import tian
 
@@ -27,7 +28,9 @@ struct InspectFileTreeViewModelTests {
         #expect(vm.statusByRelativePath["README.md"] == nil)
 
         // The matching FileTreeNode has the relativePath used for the lookup.
-        let middleware = vm.visibleRowsContaining(relativePath: "auth/middleware.ts")
+        // (Use the full unfiltered tree — `auth/` is collapsed by default
+        // per FR-13, so its child isn't in visibleRows yet.)
+        let middleware = vm.allNodesContaining(relativePath: "auth/middleware.ts")
         #expect(middleware != nil)
     }
 
@@ -129,6 +132,13 @@ struct InspectFileTreeViewModelTests {
 
         vm.setRoot(URL(filePath: dir1))   // blocks indefinitely
 
+        // Let the first scan task start executing the blocking scanner before
+        // we cancel it. Without this wait the task may still be queued —
+        // cancellation would land at the earlier `Task.isCancelled` guard in
+        // `runScan`, never reaching the scanner where `cancelObserved` flips.
+        try? await pollUntil(timeout: .seconds(2)) { blocking.isRunning }
+        #expect(blocking.isRunning)
+
         // Second setRoot uses a different (non-blocking) scanner. The first
         // scan task must be cancelled. The second scan completes immediately.
         let responsive = FixedScanner(gitTracked: ["alpha.txt", "beta/gamma.txt"])
@@ -142,6 +152,10 @@ struct InspectFileTreeViewModelTests {
         // And the scanner used for dir2 produced visible rows.
         #expect(!vm.visibleRows.isEmpty)
         // The blocked task observed cancellation (didn't deadlock the test).
+        // The cancelled scan runs concurrently; poll briefly until it exits.
+        try? await pollUntil(timeout: .milliseconds(500)) {
+            blocking.cancelObserved
+        }
         #expect(blocking.cancelObserved)
     }
 
@@ -209,16 +223,22 @@ private final class FixedScanner: InspectFileScanning, @unchecked Sendable {
     func scanFileSystem(root: URL) async throws -> [String] { gitTracked }
 }
 
-private final class BlockingScanner: InspectFileScanning, @unchecked Sendable {
-    /// Set to `true` after the blocking scan observes Task cancellation.
-    private(set) var cancelObserved = false
+private final class BlockingScanner: InspectFileScanning, Sendable {
+    private struct State {
+        var isRunning = false
+        var cancelObserved = false
+    }
+    private let state = OSAllocatedUnfairLock<State>(initialState: State())
+    var isRunning: Bool { state.withLock { $0.isRunning } }
+    var cancelObserved: Bool { state.withLock { $0.cancelObserved } }
 
     func scanGitTracked(workingTree: String) async throws -> [String] {
+        state.withLock { $0.isRunning = true }
         // Loop until cancellation. Yield so the runtime can deliver cancel.
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(20))
         }
-        cancelObserved = true
+        state.withLock { $0.cancelObserved = true }
         try Task.checkCancellation()
         return []
     }
@@ -252,5 +272,17 @@ extension InspectFileTreeViewModel {
 private extension String {
     func replacingLastPathComponent() -> String {
         (self as NSString).deletingLastPathComponent
+    }
+}
+
+@MainActor
+private func pollUntil(
+    timeout: Duration,
+    _ condition: @MainActor () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
+        if condition() { return }
+        try await Task.sleep(for: .milliseconds(20))
     }
 }
