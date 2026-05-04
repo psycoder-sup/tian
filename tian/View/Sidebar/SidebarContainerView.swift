@@ -25,6 +25,10 @@ struct SidebarContainerView: View {
     @State private var lastContainerSize: CGSize = .zero
     @State private var nsWindow: NSWindow?
     @State private var announcementsEnabled = false
+    /// In-flight git-status fetch for the inspect panel. Cancelled on space
+    /// switch or when a newer repoStatuses change fires — ensures stale results
+    /// from a previous space never land in the current tree (FR-28a).
+    @State private var inspectGitStatusTask: Task<Void, Never>?
 
     private var displayedSpaceCollection: SpaceCollection? {
         workspaceCollection.activeSpaceCollection
@@ -54,19 +58,10 @@ struct SidebarContainerView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowAccessor(window: $nsWindow))
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { notification in
-            guard let obj = notification.object as? WorkspaceCollection,
-                  obj === workspaceCollection else { return }
-            sidebarState.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .focusSidebar)) { notification in
-            guard let obj = notification.object as? WorkspaceCollection,
-                  obj === workspaceCollection else { return }
-            if !sidebarState.isExpanded {
-                sidebarState.toggle()
-            }
-            sidebarState.focusTarget = .sidebar
-        }
+        .modifier(SidebarNotificationModifier(
+            workspaceCollection: workspaceCollection,
+            sidebarState: sidebarState
+        ))
         .onChange(of: sidebarState.focusTarget) { _, newTarget in
             if newTarget == .terminal {
                 returnFocusToTerminal()
@@ -80,22 +75,21 @@ struct SidebarContainerView: View {
                 AccessibilityNotification.Announcement("Workspace: \(name)").post()
             }
             updateInspectPanelRoot()
+            refreshInspectPanelStatus()
         }
         .onChange(of: displayedSpaceCollection?.activeSpaceID) { _, _ in
             if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.name {
                 AccessibilityNotification.Announcement("Space: \(name)").post()
             }
             updateInspectPanelRoot()
+            refreshInspectPanelStatus()
         }
-        .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
-            updateInspectPanelRoot()
-        }
-        .onChange(of: activeSpace?.worktreePath) { _, _ in
-            updateInspectPanelRoot()
-        }
-        .onChange(of: activeWorkspace?.defaultWorkingDirectory) { _, _ in
-            updateInspectPanelRoot()
-        }
+        .modifier(InspectPanelWiringModifier(
+            activeSpace: activeSpace,
+            activeWorkspace: activeWorkspace,
+            updateRoot: updateInspectPanelRoot,
+            refreshStatus: refreshInspectPanelStatus
+        ))
         .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
             if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.displayName {
                 AccessibilityNotification.Announcement("Tab: \(name)").post()
@@ -103,6 +97,7 @@ struct SidebarContainerView: View {
         }
         .task {
             updateInspectPanelRoot()
+            refreshInspectPanelStatus()
             try? await Task.sleep(for: .milliseconds(500))
             announcementsEnabled = true
         }
@@ -159,6 +154,47 @@ struct SidebarContainerView: View {
         let newRoot = workspace.inspectPanelRoot(for: activeSpace)
         if workspace.inspectFileTreeViewModel.rootDirectory != newRoot {
             workspace.inspectFileTreeViewModel.setRoot(newRoot)
+        }
+    }
+
+    /// Fetches the full (uncapped) git diff for the active space's root and
+    /// pushes the result into the inspect panel view model so file badges
+    /// reflect the current git status (FR-19, FR-27).
+    ///
+    /// FR-22: Directories with no git repo skip the fetch; `updateStatus([])` is
+    /// called to ensure stale badges from a previous space are cleared.
+    ///
+    /// Cancels any in-flight fetch before launching a new one so stale results
+    /// from a slow git invocation never overwrite fresher data (FR-28a).
+    private func refreshInspectPanelStatus() {
+        guard let workspace = activeWorkspace else { return }
+        let viewModel = workspace.inspectFileTreeViewModel
+
+        // Resolved root for the current space — must match what the file tree shows.
+        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+            // No root at all: clear any lingering badges and bail.
+            viewModel.updateStatus([])
+            return
+        }
+
+        // FR-22: if the active space has no pinned git repos, the root is not
+        // inside a git repo. Skip the fetch and clear any stale badges so the
+        // tree renders without badges, matching the "local" context-suffix state.
+        let hasRepo = !(activeSpace?.gitContext.repoStatuses.isEmpty ?? true)
+        guard hasRepo else {
+            viewModel.updateStatus([])
+            return
+        }
+
+        // Cancel the previous in-flight fetch before starting a new one.
+        inspectGitStatusTask?.cancel()
+        let rootPath = root.path
+        inspectGitStatusTask = Task { [weak viewModel] in
+            let result = await GitStatusService.diffStatusFull(directory: rootPath)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                viewModel?.updateStatus(result.files)
+            }
         }
     }
 
@@ -238,6 +274,73 @@ struct SidebarContainerView: View {
               let space = spaceCollection.activeSpace,
               let tab = space.activeTab else { return }
         tab.paneViewModel.containerSize = size
+    }
+}
+
+// MARK: - Sidebar Notification Modifier
+
+/// Breaks out the two `onReceive` Notification handlers from the main body so
+/// Swift's type checker doesn't time out on the long modifier chain.
+private struct SidebarNotificationModifier: ViewModifier {
+    let workspaceCollection: WorkspaceCollection
+    let sidebarState: SidebarState
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { notification in
+                guard let obj = notification.object as? WorkspaceCollection,
+                      obj === workspaceCollection else { return }
+                sidebarState.toggle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .focusSidebar)) { notification in
+                guard let obj = notification.object as? WorkspaceCollection,
+                      obj === workspaceCollection else { return }
+                if !sidebarState.isExpanded {
+                    sidebarState.toggle()
+                }
+                sidebarState.focusTarget = .sidebar
+            }
+    }
+}
+
+// MARK: - Inspect Panel Wiring Modifier
+
+/// Wires the inspect panel's root + status refresh triggers into a separate
+/// ViewModifier so the main body stays within Swift's type-check budget.
+///
+/// Handles:
+///   - `activeSpace?.defaultWorkingDirectory` changes
+///   - `activeSpace?.worktreePath` changes
+///   - `activeWorkspace?.defaultWorkingDirectory` changes
+///   - `activeSpace?.gitContext.repoStatuses` changes (FR-27 badge refresh)
+private struct InspectPanelWiringModifier: ViewModifier {
+    let activeSpace: SpaceModel?
+    let activeWorkspace: Workspace?
+    let updateRoot: () -> Void
+    let refreshStatus: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
+                updateRoot()
+                refreshStatus()
+            }
+            .onChange(of: activeSpace?.worktreePath) { _, _ in
+                updateRoot()
+                refreshStatus()
+            }
+            .onChange(of: activeWorkspace?.defaultWorkingDirectory) { _, _ in
+                updateRoot()
+                refreshStatus()
+            }
+            // FR-27: badges refresh within 1 s of git status changes. `repoStatuses`
+            // is the @Observable property on SpaceGitContext that the FSEvents watcher
+            // + RefreshScheduler update after every debounced git-status run. When it
+            // changes for the active space we fetch the full (uncapped) diff and push
+            // it into the view model so every changed file in the tree gets a badge.
+            .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
+                refreshStatus()
+            }
     }
 }
 
