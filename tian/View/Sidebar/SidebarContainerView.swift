@@ -30,6 +30,14 @@ struct SidebarContainerView: View {
         workspaceCollection.activeSpaceCollection
     }
 
+    private var activeWorkspace: Workspace? {
+        workspaceCollection.activeWorkspace
+    }
+
+    private var activeSpace: SpaceModel? {
+        displayedSpaceCollection?.activeSpace
+    }
+
     /// Leading inset that reserves room for the traffic lights + sidebar
     /// toggle when the sidebar is collapsed, and matches the sidebar width
     /// when expanded. 104pt = 80pt traffic-light gutter + 6pt HStack spacing
@@ -40,25 +48,9 @@ struct SidebarContainerView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if sidebarState.isExpanded {
-                SidebarPanelView(
-                    workspaceCollection: workspaceCollection,
-                    worktreeOrchestrator: worktreeOrchestrator,
-                    sidebarState: sidebarState
-                )
-                .frame(width: sidebarState.mode.width)
-            }
-
-            spaceContentStack
-                .padding(.leading, toggleGutterWidth)
-                .padding(.bottom, bottomContentInset)
-
-            HStack(spacing: 6) {
-                Color.clear.frame(width: 80)
-                SidebarToggleButton(workspaceCollection: workspaceCollection)
-            }
-            .frame(width: toggleGutterWidth, height: 44, alignment: .leading)
+        HStack(spacing: 0) {
+            sidebarAndContent
+            inspectColumn
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowAccessor(window: $nsWindow))
@@ -87,11 +79,22 @@ struct SidebarContainerView: View {
             if announcementsEnabled, let name = workspaceCollection.activeWorkspace?.name {
                 AccessibilityNotification.Announcement("Workspace: \(name)").post()
             }
+            updateInspectPanelRoot()
         }
         .onChange(of: displayedSpaceCollection?.activeSpaceID) { _, _ in
             if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.name {
                 AccessibilityNotification.Announcement("Space: \(name)").post()
             }
+            updateInspectPanelRoot()
+        }
+        .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
+            updateInspectPanelRoot()
+        }
+        .onChange(of: activeSpace?.worktreePath) { _, _ in
+            updateInspectPanelRoot()
+        }
+        .onChange(of: activeWorkspace?.defaultWorkingDirectory) { _, _ in
+            updateInspectPanelRoot()
         }
         .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
             if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.displayName {
@@ -99,8 +102,63 @@ struct SidebarContainerView: View {
             }
         }
         .task {
+            updateInspectPanelRoot()
             try? await Task.sleep(for: .milliseconds(500))
             announcementsEnabled = true
+        }
+    }
+
+    // MARK: - Layout
+
+    private var sidebarAndContent: some View {
+        ZStack(alignment: .topLeading) {
+            if sidebarState.isExpanded {
+                SidebarPanelView(
+                    workspaceCollection: workspaceCollection,
+                    worktreeOrchestrator: worktreeOrchestrator,
+                    sidebarState: sidebarState
+                )
+                .frame(width: sidebarState.mode.width)
+            }
+
+            spaceContentStack
+                .padding(.leading, toggleGutterWidth)
+                .padding(.bottom, bottomContentInset)
+
+            HStack(spacing: 6) {
+                Color.clear.frame(width: 80)
+                SidebarToggleButton(workspaceCollection: workspaceCollection)
+            }
+            .frame(width: toggleGutterWidth, height: 44, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var inspectColumn: some View {
+        if let workspace = activeWorkspace {
+            if workspace.inspectPanelState.isVisible {
+                InspectPanelView(
+                    panelState: workspace.inspectPanelState,
+                    viewModel: workspace.inspectFileTreeViewModel,
+                    spaceName: activeSpace?.name ?? workspace.name
+                )
+            } else {
+                InspectPanelRail {
+                    workspace.inspectPanelState.isVisible = true
+                }
+            }
+        }
+    }
+
+    /// Re-roots the workspace's inspect file tree to the active space's
+    /// resolved working directory (FR-10). Called whenever the active
+    /// workspace, active space, or either's working directory changes.
+    private func updateInspectPanelRoot() {
+        guard let workspace = activeWorkspace else { return }
+        let newRoot = workspace.inspectPanelRoot(for: activeSpace)
+        if workspace.inspectFileTreeViewModel.rootDirectory != newRoot {
+            workspace.inspectFileTreeViewModel.setRoot(newRoot)
         }
     }
 
