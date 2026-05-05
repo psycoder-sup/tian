@@ -68,6 +68,19 @@ enum GitFileStatus: String, Sendable {
 
     var letter: String { rawValue }
 
+    /// Used when aggregating descendant statuses onto a directory row.
+    /// Higher value = more attention-grabbing; the highest among descendants
+    /// wins.
+    var severity: Int {
+        switch self {
+        case .unmerged: 5
+        case .modified: 4
+        case .renamed:  3
+        case .deleted:  2
+        case .added:    1
+        }
+    }
+
     var color: Color {
         switch self {
         case .modified: .yellow

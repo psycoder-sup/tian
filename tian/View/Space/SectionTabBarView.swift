@@ -81,11 +81,11 @@ struct SectionTabBarView: View {
             Button(action: onNewTab) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
             }
             .buttonStyle(.plain)
-            .frame(width: 28, height: 28)
-            .glassEffect(.regular, in: .circle)
+            .frame(width: 32, height: 32)
+            .liquidGlassCircle()
             .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
 
             if let trailingToolbar {

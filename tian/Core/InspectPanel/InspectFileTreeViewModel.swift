@@ -105,14 +105,30 @@ final class InspectFileTreeViewModel {
     }
 
     /// Pushes a fresh `git status` result into the tree so badges re-render.
-    /// FR-21: directory rows do NOT receive a badge — the map only holds
-    /// file paths. FR-19b: rename's `path` is the new path; we set R there.
-    /// (Old-path "D if still present" requires upstream parser changes; with
-    /// today's `GitChangedFile` shape we only see the new path.)
+    /// File paths receive their explicit status; ancestor directories inherit
+    /// the highest-severity status among their descendants
+    /// (`GitFileStatus.severity`). FR-19b: rename's `path` is the new path;
+    /// we set R there. (Old-path "D if still present" requires upstream parser
+    /// changes; with today's `GitChangedFile` shape we only see the new path.)
     func updateStatus(_ files: [GitChangedFile]) {
         var map: [String: GitFileStatus] = [:]
         for file in files {
             map[file.path] = file.status
+
+            // Propagate to every ancestor directory of this file.
+            var components = file.path.split(separator: "/").map(String.init)
+            _ = components.popLast()
+            var prefix = ""
+            for c in components {
+                prefix = prefix.isEmpty ? c : prefix + "/" + c
+                if let existing = map[prefix] {
+                    if file.status.severity > existing.severity {
+                        map[prefix] = file.status
+                    }
+                } else {
+                    map[prefix] = file.status
+                }
+            }
         }
         statusByRelativePath = map
     }

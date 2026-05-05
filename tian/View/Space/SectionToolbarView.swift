@@ -37,11 +37,11 @@ struct SectionToolbarView: View {
                   ? "rectangle.righthalf.inset.filled"
                   : "rectangle.righthalf.inset.filled.arrow.right")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
         }
         .buttonStyle(.plain)
-        .frame(width: 28, height: 28)
-        .glassEffect(.regular, in: .circle)
+        .frame(width: 32, height: 32)
+        .liquidGlassCircle()
         .disabled(isDragging)
         .opacity(isDragging ? 0.5 : 1.0)
         .help(isDragging
@@ -83,14 +83,14 @@ struct SectionToolbarView: View {
                 Label("Reset Terminal Section", systemImage: "arrow.counterclockwise")
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 28, height: 28)
-        .glassEffect(.regular, in: .circle)
+        .frame(width: 32, height: 32)
+        .liquidGlassCircle()
         .disabled(isDragging)
         .opacity(isDragging ? 0.5 : 1.0)
         .help(isDragging ? "Release divider to switch dock" : "Terminal section options")

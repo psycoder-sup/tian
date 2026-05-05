@@ -88,9 +88,7 @@ struct InspectPanelFileRow: View {
     // MARK: - Accessibility label (FR-36)
 
     private var accessibilityLabelText: String {
-        guard !node.isDirectory, let status else {
-            return node.name
-        }
+        guard let status else { return node.name }
         return "\(node.name), \(status.accessibilityLabel)"
     }
 
@@ -145,8 +143,9 @@ struct InspectPanelFileRow: View {
 
             Spacer(minLength: 4)
 
-            // Status badge (FR-19 / FR-21: directories excluded)
-            if !node.isDirectory, let status, let color = badgeColor {
+            // Status badge (FR-19). Directories inherit the highest-severity
+            // status of their descendants.
+            if let status, let color = badgeColor {
                 Text(status.letter)
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .foregroundStyle(color)

@@ -63,9 +63,9 @@ struct InspectFileTreeViewModelTests {
         #expect(vm.statusByRelativePath["untouched.txt"] == nil)
     }
 
-    // MARK: - FR-21 — directory rows have no badge
+    // MARK: - Directory rows inherit descendant status
 
-    @Test func directoryRowsHaveNoBadge() async {
+    @Test func directoryInheritsDescendantStatus() async {
         let scanner = FixedScanner(gitTracked: ["auth/middleware.ts", "auth/tokens.ts"])
         let vm = InspectFileTreeViewModel(
             scanner: scanner,
@@ -80,10 +80,37 @@ struct InspectFileTreeViewModelTests {
             GitChangedFile(status: .modified, path: "auth/middleware.ts")
         ])
 
-        // The directory `auth` does not appear in statusByRelativePath even
-        // though its descendant is modified.
-        #expect(vm.statusByRelativePath["auth"] == nil)
-        #expect(vm.statusByRelativePath["auth/"] == nil)
+        // Directory `auth` inherits its descendant's status.
+        #expect(vm.statusByRelativePath["auth"] == .modified)
+    }
+
+    @Test func directoryStatusUsesHighestSeverity() async {
+        let scanner = FixedScanner(gitTracked: [
+            "src/feature/added.ts",
+            "src/feature/changed.ts",
+            "src/other/new.ts",
+        ])
+        let vm = InspectFileTreeViewModel(
+            scanner: scanner,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+
+        vm.setRoot(URL(filePath: "/tmp/fake-root"))
+        await vm.waitForFirstScan()
+
+        // src/feature has both A and M descendants; M outranks A.
+        // src/other has only A.
+        vm.updateStatus([
+            GitChangedFile(status: .added,    path: "src/feature/added.ts"),
+            GitChangedFile(status: .modified, path: "src/feature/changed.ts"),
+            GitChangedFile(status: .added,    path: "src/other/new.ts"),
+        ])
+
+        #expect(vm.statusByRelativePath["src/feature"] == .modified)
+        #expect(vm.statusByRelativePath["src/other"] == .added)
+        // src has both A and M descendants; should resolve to M.
+        #expect(vm.statusByRelativePath["src"] == .modified)
     }
 
     // MARK: - FR-23 / FR-26 — selection clears when path disappears
