@@ -11,7 +11,7 @@ struct GitRepoID: Hashable, Sendable {
 
 // MARK: - Status
 
-struct GitRepoStatus: Sendable {
+struct GitRepoStatus: Sendable, Equatable {
     let repoID: GitRepoID
     var branchName: String?
     var isDetachedHead: Bool
@@ -20,17 +20,18 @@ struct GitRepoStatus: Sendable {
     var prStatus: PRStatus?
     var lastUpdated: Date
 
-    /// True when every observable field except `lastUpdated` matches `other`.
-    /// Used to skip Observable writes that would re-render the sidebar with
-    /// no visible change (FSEvents fires constantly during builds).
-    func contentMatches(_ other: GitRepoStatus) -> Bool {
-        repoID == other.repoID
-            && branchName == other.branchName
-            && isDetachedHead == other.isDetachedHead
-            && diffSummary == other.diffSummary
-            && changedFiles == other.changedFiles
-            && prStatus == other.prStatus
+    /// Equality intentionally excludes `lastUpdated` so that a no-op refresh
+    /// (same content, newer timestamp) does not trigger Observable re-renders
+    /// or SwiftUI `.onChange` callbacks.
+    static func == (lhs: GitRepoStatus, rhs: GitRepoStatus) -> Bool {
+        lhs.repoID == rhs.repoID
+            && lhs.branchName == rhs.branchName
+            && lhs.isDetachedHead == rhs.isDetachedHead
+            && lhs.diffSummary == rhs.diffSummary
+            && lhs.changedFiles == rhs.changedFiles
+            && lhs.prStatus == rhs.prStatus
     }
+
 }
 
 struct GitDiffSummary: Sendable, Equatable {

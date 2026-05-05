@@ -20,6 +20,32 @@ struct WorkspaceState: Codable, Sendable, Equatable {
     let spaces: [SpaceState]
     let windowFrame: WindowFrame?
     let isFullscreen: Bool?
+    /// Added in schema v5. Optional so v4 records decode without migration.
+    /// Defaults applied at runtime: visible = true, width = 320.
+    let inspectPanelVisible: Bool?
+    let inspectPanelWidth: Double?
+
+    init(
+        id: UUID,
+        name: String,
+        activeSpaceId: UUID,
+        defaultWorkingDirectory: String?,
+        spaces: [SpaceState],
+        windowFrame: WindowFrame?,
+        isFullscreen: Bool?,
+        inspectPanelVisible: Bool? = nil,
+        inspectPanelWidth: Double? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.activeSpaceId = activeSpaceId
+        self.defaultWorkingDirectory = defaultWorkingDirectory
+        self.spaces = spaces
+        self.windowFrame = windowFrame
+        self.isFullscreen = isFullscreen
+        self.inspectPanelVisible = inspectPanelVisible
+        self.inspectPanelWidth = inspectPanelWidth
+    }
 }
 
 // MARK: - Window Frame

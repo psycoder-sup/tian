@@ -158,7 +158,9 @@ enum SessionRestorer {
                 defaultWorkingDirectory: resolveDirectory(workspace.defaultWorkingDirectory),
                 spaces: validatedSpaces,
                 windowFrame: workspace.windowFrame,
-                isFullscreen: workspace.isFullscreen
+                isFullscreen: workspace.isFullscreen,
+                inspectPanelVisible: workspace.inspectPanelVisible,
+                inspectPanelWidth: workspace.inspectPanelWidth
             )
         }
         metrics.workspaceCount = validatedWorkspaces.count
@@ -209,11 +211,16 @@ enum SessionRestorer {
                 workspaceDefaultDirectory: wdURL
             )
 
+            let inspectPanelState = InspectPanelState.restore(
+                visible: ws.inspectPanelVisible,
+                width: ws.inspectPanelWidth
+            )
             return Workspace(
                 id: ws.id,
                 name: ws.name,
                 defaultWorkingDirectory: wdURL,
-                spaceCollection: spaceCollection
+                spaceCollection: spaceCollection,
+                inspectPanelState: inspectPanelState
             )
         }
 

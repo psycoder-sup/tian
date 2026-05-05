@@ -208,6 +208,28 @@ struct GitStatusServiceTests {
         #expect(result.summary.totalCount == 150)
     }
 
+    // MARK: - diffStatusFull
+
+    @Test func diffStatusFullReturnsAllFilesUncapped() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        for i in 1...150 {
+            let path = (repo as NSString).appendingPathComponent("file_\(String(format: "%03d", i)).txt")
+            try "content".write(toFile: path, atomically: true, encoding: .utf8)
+        }
+
+        let full = await GitStatusService.diffStatusFull(directory: repo)
+        #expect(full.files.count == 150)
+        #expect(full.summary.added == 150)
+        #expect(full.summary.totalCount == 150)
+
+        // Confirm the capped variant is still capped
+        let capped = await GitStatusService.diffStatus(directory: repo)
+        #expect(capped.files.count == 100)
+        #expect(capped.summary.added == 150)
+    }
+
     // MARK: - fetchPRStatus
 
     @Test func fetchPRStatusReturnsNilForNonGitDir() async throws {

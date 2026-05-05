@@ -2,12 +2,14 @@ import Foundation
 import Observation
 
 /// Serializable snapshot of a workspace's persisted fields.
-/// Used for encoding (M4) and will be extended for full persistence in M5.
 struct WorkspaceSnapshot: Sendable, Codable {
     let id: UUID
     let name: String
     let defaultWorkingDirectory: URL?
     let createdAt: Date
+    /// Added in schema v5. Optional for back-compat with older snapshots.
+    let inspectPanelVisible: Bool?
+    let inspectPanelWidth: Double?
 }
 
 /// The top-level organizational unit in tian's 4-level hierarchy
@@ -27,6 +29,15 @@ final class Workspace: Identifiable {
 
     let spaceCollection: SpaceCollection
 
+    /// Inspect panel visibility and width for this workspace's window.
+    let inspectPanelState: InspectPanelState
+
+    /// Workspace-scoped file tree view model for the inspect panel.
+    /// Kept alive for the workspace lifetime so reopening the rail is
+    /// instant — only `setRoot(_:)` is re-called when the active space
+    /// changes. Torn down via `cleanup()` on workspace close.
+    let inspectFileTreeViewModel: InspectFileTreeViewModel
+
     /// Called when the workspace's last space is closed.
     var onEmpty: (() -> Void)?
 
@@ -37,7 +48,8 @@ final class Workspace: Identifiable {
             id: UUID(),
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
-            createdAt: Date()
+            createdAt: Date(),
+            inspectPanelState: InspectPanelState()
         )
     }
 
@@ -45,12 +57,15 @@ final class Workspace: Identifiable {
         id: UUID,
         name: String,
         defaultWorkingDirectory: URL?,
-        createdAt: Date
+        createdAt: Date,
+        inspectPanelState: InspectPanelState = InspectPanelState()
     ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = createdAt
+        self.inspectPanelState = inspectPanelState
+        self.inspectFileTreeViewModel = InspectFileTreeViewModel()
 
         let workingDir = defaultWorkingDirectory?.path
             ?? ProcessInfo.processInfo.environment["HOME"]
@@ -65,11 +80,19 @@ final class Workspace: Identifiable {
     }
 
     /// Restore a workspace with a pre-built SpaceCollection.
-    init(id: UUID, name: String, defaultWorkingDirectory: URL?, spaceCollection: SpaceCollection) {
+    init(
+        id: UUID,
+        name: String,
+        defaultWorkingDirectory: URL?,
+        spaceCollection: SpaceCollection,
+        inspectPanelState: InspectPanelState = InspectPanelState()
+    ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = Date()
+        self.inspectPanelState = inspectPanelState
+        self.inspectFileTreeViewModel = InspectFileTreeViewModel()
         self.spaceCollection = spaceCollection
         self.spaceCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
         self.spaceCollection.propagateWorkspaceID(id)
@@ -94,6 +117,7 @@ final class Workspace: Identifiable {
     // MARK: - Lifecycle
 
     func cleanup() {
+        inspectFileTreeViewModel.teardown()
         for space in spaceCollection.spaces {
             for tab in space.claudeSection.tabs {
                 tab.cleanup()
@@ -104,6 +128,26 @@ final class Workspace: Identifiable {
         }
     }
 
+    // MARK: - Inspect Panel
+
+    /// Resolves the root directory the inspect panel should display for the
+    /// given space. Per FR-10, the chain is space-level configured working
+    /// directory → workspace's default working directory. Worktree-backed
+    /// spaces (FR-10's "linked worktree") use `worktreePath` as their
+    /// space-level directory. Returns `nil` when neither level has a
+    /// configured directory — the panel renders the FR-18 empty state in
+    /// that case (no `$HOME` fallback).
+    func inspectPanelRoot(for space: SpaceModel?) -> URL? {
+        guard let space else { return defaultWorkingDirectory }
+        if let worktreePath = space.worktreePath {
+            return worktreePath
+        }
+        if let spaceDir = space.defaultWorkingDirectory {
+            return spaceDir
+        }
+        return defaultWorkingDirectory
+    }
+
     // MARK: - Serialization
 
     var snapshot: WorkspaceSnapshot {
@@ -111,16 +155,22 @@ final class Workspace: Identifiable {
             id: id,
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
-            createdAt: createdAt
+            createdAt: createdAt,
+            inspectPanelVisible: inspectPanelState.isVisible,
+            inspectPanelWidth: Double(inspectPanelState.width)
         )
     }
 
     static func from(snapshot: WorkspaceSnapshot) -> Workspace {
-        Workspace(
+        return Workspace(
             id: snapshot.id,
             name: snapshot.name,
             defaultWorkingDirectory: snapshot.defaultWorkingDirectory,
-            createdAt: snapshot.createdAt
+            createdAt: snapshot.createdAt,
+            inspectPanelState: InspectPanelState.restore(
+                visible: snapshot.inspectPanelVisible,
+                width: snapshot.inspectPanelWidth
+            )
         )
     }
 }

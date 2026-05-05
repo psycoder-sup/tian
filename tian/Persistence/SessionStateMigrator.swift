@@ -20,6 +20,10 @@ enum SessionStateMigrator {
         // v2 → v3: Added optional claudeSessionState to PaneLeafState.
         // The field is optional so existing v2 data decodes correctly without transformation.
         2: { json in json },
+        // v4 → v5: Added optional `inspectPanelVisible` and `inspectPanelWidth`
+        // to `WorkspaceState`. Both fields are optional so v4 decodes as nil and
+        // the runtime applies defaults (true / 320) on first load.
+        4: { json in json },
         // v3 → v4: Split flat SpaceState.tabs into (claudeSection, terminalSection).
         // Legacy tabs (all shell, per v3 semantics) move into terminalSection
         // preserving order + PaneLeafState.claudeSessionState. A fresh Claude
