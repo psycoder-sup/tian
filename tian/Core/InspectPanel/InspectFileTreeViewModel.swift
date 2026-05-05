@@ -117,6 +117,20 @@ final class InspectFileTreeViewModel {
         statusByRelativePath = map
     }
 
+    /// Re-runs the scan for the current root WITHOUT flipping
+    /// `isInitialScanInFlight` or restarting the watcher. The existing tree
+    /// stays visible while the rescan runs, so FS-event refreshes don't blink
+    /// the panel back to the Loading… state.
+    func refresh() {
+        guard let url = rootDirectory else { return }
+        scanTask?.cancel()
+        let scanner = self.scanner
+        let classify = self.classify
+        scanTask = Task { [weak self] in
+            await self?.runScan(url: url, scanner: scanner, classify: classify, isRefresh: true)
+        }
+    }
+
     /// Tears down the watcher and cancels the scan (called on workspace close).
     func teardown() {
         scanTask?.cancel()
@@ -178,7 +192,8 @@ final class InspectFileTreeViewModel {
     private func runScan(
         url: URL,
         scanner: InspectFileScanning,
-        classify: @Sendable (String?) async -> WorktreeKind
+        classify: @Sendable (String?) async -> WorktreeKind,
+        isRefresh: Bool = false
     ) async {
         // Resolve worktree kind first so the panel can render its label even
         // if the scan is slow.
@@ -238,24 +253,26 @@ final class InspectFileTreeViewModel {
 
         recomputeVisibleRows()
 
-        isInitialScanInFlight = false
-        slowFlagTask?.cancel()
-        slowFlagTask = nil
-        isInitialScanSlow = false
-
-        // Start the working-tree watcher so subsequent FS changes refresh.
-        startWatcher(for: url)
+        // Initial scans manage the loading flag + watcher; refresh scans leave
+        // both untouched (the tree stays visible during the rescan and the
+        // watcher is already running).
+        if !isRefresh {
+            isInitialScanInFlight = false
+            slowFlagTask?.cancel()
+            slowFlagTask = nil
+            isInitialScanSlow = false
+            startWatcher(for: url)
+        }
     }
 
     private func startWatcher(for url: URL) {
-        // Each refresh re-runs `setRoot(url)` for the same root. The
-        // FSEventStream coalesces events; setRoot's own cancel-and-restart
-        // logic handles overlapping triggers.
+        // Each FS-event burst triggers an in-place `refresh()` — the tree
+        // stays visible while the rescan runs (no Loading… flicker).
         watcher = WorkingTreeWatcher(root: url.path) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard self.rootDirectory == url else { return }
-                self.setRoot(url)
+                self.refresh()
             }
         }
     }

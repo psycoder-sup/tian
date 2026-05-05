@@ -11,6 +11,10 @@ struct InspectPanelFileBrowser: View {
         viewModel.worktreeKind.label?.uppercased() ?? ""
     }
 
+    private var rootName: String {
+        viewModel.rootDirectory?.lastPathComponent ?? spaceName
+    }
+
     private var subheader: some View {
         HStack(spacing: 0) {
             Image(systemName: "folder.fill")
@@ -20,7 +24,7 @@ struct InspectPanelFileBrowser: View {
 
             Spacer().frame(width: 5)
 
-            Text(spaceName)
+            Text(rootName)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(Color.primary.opacity(0.65))
                 .lineLimit(1)

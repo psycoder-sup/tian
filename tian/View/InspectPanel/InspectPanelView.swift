@@ -94,13 +94,15 @@ struct InspectPanelView: View {
         .background(Color.black)
 }
 
-#Preview("Hidden – rail") {
-    HStack(spacing: 0) {
-        Color.gray.opacity(0.2).frame(maxWidth: .infinity)
-        InspectPanelRail(onShow: {})
-    }
-    .frame(height: 600)
-    .background(Color.black)
+#Preview("Hidden – toggle button") {
+    Color.gray.opacity(0.2)
+        .overlay(alignment: .topTrailing) {
+            InspectPanelRail(onShow: {})
+                .padding(.top, 10)
+                .padding(.trailing, 10)
+        }
+        .frame(height: 600)
+        .background(Color.black)
 }
 
 #Preview("Empty – no content") {

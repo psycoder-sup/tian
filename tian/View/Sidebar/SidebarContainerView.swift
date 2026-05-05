@@ -54,6 +54,7 @@ struct SidebarContainerView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebarAndContent
+                .overlay(alignment: .topTrailing) { inspectToggleOverlay }
             inspectColumn
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -131,18 +132,26 @@ struct SidebarContainerView: View {
 
     @ViewBuilder
     private var inspectColumn: some View {
-        if let workspace = activeWorkspace {
-            if workspace.inspectPanelState.isVisible {
-                InspectPanelView(
-                    panelState: workspace.inspectPanelState,
-                    viewModel: workspace.inspectFileTreeViewModel,
-                    spaceName: activeSpace?.name ?? workspace.name
-                )
-            } else {
-                InspectPanelRail {
-                    workspace.inspectPanelState.isVisible = true
-                }
+        if let workspace = activeWorkspace, workspace.inspectPanelState.isVisible {
+            InspectPanelView(
+                panelState: workspace.inspectPanelState,
+                viewModel: workspace.inspectFileTreeViewModel,
+                spaceName: activeSpace?.name ?? workspace.name
+            )
+            .padding(.bottom, bottomContentInset)
+        }
+    }
+
+    /// Floating toggle button shown at top-trailing of the content area when
+    /// the inspect panel is collapsed.
+    @ViewBuilder
+    private var inspectToggleOverlay: some View {
+        if let workspace = activeWorkspace, !workspace.inspectPanelState.isVisible {
+            InspectPanelRail {
+                workspace.inspectPanelState.isVisible = true
             }
+            .padding(.top, 10)
+            .padding(.trailing, 10)
         }
     }
 
