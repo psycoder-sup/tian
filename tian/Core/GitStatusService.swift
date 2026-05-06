@@ -705,6 +705,7 @@ enum GitStatusService {
         // ── Parse for-each-ref: build refName → fullSha and fullSha → [refName] ──
         var refBySha: [String: [String]] = [:]    // fullSha → local branch names
         var remoteRefBySha: [String: [String]] = [:] // fullSha → remote ref names
+        var allRemoteRefNames = Set<String>()         // all remote ref short names (e.g. "origin/beta")
         for line in refResult.stdout.components(separatedBy: "\n") {
             let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
             guard parts.count == 2 else { continue }
@@ -712,6 +713,7 @@ enum GitStatusService {
             let sha = parts[1]
             if refName.hasPrefix("origin/") || refName.contains("/") {
                 remoteRefBySha[sha, default: []].append(refName)
+                allRemoteRefNames.insert(refName)
             } else {
                 refBySha[sha, default: []].append(refName)
             }
@@ -881,13 +883,8 @@ enum GitStatusService {
             for branch in branches {
                 guard !seenIds.contains(branch) else { continue }
                 seenIds.insert(branch)
-                let isTrackedRemote: Bool
-                if let tr = trackedRemote {
-                    // Check if this branch's name matches the remote
-                    isTrackedRemote = (tr == "origin/\(branch)")
-                } else {
-                    isTrackedRemote = false
-                }
+                // A branch has a tracked remote if "origin/<branchName>" exists in the remote refs
+                let isTrackedRemote = allRemoteRefNames.contains("origin/\(branch)")
                 remaining.append(LaneCandidate(
                     id: branch,
                     label: branch,

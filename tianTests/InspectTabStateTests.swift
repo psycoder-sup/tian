@@ -1,6 +1,7 @@
 import Testing
 @testable import tian
 
+@MainActor
 struct InspectTabStateTests {
 
     // MARK: - InspectTab Enum
