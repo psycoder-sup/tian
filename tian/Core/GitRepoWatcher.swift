@@ -94,6 +94,32 @@ final class GitRepoWatcher: @unchecked Sendable {
         return false
     }
 
+    /// True if any event path indicates a local-ref or HEAD change — i.e. a
+    /// commit, branch switch, or `packed-refs` rewrite that invalidates the
+    /// commit graph. Matches paths under `canonicalCommonDir/refs/heads/`,
+    /// `canonicalCommonDir/HEAD`, or `canonicalCommonDir/packed-refs`.
+    ///
+    /// `canonicalCommonDir` must already be resolved via `canonicalizedPath`
+    /// — FSEvents reports paths with macOS firmlinks resolved (e.g.
+    /// `/private/var/folders/...`), while `commonDir` from `git rev-parse`
+    /// keeps the unresolved `/var/folders/...` form. Canonicalizing once at
+    /// watcher construction keeps `realpath(3)` off the FSEvents callback
+    /// hot path.
+    static func pathsAffectBranchGraph(_ paths: [String], canonicalCommonDir: String) -> Bool {
+        let localRefsPrefix = (canonicalCommonDir as NSString)
+            .appendingPathComponent("refs/heads") + "/"
+        let headPath = (canonicalCommonDir as NSString)
+            .appendingPathComponent("HEAD")
+        let packedRefsPath = (canonicalCommonDir as NSString)
+            .appendingPathComponent("packed-refs")
+        for path in paths {
+            if path == headPath || path == packedRefsPath || path.hasPrefix(localRefsPrefix) {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Resolves symlinks and firmlinks via `realpath(3)`. Falls back to the
     /// input if the path can't be resolved (e.g. it was just deleted).
     /// Uses the heap-allocating form (`resolved_name = NULL`) so it doesn't
