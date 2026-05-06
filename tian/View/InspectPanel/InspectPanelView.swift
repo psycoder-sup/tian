@@ -25,21 +25,20 @@ struct InspectPanelView: View {
     // MARK: - Full panel
 
     private var fullPanel: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
+            InspectPanelHeader(
+                spaceName: spaceName,
+                worktreeKind: viewModel.worktreeKind
+            )
+
+            panelBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12, style: .continuous))
+        .padding(4)
+        .overlay(alignment: .leading) {
             InspectPanelResizeHandle(panelState: panelState)
-
-            VStack(spacing: 0) {
-                InspectPanelHeader(
-                    spaceName: spaceName,
-                    worktreeKind: viewModel.worktreeKind
-                )
-
-                panelBody
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .glassEffect(.regular, in: .rect(cornerRadius: 12, style: .continuous))
-            .padding(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 4))
         }
         .frame(width: panelState.width)
         .frame(maxHeight: .infinity)

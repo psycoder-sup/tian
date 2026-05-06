@@ -53,8 +53,8 @@ struct InspectPanelHeader: View {
             spaceLabel
                 .frame(maxWidth: .infinity, alignment: .leading)
             // Trailing space reserved for the floating InspectPanelRail
-            // overlay (rail size 32 + trailing inset 10 + outer glass 4).
-            Color.clear.frame(width: 46, height: 1)
+            // overlay (rail size 22 + trailing inset 10).
+            Color.clear.frame(width: 32, height: 1)
         }
         .padding(.leading, 10)
         .frame(height: Self.height)

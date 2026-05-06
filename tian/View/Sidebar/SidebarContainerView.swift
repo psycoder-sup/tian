@@ -155,9 +155,9 @@ struct SidebarContainerView: View {
     /// Floating inspect-panel toggle. Anchored to the window's top-trailing
     /// corner (overlay on the outer HStack, not on `sidebarAndContent`) so
     /// its absolute position is identical whether the panel is open or
-    /// collapsed. Vertical inset is tuned so the rail's center lines up
-    /// with the section tab bar's 32 pt buttons (tab bar is 48 pt tall →
-    /// button center at y = 24, rail of 32 pt with top inset 8 → center
+    /// collapsed. Vertical inset is tuned so the icon's center lines up
+    /// with the section tab bar's button row (tab bar is 48 pt tall →
+    /// button center at y = 24, icon of 22 pt with top inset 13 → center
     /// at y = 24).
     @ViewBuilder
     private var inspectToggleOverlay: some View {
@@ -172,20 +172,19 @@ struct SidebarContainerView: View {
                     ? "Hide inspect panel"
                     : "Show inspect panel"
             )
-            .padding(.top, 8)
+            .padding(.top, 13)
             .padding(.trailing, 10)
         }
     }
 
     /// Right gutter reserved for the floating inspect-panel rail when the
     /// panel is collapsed, so the section tab bar's trailing toolbar sits
-    /// ~6 pt to the rail's left (matching the in-bar HStack spacing).
-    /// 36 = window-trailing edge → tab bar internal pad (12) + 6 pt gap
-    /// + 32 pt rail width − 10 pt rail trailing inset − 4 pt slack ≈ 36.
+    /// ~6 pt to the rail's left.
+    /// 26 = 22 pt rail width + 10 pt rail trailing inset − 6 pt overlap into pad.
     private var inspectRailGutter: CGFloat {
         guard let workspace = activeWorkspace,
               !workspace.inspectPanelState.isVisible else { return 0 }
-        return 36
+        return 26
     }
 
     /// Inline show/hide-terminal toggle anchored to the bottom-leading
