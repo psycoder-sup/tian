@@ -51,7 +51,8 @@ enum SessionSerializer {
                 windowFrame: windowFrame,
                 isFullscreen: isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelState.isVisible,
-                inspectPanelWidth: Double(workspace.inspectPanelState.width)
+                inspectPanelWidth: Double(workspace.inspectPanelState.width),
+                activeTab: workspace.inspectTabState.activeTab.rawValue
             )
         }
 

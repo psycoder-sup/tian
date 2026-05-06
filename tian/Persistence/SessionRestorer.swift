@@ -160,7 +160,8 @@ enum SessionRestorer {
                 windowFrame: workspace.windowFrame,
                 isFullscreen: workspace.isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelVisible,
-                inspectPanelWidth: workspace.inspectPanelWidth
+                inspectPanelWidth: workspace.inspectPanelWidth,
+                activeTab: workspace.activeTab
             )
         }
         metrics.workspaceCount = validatedWorkspaces.count
@@ -215,12 +216,16 @@ enum SessionRestorer {
                 visible: ws.inspectPanelVisible,
                 width: ws.inspectPanelWidth
             )
+            let initialTab: InspectTab = ws.activeTab
+                .flatMap { InspectTab(rawValue: $0) } ?? .files
+            let inspectTabState = InspectTabState(activeTab: initialTab)
             return Workspace(
                 id: ws.id,
                 name: ws.name,
                 defaultWorkingDirectory: wdURL,
                 spaceCollection: spaceCollection,
-                inspectPanelState: inspectPanelState
+                inspectPanelState: inspectPanelState,
+                inspectTabState: inspectTabState
             )
         }
 

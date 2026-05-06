@@ -107,6 +107,13 @@ struct SidebarContainerView: View {
             updateRoot: updateInspectPanelRoot,
             refreshStatus: refreshInspectPanelStatus
         ))
+        .modifier(InspectPanelTabsWiringModifier(
+            activeSpace: activeSpace,
+            activeWorkspace: activeWorkspace,
+            refreshDiff: refreshInspectPanelDiff,
+            refreshBranch: refreshInspectPanelBranch,
+            wireDiffCollapsePrune: wireDiffCollapsePrune
+        ))
         .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
             if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.displayName {
                 AccessibilityNotification.Announcement("Tab: \(name)").post()
@@ -115,6 +122,9 @@ struct SidebarContainerView: View {
         .task {
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
+            wireDiffCollapsePrune()
+            refreshInspectPanelDiff()
+            refreshInspectPanelBranch()
             try? await Task.sleep(for: .milliseconds(500))
             announcementsEnabled = true
         }
@@ -153,6 +163,7 @@ struct SidebarContainerView: View {
             InspectPanelView(
                 panelState: panelState,
                 viewModel: workspace.inspectFileTreeViewModel,
+                tabState: workspace.inspectTabState,
                 spaceName: activeSpace?.name ?? workspace.name
             )
             // Animated width: 0 when hidden, panelState.width when visible.
@@ -252,6 +263,71 @@ struct SidebarContainerView: View {
             await MainActor.run {
                 viewModel?.updateStatus(result.files)
             }
+        }
+    }
+
+    /// Schedules a refresh of `InspectDiffViewModel` against the active
+    /// space's working directory. Called on space switch, workspace switch,
+    /// and on every `repoStatuses` change (FR-T18 — the view-model handles
+    /// debounce + cancel-on-new). Clears state when the directory has no
+    /// resolvable git repo so stale diffs don't survive a space switch.
+    private func refreshInspectPanelDiff() {
+        guard let workspace = activeWorkspace else { return }
+        let diffVM = workspace.inspectTabState.diffViewModel
+
+        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+            diffVM.scheduleRefresh(directory: nil)
+            return
+        }
+        // FR-T19: outside a git repo, the Diff body shows the no-repo
+        // placeholder. Clear the view-model so we don't show stale data
+        // when the user moves between repo and non-repo spaces.
+        let hasRepo = !(activeSpace?.gitContext.repoStatuses.isEmpty ?? true)
+        guard hasRepo else {
+            diffVM.scheduleRefresh(directory: nil)
+            return
+        }
+        diffVM.scheduleRefresh(directory: root.path)
+    }
+
+    /// Schedules a refresh of `InspectBranchViewModel` against the active
+    /// space's working directory + first pinned repo (FR-T28). Called on
+    /// space/workspace switches and whenever `branchGraphDirty` changes for
+    /// the active space. The Branch view-model clears the dirty flag on
+    /// successful completion.
+    private func refreshInspectPanelBranch() {
+        guard let workspace = activeWorkspace else { return }
+        let branchVM = workspace.inspectTabState.branchViewModel
+
+        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+            branchVM.scheduleRefresh(directory: nil, repoID: nil, in: nil)
+            return
+        }
+        // FR-T19: outside a git repo, render no-repo placeholder.
+        guard let space = activeSpace,
+              let repoID = space.gitContext.pinnedRepoOrder.first else {
+            branchVM.scheduleRefresh(directory: nil, repoID: nil, in: nil)
+            return
+        }
+        branchVM.scheduleRefresh(
+            directory: root.path,
+            repoID: repoID,
+            in: space.gitContext
+        )
+    }
+
+    /// Installs the `onFilesRefreshed` hook on the active workspace's diff
+    /// view-model (FR-T11). After every successful diff refresh, the closure
+    /// prunes `inspectTabState.diffCollapse` to the new file set so collapse
+    /// state for files that disappeared can't leak into a future diff.
+    /// Idempotent — replaces any previously-installed closure.
+    private func wireDiffCollapsePrune() {
+        guard let workspace = activeWorkspace else { return }
+        let tabState = workspace.inspectTabState
+        let diffVM = tabState.diffViewModel
+        diffVM.onFilesRefreshed = { [weak tabState] paths in
+            guard let tabState else { return }
+            tabState.diffCollapse = tabState.diffCollapse.filter { paths.contains($0.key) }
         }
     }
 
@@ -399,6 +475,78 @@ private struct InspectPanelWiringModifier: ViewModifier {
             // it into the view model so every changed file in the tree gets a badge.
             .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
                 refreshStatus()
+            }
+    }
+}
+
+// MARK: - Inspect Panel Tabs Wiring Modifier
+
+/// Wires the Diff and Branch tab view-models to the active space's
+/// `SpaceGitContext` signals. Lifted out of the main body to keep Swift's
+/// type-checker within budget and isolate the per-tab refresh triggers from
+/// the v1 file-tree refresh wiring above.
+///
+/// Handles:
+///   - Active workspace / space changes → re-arm collapse-prune hook +
+///     fire one diff and one branch refresh against the new directory.
+///   - `activeSpace?.gitContext.repoStatuses` (FR-T18) → diff refresh. The
+///     view-model debounces and cancels in-flight diffs internally.
+///   - `activeSpace?.gitContext.branchGraphDirty` (FR-T28) → branch refresh
+///     when the active repo's dirty flag flips on. The view-model clears
+///     the flag on successful completion.
+///   - `activeSpace?.worktreePath` and `activeWorkspace?.defaultWorkingDirectory`
+///     → diff + branch refresh (the resolved root may have changed).
+private struct InspectPanelTabsWiringModifier: ViewModifier {
+    let activeSpace: SpaceModel?
+    let activeWorkspace: Workspace?
+    let refreshDiff: () -> Void
+    let refreshBranch: () -> Void
+    let wireDiffCollapsePrune: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: activeWorkspace?.id) { _, _ in
+                wireDiffCollapsePrune()
+                refreshDiff()
+                refreshBranch()
+            }
+            .onChange(of: activeSpace?.id) { _, _ in
+                refreshDiff()
+                refreshBranch()
+            }
+            .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
+                refreshDiff()
+                refreshBranch()
+            }
+            .onChange(of: activeSpace?.worktreePath) { _, _ in
+                refreshDiff()
+                refreshBranch()
+            }
+            .onChange(of: activeWorkspace?.defaultWorkingDirectory) { _, _ in
+                refreshDiff()
+                refreshBranch()
+            }
+            // FR-T18: every git-status change → diff refresh.
+            .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
+                refreshDiff()
+            }
+            // FR-T28: HEAD / local-ref change → branch refresh.
+            .onChange(of: activeSpace?.gitContext.branchGraphDirty) { _, newValue in
+                guard let newValue,
+                      let space = activeSpace,
+                      let repoID = space.gitContext.pinnedRepoOrder.first,
+                      newValue.contains(repoID)
+                else { return }
+                refreshBranch()
+            }
+            // Tab activation kicker: when the user switches to Branch and we
+            // don't yet have a graph, fire a one-shot fetch. (Diff handles
+            // its own initial load via `refreshDiff` on space switch.)
+            .onChange(of: activeWorkspace?.inspectTabState.activeTab) { _, newTab in
+                guard newTab == .branch,
+                      activeWorkspace?.inspectTabState.branchViewModel.graph == nil
+                else { return }
+                refreshBranch()
             }
     }
 }

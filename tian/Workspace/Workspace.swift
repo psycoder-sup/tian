@@ -10,6 +10,9 @@ struct WorkspaceSnapshot: Sendable, Codable {
     /// Added in schema v5. Optional for back-compat with older snapshots.
     let inspectPanelVisible: Bool?
     let inspectPanelWidth: Double?
+    /// Added in schema v6. Optional for back-compat. Encodes the active
+    /// inspect-panel tab (`InspectTab.rawValue`).
+    let activeTab: String?
 }
 
 /// The top-level organizational unit in tian's 4-level hierarchy
@@ -38,6 +41,12 @@ final class Workspace: Identifiable {
     /// changes. Torn down via `cleanup()` on workspace close.
     let inspectFileTreeViewModel: InspectFileTreeViewModel
 
+    /// Holds the inspect panel's active tab + per-tab view-models
+    /// (Diff / Branch). Lives above SwiftUI so the active tab survives
+    /// space switches and the view-models survive panel hide/show.
+    /// Persisted via `WorkspaceSnapshot.activeTab`.
+    let inspectTabState: InspectTabState
+
     /// Called when the workspace's last space is closed.
     var onEmpty: (() -> Void)?
 
@@ -49,7 +58,8 @@ final class Workspace: Identifiable {
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
             createdAt: Date(),
-            inspectPanelState: InspectPanelState()
+            inspectPanelState: InspectPanelState(),
+            inspectTabState: InspectTabState()
         )
     }
 
@@ -58,13 +68,15 @@ final class Workspace: Identifiable {
         name: String,
         defaultWorkingDirectory: URL?,
         createdAt: Date,
-        inspectPanelState: InspectPanelState = InspectPanelState()
+        inspectPanelState: InspectPanelState = InspectPanelState(),
+        inspectTabState: InspectTabState = InspectTabState()
     ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = createdAt
         self.inspectPanelState = inspectPanelState
+        self.inspectTabState = inspectTabState
         self.inspectFileTreeViewModel = InspectFileTreeViewModel()
 
         let workingDir = defaultWorkingDirectory?.path
@@ -85,13 +97,15 @@ final class Workspace: Identifiable {
         name: String,
         defaultWorkingDirectory: URL?,
         spaceCollection: SpaceCollection,
-        inspectPanelState: InspectPanelState = InspectPanelState()
+        inspectPanelState: InspectPanelState = InspectPanelState(),
+        inspectTabState: InspectTabState = InspectTabState()
     ) {
         self.id = id
         self.name = name
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.createdAt = Date()
         self.inspectPanelState = inspectPanelState
+        self.inspectTabState = inspectTabState
         self.inspectFileTreeViewModel = InspectFileTreeViewModel()
         self.spaceCollection = spaceCollection
         self.spaceCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
@@ -118,6 +132,8 @@ final class Workspace: Identifiable {
 
     func cleanup() {
         inspectFileTreeViewModel.teardown()
+        inspectTabState.diffViewModel.teardown()
+        inspectTabState.branchViewModel.teardown()
         for space in spaceCollection.spaces {
             for tab in space.claudeSection.tabs {
                 tab.cleanup()
@@ -157,11 +173,14 @@ final class Workspace: Identifiable {
             defaultWorkingDirectory: defaultWorkingDirectory,
             createdAt: createdAt,
             inspectPanelVisible: inspectPanelState.isVisible,
-            inspectPanelWidth: Double(inspectPanelState.width)
+            inspectPanelWidth: Double(inspectPanelState.width),
+            activeTab: inspectTabState.activeTab.rawValue
         )
     }
 
     static func from(snapshot: WorkspaceSnapshot) -> Workspace {
+        let initialTab: InspectTab = snapshot.activeTab
+            .flatMap { InspectTab(rawValue: $0) } ?? .files
         return Workspace(
             id: snapshot.id,
             name: snapshot.name,
@@ -170,7 +189,8 @@ final class Workspace: Identifiable {
             inspectPanelState: InspectPanelState.restore(
                 visible: snapshot.inspectPanelVisible,
                 width: snapshot.inspectPanelWidth
-            )
+            ),
+            inspectTabState: InspectTabState(activeTab: initialTab)
         )
     }
 }

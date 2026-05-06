@@ -27,7 +27,8 @@ struct InspectPanelStateTests {
             defaultWorkingDirectory: nil,
             createdAt: Date(),
             inspectPanelVisible: false,
-            inspectPanelWidth: 380
+            inspectPanelWidth: 380,
+            activeTab: nil
         )
 
         let encoder = JSONEncoder()
@@ -50,7 +51,8 @@ struct InspectPanelStateTests {
             defaultWorkingDirectory: nil,
             createdAt: Date(),
             inspectPanelVisible: nil,
-            inspectPanelWidth: nil
+            inspectPanelWidth: nil,
+            activeTab: nil
         )
         let workspace = Workspace.from(snapshot: snapshot)
         #expect(workspace.inspectPanelState.isVisible == true)
@@ -65,7 +67,8 @@ struct InspectPanelStateTests {
             defaultWorkingDirectory: nil,
             createdAt: Date(),
             inspectPanelVisible: false,
-            inspectPanelWidth: 400
+            inspectPanelWidth: 400,
+            activeTab: nil
         )
         let workspace = Workspace.from(snapshot: snapshot)
         #expect(workspace.inspectPanelState.isVisible == false)
