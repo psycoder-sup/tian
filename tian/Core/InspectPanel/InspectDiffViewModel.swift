@@ -27,8 +27,8 @@ final class InspectDiffViewModel {
     var diffService: (String) async -> [GitFileDiff]
 
     /// Invoked after each successful refresh with the set of file paths
-    /// in the new diff. Wiring code (Task 10) prunes
-    /// `InspectTabState.diffCollapse` accordingly.
+    /// in the new diff. The caller prunes `InspectTabState.diffCollapse`
+    /// accordingly.
     var onFilesRefreshed: ((Set<String>) -> Void)?
 
     private var inFlightTask: Task<Void, Never>?

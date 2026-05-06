@@ -302,14 +302,3 @@ private extension String {
     }
 }
 
-@MainActor
-private func pollUntil(
-    timeout: Duration,
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-        if condition() { return }
-        try await Task.sleep(for: .milliseconds(20))
-    }
-}

@@ -10,7 +10,7 @@ import SwiftUI
 /// No-repo / no-data states per FR-T19.
 ///
 /// Data is injected via value types so this view is pure and previewable
-/// without a live view-model. Task 10 will wire real data from
+/// without a live view-model. Callers pass live data from
 /// `InspectDiffViewModel` / `InspectBranchViewModel`.
 struct InspectPanelInfoStrip: View {
     static let height: CGFloat = 26

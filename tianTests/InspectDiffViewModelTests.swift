@@ -16,14 +16,14 @@ struct InspectDiffViewModelTests {
 
         vm.scheduleRefresh(directory: "/tmp/A")
         // Give the debounce time to elapse and the first call to land in the fake.
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
 
         vm.scheduleRefresh(directory: "/tmp/B")
         // Wait for B's debounce to elapse and B's call to register.
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 2 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 2 }
 
         // Wait for the cancellation handler to record A as cancelled.
-        try await pollUntilDiff(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             fake.cancelledDirectories.contains("/tmp/A")
         }
 
@@ -41,7 +41,7 @@ struct InspectDiffViewModelTests {
         fake.releaseAll(with: bFiles)
 
         // Wait for B's result to land.
-        try await pollUntilDiff(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             vm.lastDirectory == "/tmp/B"
         }
 
@@ -72,7 +72,7 @@ struct InspectDiffViewModelTests {
         }
 
         // After the debounce window elapses, exactly one fetch should occur.
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
         // Give a small buffer to make sure no extra fetch sneaks in.
         try await Task.sleep(for: .milliseconds(100))
         #expect(fake.callCount == 1)
@@ -81,7 +81,7 @@ struct InspectDiffViewModelTests {
         // fetch.
         try await Task.sleep(for: .milliseconds(200))
         vm.scheduleRefresh(directory: "/tmp/burst")
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 2 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 2 }
         #expect(fake.callCount == 2)
 
         // Release pending continuations so any in-flight tasks can finish.
@@ -110,7 +110,7 @@ struct InspectDiffViewModelTests {
 
         // First refresh: file is present in the new diff.
         vm.scheduleRefresh(directory: "/tmp/repo")
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
         let presentFiles = [
             GitFileDiff(
                 path: "auth/middleware.ts",
@@ -130,14 +130,14 @@ struct InspectDiffViewModelTests {
             )
         ]
         fake.releaseAll(with: presentFiles)
-        try await pollUntilDiff(timeout: .seconds(2)) { vm.files.count == 2 }
+        try await pollUntil(timeout: .seconds(2)) { vm.files.count == 2 }
 
         // The collapse flag should still be there since the file is still in files.
         #expect(state.diffCollapse["auth/middleware.ts"] == true)
 
         // Second refresh: file disappears from diff.
         vm.scheduleRefresh(directory: "/tmp/repo")
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 2 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 2 }
         let withoutFile = [
             GitFileDiff(
                 path: "other.swift",
@@ -149,7 +149,7 @@ struct InspectDiffViewModelTests {
             )
         ]
         fake.releaseAll(with: withoutFile)
-        try await pollUntilDiff(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             vm.files.count == 1 && state.diffCollapse["auth/middleware.ts"] == nil
         }
 
@@ -167,12 +167,12 @@ struct InspectDiffViewModelTests {
         )
 
         vm.scheduleRefresh(directory: "/tmp/X")
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
 
         vm.teardown()
 
         // Cancellation handler should run for X.
-        try await pollUntilDiff(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             fake.cancelledDirectories.contains("/tmp/X")
         }
         #expect(fake.cancelledDirectories.contains("/tmp/X"))
@@ -204,7 +204,7 @@ struct InspectDiffViewModelTests {
         )
 
         vm.scheduleRefresh(directory: "/tmp/Y")
-        try await pollUntilDiff(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
         fake.releaseAll(with: [
             GitFileDiff(
                 path: "y.swift",
@@ -215,12 +215,12 @@ struct InspectDiffViewModelTests {
                 isBinary: false
             )
         ])
-        try await pollUntilDiff(timeout: .seconds(2)) { vm.lastDirectory == "/tmp/Y" }
+        try await pollUntil(timeout: .seconds(2)) { vm.lastDirectory == "/tmp/Y" }
 
         // Now schedule with nil — should clear state and cancel.
         vm.scheduleRefresh(directory: nil)
 
-        try await pollUntilDiff(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             vm.lastDirectory == nil && vm.files.isEmpty
         }
         #expect(vm.lastDirectory == nil)
@@ -260,19 +260,3 @@ private final class BlockingDiffService {
     }
 }
 
-@MainActor
-private func pollUntilDiff(
-    timeout: Duration,
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-        if condition() { return }
-        try await Task.sleep(for: .milliseconds(10))
-    }
-    if !condition() {
-        throw PollTimeoutError()
-    }
-}
-
-private struct PollTimeoutError: Error {}

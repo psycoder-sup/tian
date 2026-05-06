@@ -354,16 +354,21 @@ enum GitStatusService {
         var fileAdditions = 0
         var fileDeletions = 0
         let lineCapPerFile = 5000
+        // Monotonically increasing IDs for Identifiable conformance.
+        var hunkID = 0
+        var lineID = 0
 
         func flushHunk() {
             guard let header = currentHunkHeader else { return }
             // Overflow = raw lines in this hunk that weren't emitted
             let hunkOverflow = currentHunkRawCount - currentHunkLines.count
             hunks.append(GitDiffHunk(
+                id: hunkID,
                 header: header,
                 lines: currentHunkLines,
                 truncatedLines: max(0, hunkOverflow)
             ))
+            hunkID += 1
             currentHunkHeader = nil
             currentHunkLines = []
             currentHunkRawCount = 0
@@ -518,11 +523,13 @@ enum GitStatusService {
                 }
 
                 currentHunkLines.append(GitDiffLine(
+                    id: lineID,
                     kind: kind,
                     oldLineNumber: oldNum,
                     newLineNumber: newNum,
                     text: text
                 ))
+                lineID += 1
                 totalEmittedLines += 1
             }
             // Lines beyond cap are counted in currentHunkRawCount but not emitted

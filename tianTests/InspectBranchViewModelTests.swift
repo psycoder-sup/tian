@@ -14,7 +14,7 @@ struct InspectBranchViewModelTests {
 
         vm.scheduleRefresh(directory: "/tmp/repo", repoID: nil, in: nil)
 
-        try await pollUntilBranch(timeout: .seconds(2)) { vm.lastDirectory == "/tmp/repo" }
+        try await pollUntil(timeout: .seconds(2)) { vm.lastDirectory == "/tmp/repo" }
         #expect(vm.graph == expected)
         #expect(vm.lastDirectory == "/tmp/repo")
         #expect(vm.isLoadingInitial == false)
@@ -35,7 +35,7 @@ struct InspectBranchViewModelTests {
 
         vm.scheduleRefresh(directory: "/tmp/repo", repoID: repoID, in: host)
 
-        try await pollUntilBranch(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             vm.graph != nil && host.clearedRepos == [repoID]
         }
 
@@ -54,11 +54,11 @@ struct InspectBranchViewModelTests {
         vm.graphService = { dir in await fake.graph(directory: dir) }
 
         vm.scheduleRefresh(directory: "/tmp/repo", repoID: nil, in: nil)
-        try await pollUntilBranch(timeout: .seconds(2)) { fake.callCount == 1 }
+        try await pollUntil(timeout: .seconds(2)) { fake.callCount == 1 }
 
         vm.teardown()
 
-        try await pollUntilBranch(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             fake.cancelledDirectories.contains("/tmp/repo")
         }
 
@@ -77,10 +77,10 @@ struct InspectBranchViewModelTests {
         vm.graphService = { _ in expected }
 
         vm.scheduleRefresh(directory: "/tmp/repo", repoID: nil, in: nil)
-        try await pollUntilBranch(timeout: .seconds(2)) { vm.graph != nil }
+        try await pollUntil(timeout: .seconds(2)) { vm.graph != nil }
 
         vm.scheduleRefresh(directory: nil, repoID: nil, in: nil)
-        try await pollUntilBranch(timeout: .seconds(2)) {
+        try await pollUntil(timeout: .seconds(2)) {
             vm.graph == nil && vm.lastDirectory == nil
         }
         #expect(vm.graph == nil)
@@ -178,19 +178,3 @@ private final class BlockingGraphService {
     }
 }
 
-@MainActor
-private func pollUntilBranch(
-    timeout: Duration,
-    _ condition: @MainActor () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-        if condition() { return }
-        try await Task.sleep(for: .milliseconds(10))
-    }
-    if !condition() {
-        throw PollTimeoutError()
-    }
-}
-
-private struct PollTimeoutError: Error {}

@@ -24,7 +24,7 @@ extension SpaceGitContext: BranchGraphDirtyHost {}
 /// Unlike the Diff tab, refresh is NOT debounced on file events. It is driven
 /// by:
 /// - explicit `scheduleRefresh` calls (tab activation, space switch),
-/// - `branchGraphDirty` transitions wired in by the host (Task 10).
+/// - `branchGraphDirty` transitions signalled by the host.
 ///
 /// Loading state (FR-T26): `isLoadingInitial` is set true only when the
 /// view-model has no graph yet. Subsequent refreshes keep the prior graph

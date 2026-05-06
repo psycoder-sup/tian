@@ -39,7 +39,7 @@ struct GitDiffFileGroup: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                 } else {
-                    ForEach(Array(file.hunks.enumerated()), id: \.offset) { _, hunk in
+                    ForEach(file.hunks) { hunk in
                         hunkBlock(hunk)
                     }
                 }
@@ -104,7 +104,7 @@ struct GitDiffFileGroup: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(red: 59/255, green: 130/255, blue: 246/255).opacity(0.08))
 
-            ForEach(Array(hunk.lines.enumerated()), id: \.offset) { _, line in
+            ForEach(hunk.lines) { line in
                 DiffLineRow(line: line)
             }
 
@@ -215,13 +215,14 @@ struct DiffLineRow: View {
         deletions: 4,
         hunks: [
             GitDiffHunk(
+                id: 0,
                 header: "@@ -10,4 +10,12 @@ struct InspectPanelView",
                 lines: [
-                    GitDiffLine(kind: .context, oldLineNumber: 10, newLineNumber: 10, text: "    var body: some View {"),
-                    GitDiffLine(kind: .deleted, oldLineNumber: 11, newLineNumber: nil, text: "        oldStuff()"),
-                    GitDiffLine(kind: .added, oldLineNumber: nil, newLineNumber: 11, text: "        newStuff()"),
-                    GitDiffLine(kind: .added, oldLineNumber: nil, newLineNumber: 12, text: "        moreStuff()"),
-                    GitDiffLine(kind: .context, oldLineNumber: 12, newLineNumber: 13, text: "    }")
+                    GitDiffLine(id: 0, kind: .context, oldLineNumber: 10, newLineNumber: 10, text: "    var body: some View {"),
+                    GitDiffLine(id: 1, kind: .deleted, oldLineNumber: 11, newLineNumber: nil, text: "        oldStuff()"),
+                    GitDiffLine(id: 2, kind: .added, oldLineNumber: nil, newLineNumber: 11, text: "        newStuff()"),
+                    GitDiffLine(id: 3, kind: .added, oldLineNumber: nil, newLineNumber: 12, text: "        moreStuff()"),
+                    GitDiffLine(id: 4, kind: .context, oldLineNumber: 12, newLineNumber: 13, text: "    }")
                 ],
                 truncatedLines: 0
             )

@@ -4,8 +4,8 @@ import SwiftUI
 ///
 /// Renders a virtualized `LazyVStack` of file groups against the working
 /// tree's current `git diff HEAD` result. The view is purely presentational —
-/// `InspectDiffViewModel` (Task 7) owns the debounced fetch + cancellation
-/// logic, and `InspectTabState` (Task 2) owns the per-file collapse map.
+/// `InspectDiffViewModel` owns the debounced fetch + cancellation logic, and
+/// `InspectTabState` owns the per-file collapse map.
 ///
 /// ScrollViewReader uses the named anchor `"diff-top"` so tab activation can
 /// rebuild scroll position cheaply (FR-T04). The collapse map survives a

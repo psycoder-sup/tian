@@ -17,10 +17,10 @@ struct InspectPanelHeader: View {
     let worktreeKind: WorktreeKind
     /// `true` during initial file-tree scan (FR-T16a — mutes Diff / Branch tabs).
     let isInitialScan: Bool
-    /// Info-strip data for the Diff tab. Passed through from the call site
-    /// (wired in Task 10; `nil` until then shows "No changes").
+    /// Info-strip data for the Diff tab. Passed through from the call site;
+    /// `nil` shows "No changes".
     let diffSummary: InspectPanelInfoStrip.DiffSummary?
-    /// Active branch label or short SHA for detached HEAD. Wired in Task 10.
+    /// Active branch label or short SHA for detached HEAD.
     let branchLabel: String?
     /// Fires when the user taps the in-row hide button.
     let onHide: () -> Void

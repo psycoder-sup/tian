@@ -35,8 +35,8 @@ struct InspectBranchBody: View {
         } else if let graph = viewModel.graph {
             graphBody(graph)
         } else {
-            // Stale (no graph yet, no longer "loading initial") — render a
-            // dim Loading… so the body is never blank.
+            // Initial / unscheduled state — render a dim Loading… so the
+            // body is never blank.
             InspectPanelMutedMessage("Loading…")
         }
     }
@@ -62,11 +62,11 @@ struct InspectBranchBody: View {
                         .padding(.leading, 8)
 
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(graph.commits.enumerated()), id: \.element.sha) { index, commit in
+                            ForEach(graph.commits, id: \.sha) { commit in
                                 BranchCommitRow(
                                     commit: commit,
                                     lanes: graph.lanes,
-                                    isHead: index == 0,
+                                    isHead: commit.sha == graph.commits.first?.sha,
                                     gutterWidth: gutterWidth(for: graph)
                                 )
                             }

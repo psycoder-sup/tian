@@ -134,7 +134,8 @@ struct GitFileDiff: Sendable, Equatable {
     let isBinary: Bool
 }
 
-struct GitDiffHunk: Sendable, Equatable {
+struct GitDiffHunk: Sendable, Equatable, Identifiable {
+    let id: Int
     let header: String   // `@@ -A,B +C,D @@ optional context`
     let lines: [GitDiffLine]
     /// Set when the hunk's emitted line count was capped at 5 000. Renderer
@@ -142,8 +143,9 @@ struct GitDiffHunk: Sendable, Equatable {
     let truncatedLines: Int
 }
 
-struct GitDiffLine: Sendable, Equatable {
+struct GitDiffLine: Sendable, Equatable, Identifiable {
     enum Kind: Sendable, Equatable { case context, added, deleted }
+    let id: Int
     let kind: Kind
     let oldLineNumber: Int?
     let newLineNumber: Int?

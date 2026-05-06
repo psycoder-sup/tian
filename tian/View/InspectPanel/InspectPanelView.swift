@@ -118,7 +118,9 @@ struct InspectPanelView: View {
 
     private var liveDiffSummary: InspectPanelInfoStrip.DiffSummary? {
         let files = tabState.diffViewModel.files
-        guard !files.isEmpty else { return .init(fileCount: 0, additions: 0, deletions: 0) }
+        if files.isEmpty {
+            return InspectPanelInfoStrip.DiffSummary(fileCount: 0, additions: 0, deletions: 0)
+        }
         let additions = files.reduce(0) { $0 + $1.additions }
         let deletions = files.reduce(0) { $0 + $1.deletions }
         return .init(fileCount: files.count, additions: additions, deletions: deletions)
