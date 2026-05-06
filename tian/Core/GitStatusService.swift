@@ -264,10 +264,12 @@ enum GitStatusService {
         for relativePath in untrackedPaths {
             let absolutePath = (directory as NSString).appendingPathComponent(relativePath)
 
-            // Binary/size gate: skip files > 512 KB
-            if let attrs = try? FileManager.default.attributesOfItem(atPath: absolutePath),
-               let fileSize = attrs[.size] as? Int,
-               fileSize > 512 * 1024 {
+            // Binary/size gate: fail closed — if size > 512 KB OR the size read
+            // fails (e.g. permission error on a sandboxed path), treat as binary
+            // and never spawn `git diff --no-index`. Plan §6 risk mitigation.
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: absolutePath))
+                .flatMap { $0[.size] as? Int }
+            if fileSize == nil || fileSize! > 512 * 1024 {
                 untrackedDiffs.append(GitFileDiff(
                     path: relativePath,
                     status: .added,

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import tian
 
+@Suite(.serialized)
 struct GitStatusServiceCommitGraphTests {
 
     // MARK: - FR-T25: threeSubprocessesOnly
