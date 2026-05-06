@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 5
+    static let currentVersion = 6   // bumped from 5 for activeTab field
 
     static var stateDirectory: URL {
         FileManager.default

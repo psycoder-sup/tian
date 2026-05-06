@@ -9,12 +9,7 @@ struct SessionMigrationV4ToV5Tests {
         #expect(SessionStateMigrator.migrations[4] != nil)
     }
 
-    // PRD §7 — current schema version is 5.
-    @Test func currentVersionIsFive() {
-        #expect(SessionSerializer.currentVersion == 5)
-    }
-
-    // PRD §7 — a v4 fixture (no inspect-panel fields) migrates to v5;
+    // PRD §7 — a v4 fixture (no inspect-panel fields) migrates to the current version;
     // the migrated JSON decodes into WorkspaceState with nil optional fields.
     @Test func v4FileDecodesAsV5WithDefaults() throws {
         let v4JSON = """
@@ -64,7 +59,7 @@ struct SessionMigrationV4ToV5Tests {
         // Migration should succeed and bump version to 5.
         let migratedData = try SessionStateMigrator.migrateIfNeeded(data: v4JSON)!
         let json = try JSONSerialization.jsonObject(with: migratedData) as! [String: Any]
-        #expect((json["version"] as? Int) == 5)
+        #expect((json["version"] as? Int) == SessionSerializer.currentVersion)
 
         // Decode into typed model.
         let decoder = JSONDecoder()

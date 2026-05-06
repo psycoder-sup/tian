@@ -24,6 +24,10 @@ enum SessionStateMigrator {
         // to `WorkspaceState`. Both fields are optional so v4 decodes as nil and
         // the runtime applies defaults (true / 320) on first load.
         4: { json in json },
+        // v5 → v6: Added optional `activeTab: String?` to `WorkspaceState`. The
+        // field is optional so v5 decodes as nil; the runtime applies the
+        // default (.files) on load.
+        5: { json in json },
         // v3 → v4: Split flat SpaceState.tabs into (claudeSection, terminalSection).
         // Legacy tabs (all shell, per v3 semantics) move into terminalSection
         // preserving order + PaneLeafState.claudeSessionState. A fresh Claude

@@ -40,8 +40,8 @@ struct SessionRoundTripV4Tests {
         #expect(view?.initialInput == "claude\n")
     }
 
-    // Schema version bumped to 5 (v5 adds inspect-panel fields).
+    // Schema version bumped to 6 (v6 adds activeTab field).
     @Test func snapshotEmitsCurrentVersion() {
-        #expect(SessionSerializer.currentVersion == 5)
+        #expect(SessionSerializer.currentVersion == 6)
     }
 }

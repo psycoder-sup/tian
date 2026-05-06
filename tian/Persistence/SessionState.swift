@@ -24,6 +24,9 @@ struct WorkspaceState: Codable, Sendable, Equatable {
     /// Defaults applied at runtime: visible = true, width = 320.
     let inspectPanelVisible: Bool?
     let inspectPanelWidth: Double?
+    /// Added in schema v6. Optional so v5 records decode without migration.
+    /// Default applied at runtime: activeTab = .files.
+    let activeTab: String?
 
     init(
         id: UUID,
@@ -34,7 +37,8 @@ struct WorkspaceState: Codable, Sendable, Equatable {
         windowFrame: WindowFrame?,
         isFullscreen: Bool?,
         inspectPanelVisible: Bool? = nil,
-        inspectPanelWidth: Double? = nil
+        inspectPanelWidth: Double? = nil,
+        activeTab: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -45,6 +49,7 @@ struct WorkspaceState: Codable, Sendable, Equatable {
         self.isFullscreen = isFullscreen
         self.inspectPanelVisible = inspectPanelVisible
         self.inspectPanelWidth = inspectPanelWidth
+        self.activeTab = activeTab
     }
 }
 
