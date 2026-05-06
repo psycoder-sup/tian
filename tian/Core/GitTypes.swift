@@ -118,3 +118,34 @@ extension GitFileStatus {
         }
     }
 }
+
+// MARK: - Unified Diff
+
+struct GitFileDiff: Sendable, Equatable {
+    let path: String
+    let status: GitFileStatus
+    let additions: Int
+    let deletions: Int
+    let hunks: [GitDiffHunk]
+    /// True when the file was skipped because it failed the 512 KB binary
+    /// gate or `git diff` reported it as binary. `hunks` is empty in this
+    /// case; `additions` / `deletions` reflect git's reported counts (or 0
+    /// for the size-gated case).
+    let isBinary: Bool
+}
+
+struct GitDiffHunk: Sendable, Equatable {
+    let header: String   // `@@ -A,B +C,D @@ optional context`
+    let lines: [GitDiffLine]
+    /// Set when the hunk's emitted line count was capped at 5 000. Renderer
+    /// shows a muted `… N more lines` placeholder line below.
+    let truncatedLines: Int
+}
+
+struct GitDiffLine: Sendable, Equatable {
+    enum Kind: Sendable, Equatable { case context, added, deleted }
+    let kind: Kind
+    let oldLineNumber: Int?
+    let newLineNumber: Int?
+    let text: String
+}

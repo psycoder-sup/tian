@@ -213,6 +213,357 @@ enum GitStatusService {
         }
     }
 
+    // MARK: - Unified Diff
+
+    /// Returns the working-tree-vs-HEAD diff for the active space's repo.
+    /// Untracked files are included as fully-added entries; files larger
+    /// than 512 KB or reported as binary by git produce a `GitFileDiff`
+    /// with `isBinary == true` and no hunks. Each file's `lines` array is
+    /// capped at 5 000 entries; hunks past the cap set `truncatedLines`.
+    /// Returns `[]` when not inside a git repo.
+    static func unifiedDiff(directory: String) async -> [GitFileDiff] {
+        // Verify we are inside a git repo.
+        do {
+            let check = try await runGit(
+                ["rev-parse", "--is-inside-work-tree"],
+                workingDirectory: directory
+            )
+            guard check.exitCode == 0 else { return [] }
+        } catch {
+            Log.git.error("unifiedDiff repo check failed for \(directory): \(error)")
+            return []
+        }
+
+        // 1. Run `git status --porcelain` to identify untracked files (excluded from HEAD diff).
+        let untrackedPaths: [String]
+        do {
+            let statusResult = try await runGit(
+                ["status", "--porcelain=v1", "--ignore-submodules"],
+                workingDirectory: directory
+            )
+            guard statusResult.exitCode == 0 else {
+                Log.git.error("git status failed in unifiedDiff for \(directory): \(statusResult.stderr)")
+                return []
+            }
+            let statusLines = statusResult.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
+            untrackedPaths = statusLines.compactMap { line -> String? in
+                guard line.count >= 4, line.hasPrefix("??") else { return nil }
+                return String(line.dropFirst(3))
+            }
+        } catch {
+            Log.git.error("unifiedDiff git status failed for \(directory): \(error)")
+            return []
+        }
+
+        // 2. Run `git diff --no-color --no-ext-diff --unified=3 HEAD` for tracked changes.
+        var trackedDiffs: [GitFileDiff] = []
+        do {
+            let diffResult = try await runGit(
+                ["diff", "--no-color", "--no-ext-diff", "--unified=3", "HEAD"],
+                workingDirectory: directory
+            )
+            if diffResult.exitCode == 0 && !diffResult.stdout.isEmpty {
+                trackedDiffs = parseUnifiedDiff(diffResult.stdout)
+            }
+        } catch {
+            Log.git.error("unifiedDiff git diff failed for \(directory): \(error)")
+        }
+
+        // 3. Handle untracked files via `git diff --no-index /dev/null <path>`.
+        var untrackedDiffs: [GitFileDiff] = []
+        for relativePath in untrackedPaths {
+            let absolutePath = (directory as NSString).appendingPathComponent(relativePath)
+
+            // Binary/size gate: skip files > 512 KB
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: absolutePath),
+               let fileSize = attrs[.size] as? Int,
+               fileSize > 512 * 1024 {
+                untrackedDiffs.append(GitFileDiff(
+                    path: relativePath,
+                    status: .added,
+                    additions: 0,
+                    deletions: 0,
+                    hunks: [],
+                    isBinary: true
+                ))
+                continue
+            }
+
+            do {
+                let noIndexResult = try await runGit(
+                    ["diff", "--no-color", "--no-ext-diff", "--unified=3", "--no-index",
+                     "/dev/null", relativePath],
+                    workingDirectory: directory
+                )
+                // git diff --no-index exits 1 when files differ (normal for additions)
+                let output = noIndexResult.stdout
+                if output.isEmpty {
+                    // No readable diff — treat as binary
+                    untrackedDiffs.append(GitFileDiff(
+                        path: relativePath,
+                        status: .added,
+                        additions: 0,
+                        deletions: 0,
+                        hunks: [],
+                        isBinary: true
+                    ))
+                } else {
+                    // Parse and override path + status to .added
+                    let parsed = parseUnifiedDiff(output)
+                    for diff in parsed {
+                        untrackedDiffs.append(GitFileDiff(
+                            path: relativePath,
+                            status: .added,
+                            additions: diff.additions,
+                            deletions: diff.deletions,
+                            hunks: diff.hunks,
+                            isBinary: diff.isBinary
+                        ))
+                    }
+                    if parsed.isEmpty {
+                        // Binary reported
+                        untrackedDiffs.append(GitFileDiff(
+                            path: relativePath,
+                            status: .added,
+                            additions: 0,
+                            deletions: 0,
+                            hunks: [],
+                            isBinary: true
+                        ))
+                    }
+                }
+            } catch {
+                Log.git.error("unifiedDiff --no-index failed for \(relativePath): \(error)")
+            }
+        }
+
+        return trackedDiffs + untrackedDiffs
+    }
+
+    // MARK: - Unified Diff Parsing Helpers
+
+    /// Parses the output of `git diff --unified` into `[GitFileDiff]`.
+    private static func parseUnifiedDiff(_ output: String) -> [GitFileDiff] {
+        let lines = output.components(separatedBy: "\n")
+        var results: [GitFileDiff] = []
+
+        // State
+        var currentPath: String?
+        var currentStatus: GitFileStatus = .modified
+        var isBinary = false
+        var hunks: [GitDiffHunk] = []
+        var currentHunkHeader: String?
+        var currentHunkLines: [GitDiffLine] = []
+        var currentHunkRawCount = 0  // all diff lines in the current hunk
+        var oldLineCounter = 0
+        var newLineCounter = 0
+        var totalEmittedLines = 0  // across all hunks for the current file
+        let lineCapPerFile = 5000
+
+        func flushHunk() {
+            guard let header = currentHunkHeader else { return }
+            // Overflow = raw lines in this hunk that weren't emitted
+            let hunkOverflow = currentHunkRawCount - currentHunkLines.count
+            hunks.append(GitDiffHunk(
+                header: header,
+                lines: currentHunkLines,
+                truncatedLines: max(0, hunkOverflow)
+            ))
+            currentHunkHeader = nil
+            currentHunkLines = []
+            currentHunkRawCount = 0
+        }
+
+        func flushFile() {
+            guard let path = currentPath else { return }
+            flushHunk()
+            let additions = hunks.flatMap(\.lines).filter { $0.kind == .added }.count
+            let deletions = hunks.flatMap(\.lines).filter { $0.kind == .deleted }.count
+            results.append(GitFileDiff(
+                path: path,
+                status: currentStatus,
+                additions: additions,
+                deletions: deletions,
+                hunks: isBinary ? [] : hunks,
+                isBinary: isBinary
+            ))
+            // Reset
+            currentPath = nil
+            isBinary = false
+            hunks = []
+            currentHunkHeader = nil
+            currentHunkLines = []
+            currentHunkRawCount = 0
+            oldLineCounter = 0
+            newLineCounter = 0
+            totalEmittedLines = 0
+        }
+
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
+
+            // New file boundary
+            if line.hasPrefix("diff --git ") {
+                flushFile()
+
+                // Extract path from `diff --git a/path b/path`
+                // The b/ path is the destination (post-change) file — use it as primary.
+                // This is the only source for binary files (no +++ line follows).
+                let afterPrefix = String(line.dropFirst("diff --git ".count))
+                // Format is `a/<path> b/<path>` — split on ` b/` from the right
+                if let bRange = afterPrefix.range(of: " b/", options: .backwards) {
+                    let bPath = String(afterPrefix[bRange.upperBound...])
+                    currentPath = bPath
+                }
+                currentStatus = .modified
+                i += 1
+                continue
+            }
+
+            // Binary marker
+            if line.hasPrefix("Binary files ") {
+                isBinary = true
+                i += 1
+                continue
+            }
+
+            // Index line (contains status hints but we rely on --- / +++ for path)
+            if line.hasPrefix("index ") {
+                i += 1
+                continue
+            }
+
+            // Old file header — capture path for deletion case (`+++ /dev/null`)
+            if line.hasPrefix("--- ") {
+                let rawOldPath = String(line.dropFirst(4))
+                if rawOldPath != "/dev/null" {
+                    // Store tentatively; will be overridden by +++ unless it's /dev/null
+                    let stripped = rawOldPath.hasPrefix("a/") ? String(rawOldPath.dropFirst(2)) : rawOldPath
+                    currentPath = stripped
+                }
+                i += 1
+                continue
+            }
+
+            // New file header — extract path
+            if line.hasPrefix("+++ ") {
+                let rawPath = String(line.dropFirst(4))
+                if rawPath == "/dev/null" {
+                    // Deletion: currentPath already set from --- line
+                    currentStatus = .deleted
+                } else {
+                    // Strip `b/` prefix from git diff output
+                    currentPath = rawPath.hasPrefix("b/") ? String(rawPath.dropFirst(2)) : rawPath
+                    currentStatus = .modified
+                }
+                i += 1
+                continue
+            }
+
+            // Hunk header
+            if line.hasPrefix("@@ ") {
+                flushHunk()
+                currentHunkHeader = line
+                if let parsed = parseHunkHeader(line) {
+                    oldLineCounter = parsed.oldStart
+                    newLineCounter = parsed.newStart
+                }
+                i += 1
+                continue
+            }
+
+            // Diff lines (only inside a hunk)
+            guard currentHunkHeader != nil, currentPath != nil else {
+                i += 1
+                continue
+            }
+
+            // Skip "\ No newline at end of file" markers
+            if line.hasPrefix("\\ ") {
+                i += 1
+                continue
+            }
+
+            // Only count valid diff content lines (+, -, space); skip blank lines at EOF
+            guard line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") else {
+                i += 1
+                continue
+            }
+
+            currentHunkRawCount += 1
+            if totalEmittedLines < lineCapPerFile {
+                let kind: GitDiffLine.Kind
+                let oldNum: Int?
+                let newNum: Int?
+                let text: String
+
+                if line.hasPrefix("+") {
+                    kind = .added
+                    oldNum = nil
+                    newNum = newLineCounter
+                    newLineCounter += 1
+                    text = String(line.dropFirst(1))
+                } else if line.hasPrefix("-") {
+                    kind = .deleted
+                    oldNum = oldLineCounter
+                    newNum = nil
+                    oldLineCounter += 1
+                    text = String(line.dropFirst(1))
+                } else {
+                    // Context line (starts with " " or could be empty for end-of-file)
+                    kind = .context
+                    oldNum = oldLineCounter
+                    newNum = newLineCounter
+                    oldLineCounter += 1
+                    newLineCounter += 1
+                    text = line.isEmpty ? "" : String(line.dropFirst(1))
+                }
+
+                currentHunkLines.append(GitDiffLine(
+                    kind: kind,
+                    oldLineNumber: oldNum,
+                    newLineNumber: newNum,
+                    text: text
+                ))
+                totalEmittedLines += 1
+            }
+            // Lines beyond cap are counted in currentHunkRawCount but not emitted
+
+            i += 1
+        }
+
+        flushFile()
+        return results
+    }
+
+    /// Parses a hunk header line like `@@ -10,6 +10,8 @@ optional context`.
+    private static func parseHunkHeader(
+        _ header: String
+    ) -> (oldStart: Int, oldLen: Int, newStart: Int, newLen: Int)? {
+        // Format: @@ -<oldStart>[,<oldLen>] +<newStart>[,<newLen>] @@
+        let pattern = #"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(
+                  in: header,
+                  range: NSRange(header.startIndex..., in: header)
+              ) else {
+            return nil
+        }
+
+        func int(_ idx: Int) -> Int? {
+            let r = match.range(at: idx)
+            guard r.location != NSNotFound,
+                  let range = Range(r, in: header) else { return nil }
+            return Int(header[range])
+        }
+
+        guard let oldStart = int(1), let newStart = int(3) else { return nil }
+        let oldLen = int(2) ?? 1
+        let newLen = int(4) ?? 1
+        return (oldStart, oldLen, newStart, newLen)
+    }
+
     /// Fetches GitHub PR status for the given branch using `gh` CLI.
     /// Returns nil if gh is not installed, not authenticated, no PR exists, or any error occurs.
     /// Has a 10-second timeout per NFR-006.
