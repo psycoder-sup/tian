@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Compact per-section toolbar rendered inside the section tab bar.
 ///
-/// * Claude toolbar — Show/Hide Terminal button (FR-28); icon swaps based
-///   on `spaceModel.terminalVisible`.
+/// * Claude toolbar — empty. The Show/Hide Terminal control was relocated
+///   to the bottom status bar (rendered from `SidebarContainerView`).
 /// * Terminal toolbar — Menu with "Move to Bottom" / "Move to Right"
 ///   (dock toggle) and "Reset Terminal section".
 ///
@@ -14,40 +14,9 @@ struct SectionToolbarView: View {
     let kind: SectionKind
 
     var body: some View {
-        let isDragging = spaceModel.sectionDividerDragController.isDragging
-
-        Group {
-            switch kind {
-            case .claude:
-                claudeToolbar(isDragging: isDragging)
-            case .terminal:
-                terminalToolbar(isDragging: isDragging)
-            }
+        if kind == .terminal {
+            terminalToolbar(isDragging: spaceModel.sectionDividerDragController.isDragging)
         }
-    }
-
-    // MARK: - Claude
-
-    @ViewBuilder
-    private func claudeToolbar(isDragging: Bool) -> some View {
-        Button {
-            spaceModel.toggleTerminal()
-        } label: {
-            Image(systemName: spaceModel.terminalVisible
-                  ? "rectangle.righthalf.inset.filled"
-                  : "rectangle.righthalf.inset.filled.arrow.right")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
-        }
-        .buttonStyle(.plain)
-        .frame(width: 32, height: 32)
-        .liquidGlassCircle()
-        .disabled(isDragging)
-        .opacity(isDragging ? 0.5 : 1.0)
-        .help(isDragging
-              ? "Release divider to switch dock"
-              : (spaceModel.terminalVisible ? "Hide Terminal" : "Show Terminal"))
-        .accessibilityLabel(spaceModel.terminalVisible ? "Hide Terminal" : "Show Terminal")
     }
 
     // MARK: - Terminal

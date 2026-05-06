@@ -29,18 +29,15 @@ struct SpaceContentView: View {
 
     @ViewBuilder
     private func content(containerSize: CGSize) -> some View {
-        if !spaceModel.terminalVisible {
-            // FR-17 — Claude fills the whole space.
-            SectionView(
-                spaceModel: spaceModel,
-                section: spaceModel.claudeSection,
-                resolveWorkingDirectory: resolveWorkingDirectory,
-                isSectionFocused: spaceModel.focusedSectionKind == .claude
-            )
-            .frame(width: containerSize.width, height: containerSize.height)
-        } else {
-            let ratio = liveDragRatio ?? spaceModel.splitRatio
-            let layout = SectionLayout.computeFrames(
+        // Keep Claude's SectionView at a single, stable position in the view
+        // tree (always inside this ZStack) so its underlying NSView/Metal
+        // surface is preserved across `terminalVisible` toggles. Branching
+        // the ZStack vs a top-level SectionView here used to give SwiftUI
+        // two structural identities for Claude, which tore down and
+        // recreated the surface on every toggle (visible flicker).
+        let ratio = liveDragRatio ?? spaceModel.splitRatio
+        let layout: SectionLayout? = spaceModel.terminalVisible
+            ? SectionLayout.computeFrames(
                 containerSize: containerSize,
                 ratio: ratio,
                 dock: spaceModel.dockPosition,
@@ -48,20 +45,28 @@ struct SpaceContentView: View {
                 terminalMin: SectionDividerClamper.defaultTerminalMin,
                 dividerThickness: SectionDividerView.thickness
             )
-            let axis: CGFloat = spaceModel.dockPosition == .right
-                ? containerSize.width
-                : containerSize.height
+            : nil
+        let axis: CGFloat = spaceModel.dockPosition == .right
+            ? containerSize.width
+            : containerSize.height
 
-            ZStack(alignment: .topLeading) {
-                SectionView(
-                    spaceModel: spaceModel,
-                    section: spaceModel.claudeSection,
-                    resolveWorkingDirectory: resolveWorkingDirectory,
-                    isSectionFocused: spaceModel.focusedSectionKind == .claude
-                )
-                .frame(width: layout.claude.width, height: layout.claude.height)
-                .offset(x: layout.claude.minX, y: layout.claude.minY)
+        ZStack(alignment: .topLeading) {
+            SectionView(
+                spaceModel: spaceModel,
+                section: spaceModel.claudeSection,
+                resolveWorkingDirectory: resolveWorkingDirectory,
+                isSectionFocused: spaceModel.focusedSectionKind == .claude
+            )
+            .frame(
+                width: layout?.claude.width ?? containerSize.width,
+                height: layout?.claude.height ?? containerSize.height
+            )
+            .offset(
+                x: layout?.claude.minX ?? 0,
+                y: layout?.claude.minY ?? 0
+            )
 
+            if let layout {
                 SectionView(
                     spaceModel: spaceModel,
                     section: spaceModel.terminalSection,
@@ -80,7 +85,7 @@ struct SpaceContentView: View {
                 .frame(width: layout.divider.width, height: layout.divider.height)
                 .offset(x: layout.divider.minX, y: layout.divider.minY)
             }
-            .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
         }
+        .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
     }
 }

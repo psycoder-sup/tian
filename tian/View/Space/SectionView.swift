@@ -40,23 +40,41 @@ struct SectionView: View {
                 )
                 .padding(.top, SectionTabBarView.height)
 
-                SectionTabBarView(
-                    section: section,
-                    onNewTab: {
-                        let wd = resolveWorkingDirectory()
-                        spaceModel.createTab(in: section, workingDirectory: wd)
-                    },
-                    trailingToolbar: {
-                        SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
-                    }
-                )
-                // Tab bar before terminal pane in VoiceOver order.
-                .accessibilitySortPriority(1)
+                tabBar(for: activeTab)
+                    // Tab bar before terminal pane in VoiceOver order.
+                    .accessibilitySortPriority(1)
             }
         } else {
             // Terminal section with no active tab — should not appear in
             // practice because FR-12 auto-hides before reaching zero.
             Color.clear
+        }
+    }
+
+    /// Builds the section tab bar. Claude sections render no trailing
+    /// toolbar — the show/hide-terminal toggle lives in the bottom status
+    /// bar now. Terminal sections still get the dock-options menu.
+    @ViewBuilder
+    private func tabBar(for activeTab: TabModel) -> some View {
+        if section.kind == .terminal {
+            SectionTabBarView(
+                section: section,
+                onNewTab: {
+                    let wd = resolveWorkingDirectory()
+                    spaceModel.createTab(in: section, workingDirectory: wd)
+                },
+                trailingToolbar: {
+                    SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
+                }
+            )
+        } else {
+            SectionTabBarView(
+                section: section,
+                onNewTab: {
+                    let wd = resolveWorkingDirectory()
+                    spaceModel.createTab(in: section, workingDirectory: wd)
+                }
+            )
         }
     }
 }

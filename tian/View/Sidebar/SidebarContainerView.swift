@@ -57,6 +57,7 @@ struct SidebarContainerView: View {
             inspectColumn
         }
         .overlay(alignment: .topTrailing) { inspectToggleOverlay }
+        .overlay(alignment: .bottomLeading) { terminalToggleStatusBarOverlay }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowAccessor(window: $nsWindow))
         .modifier(SidebarNotificationModifier(
@@ -185,6 +186,18 @@ struct SidebarContainerView: View {
         guard let workspace = activeWorkspace,
               !workspace.inspectPanelState.isVisible else { return 0 }
         return 36
+    }
+
+    /// Inline show/hide-terminal toggle anchored to the bottom-leading
+    /// corner so it sits inside the status-bar strip, just to the right of
+    /// the sidebar's visual edge. Hidden when no space is active.
+    @ViewBuilder
+    private var terminalToggleStatusBarOverlay: some View {
+        if let space = activeSpace, bottomContentInset > 0 {
+            TerminalToggleStatusBarButton(space: space)
+                .padding(.leading, toggleGutterWidth + 4)
+                .frame(height: bottomContentInset)
+        }
     }
 
     /// Re-roots the workspace's inspect file tree to the active space's
@@ -382,6 +395,53 @@ private struct InspectPanelWiringModifier: ViewModifier {
             .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
                 refreshStatus()
             }
+    }
+}
+
+// MARK: - Terminal Toggle (status-bar inline)
+
+/// Inline show/hide-terminal toggle that lives in the status-bar strip,
+/// to the right of the workspace sidebar. Replaces the floating
+/// liquid-glass disc that used to sit in the Claude section's tab bar.
+private struct TerminalToggleStatusBarButton: View {
+    @Bindable var space: SpaceModel
+
+    @State private var isHovering = false
+
+    private static let buttonWidth: CGFloat = 24
+    private static let buttonHeight: CGFloat = 18
+
+    var body: some View {
+        Button {
+            space.toggleTerminal()
+        } label: {
+            Image(systemName: iconName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(iconForeground)
+                .frame(width: Self.buttonWidth, height: Self.buttonHeight)
+                .background {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(isHovering ? Color.white.opacity(0.07) : Color.clear)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(space.terminalVisible ? "Hide Terminal" : "Show Terminal")
+        .accessibilityLabel(space.terminalVisible ? "Hide Terminal" : "Show Terminal")
+        .accessibilityIdentifier("status-bar-terminal-toggle")
+    }
+
+    private var iconName: String {
+        space.dockPosition == .bottom
+            ? "rectangle.bottomhalf.inset.filled"
+            : "rectangle.righthalf.inset.filled"
+    }
+
+    private var iconForeground: Color {
+        space.terminalVisible
+            ? Color.primary.opacity(0.85)
+            : Color.secondary.opacity(0.55)
     }
 }
 
