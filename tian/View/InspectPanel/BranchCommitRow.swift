@@ -151,15 +151,11 @@ struct BranchCommitRow: View {
     // MARK: - A11y (FR-T34)
 
     private var a11yLabel: String {
-        var s = "\(commit.shortSha), \(commit.subject), by \(commit.author)"
-        if isHead { s += ", HEAD" }
-        if commit.isMerge { s += ", merge commit" }
-        if !commit.headRefs.isEmpty {
-            s += ", refs: \(commit.headRefs.joined(separator: ", "))"
-        }
-        if let tag = commit.tag {
-            s += ", tag \(tag)"
-        }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        let relativeTime = formatter.localizedString(for: commit.when, relativeTo: Date())
+        var s = "\(commit.shortSha), \(commit.subject), by \(commit.author), \(relativeTime)"
+        if commit.isMerge { s += ", merge" }
         return s
     }
 }

@@ -144,7 +144,6 @@ struct GitDiffFileGroup: View {
         var s = "\(file.path), \(statusWord.lowercased())"
         if file.additions > 0 { s += ", \(file.additions) addition\(file.additions == 1 ? "" : "s")" }
         if file.deletions > 0 { s += ", \(file.deletions) deletion\(file.deletions == 1 ? "" : "s")" }
-        s += isCollapsed ? ", collapsed" : ", expanded"
         return s
     }
 }
