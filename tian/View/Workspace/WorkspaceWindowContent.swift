@@ -16,9 +16,16 @@ struct WorkspaceWindowContent: View {
 
     private static let setupCapsuleLingerSeconds: Duration = .seconds(3)
 
+    private var statusBarTrailingInset: CGFloat {
+        guard let workspace = workspaceCollection.activeWorkspace,
+              workspace.inspectPanelState.isVisible else { return 0 }
+        return workspace.inspectPanelState.width
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             StatusBarView()
+                .padding(.trailing, statusBarTrailingInset)
 
             ZStack(alignment: .bottomTrailing) {
                 SidebarContainerView(

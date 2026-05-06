@@ -54,9 +54,9 @@ struct SidebarContainerView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebarAndContent
-                .overlay(alignment: .topTrailing) { inspectToggleOverlay }
             inspectColumn
         }
+        .overlay(alignment: .topTrailing) { inspectToggleOverlay }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowAccessor(window: $nsWindow))
         .modifier(SidebarNotificationModifier(
@@ -119,6 +119,7 @@ struct SidebarContainerView: View {
 
             spaceContentStack
                 .padding(.leading, toggleGutterWidth)
+                .padding(.trailing, inspectRailGutter)
                 .padding(.bottom, bottomContentInset)
 
             HStack(spacing: 6) {
@@ -132,27 +133,58 @@ struct SidebarContainerView: View {
 
     @ViewBuilder
     private var inspectColumn: some View {
-        if let workspace = activeWorkspace, workspace.inspectPanelState.isVisible {
+        if let workspace = activeWorkspace {
+            let panelState = workspace.inspectPanelState
             InspectPanelView(
-                panelState: workspace.inspectPanelState,
+                panelState: panelState,
                 viewModel: workspace.inspectFileTreeViewModel,
                 spaceName: activeSpace?.name ?? workspace.name
             )
-            .padding(.bottom, bottomContentInset)
+            // Animated width: 0 when hidden, panelState.width when visible.
+            // .trailing alignment + .clipped() makes the panel slide in from
+            // the window's trailing edge instead of fading or squashing.
+            .frame(
+                width: panelState.isVisible ? panelState.width : 0,
+                alignment: .trailing
+            )
+            .clipped()
         }
     }
 
-    /// Floating toggle button shown at top-trailing of the content area when
-    /// the inspect panel is collapsed.
+    /// Floating inspect-panel toggle. Anchored to the window's top-trailing
+    /// corner (overlay on the outer HStack, not on `sidebarAndContent`) so
+    /// its absolute position is identical whether the panel is open or
+    /// collapsed. Vertical inset is tuned so the rail's center lines up
+    /// with the section tab bar's 32 pt buttons (tab bar is 48 pt tall →
+    /// button center at y = 24, rail of 32 pt with top inset 8 → center
+    /// at y = 24).
     @ViewBuilder
     private var inspectToggleOverlay: some View {
-        if let workspace = activeWorkspace, !workspace.inspectPanelState.isVisible {
-            InspectPanelRail {
-                workspace.inspectPanelState.isVisible = true
-            }
-            .padding(.top, 10)
+        if let workspace = activeWorkspace {
+            InspectPanelRail(
+                action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        workspace.inspectPanelState.isVisible.toggle()
+                    }
+                },
+                accessibilityTitle: workspace.inspectPanelState.isVisible
+                    ? "Hide inspect panel"
+                    : "Show inspect panel"
+            )
+            .padding(.top, 8)
             .padding(.trailing, 10)
         }
+    }
+
+    /// Right gutter reserved for the floating inspect-panel rail when the
+    /// panel is collapsed, so the section tab bar's trailing toolbar sits
+    /// ~6 pt to the rail's left (matching the in-bar HStack spacing).
+    /// 36 = window-trailing edge → tab bar internal pad (12) + 6 pt gap
+    /// + 32 pt rail width − 10 pt rail trailing inset − 4 pt slack ≈ 36.
+    private var inspectRailGutter: CGFloat {
+        guard let workspace = activeWorkspace,
+              !workspace.inspectPanelState.isVisible else { return 0 }
+        return 36
     }
 
     /// Re-roots the workspace's inspect file tree to the active space's

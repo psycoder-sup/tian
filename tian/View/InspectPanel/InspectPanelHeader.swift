@@ -1,19 +1,19 @@
 import SwiftUI
 
-/// 48 px header for the Inspect panel (FR-03 / FR-04 / FR-05 / FR-06).
+/// 48 px header for the Inspect panel (FR-03 / FR-04 / FR-05).
 ///
 /// Layout (left → right):
 ///   - "Files" pill (segmented control, single item, always active in v1) — FR-04
 ///   - Space-name label with optional WorktreeKind suffix — FR-05
-///   - Close (×) pill button — FR-06
 ///
-/// Background: rgba(8, 11, 18, 0.55) + 0.5 px bottom border rgba(255,255,255,0.05)
+/// The inspect-panel toggle is rendered as a window-level floating rail
+/// (`InspectPanelRail` overlay in `SidebarContainerView`) so its absolute
+/// position is identical whether the panel is open or collapsed.
 struct InspectPanelHeader: View {
     static let height: CGFloat = 48
 
     let spaceName: String
     let worktreeKind: WorktreeKind
-    let onClose: () -> Void
 
     // MARK: - Subviews
 
@@ -45,27 +45,6 @@ struct InspectPanelHeader: View {
             .truncationMode(.tail)
     }
 
-    /// Close (×) pill button (FR-06).
-    private var closeButton: some View {
-        Button(action: onClose) {
-            Text("\u{00D7}")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Color.primary.opacity(0.5))
-                .frame(width: 22, height: 22)
-                .contentShape(Capsule())
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Hide inspect panel")
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -73,13 +52,12 @@ struct InspectPanelHeader: View {
             filesPill
             spaceLabel
                 .frame(maxWidth: .infinity, alignment: .leading)
-            closeButton
+            // Trailing space reserved for the floating InspectPanelRail
+            // overlay (rail size 32 + trailing inset 10 + outer glass 4).
+            Color.clear.frame(width: 46, height: 1)
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 10)
         .frame(height: Self.height)
-        .background(
-            Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.55)
-        )
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.05))
@@ -93,8 +71,7 @@ struct InspectPanelHeader: View {
 #Preview("Header – worktree") {
     InspectPanelHeader(
         spaceName: "tian",
-        worktreeKind: .linkedWorktree,
-        onClose: {}
+        worktreeKind: .linkedWorktree
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -103,8 +80,7 @@ struct InspectPanelHeader: View {
 #Preview("Header – repo") {
     InspectPanelHeader(
         spaceName: "my-project",
-        worktreeKind: .mainCheckout,
-        onClose: {}
+        worktreeKind: .mainCheckout
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -113,8 +89,7 @@ struct InspectPanelHeader: View {
 #Preview("Header – no dir") {
     InspectPanelHeader(
         spaceName: "untitled",
-        worktreeKind: .noWorkingDirectory,
-        onClose: {}
+        worktreeKind: .noWorkingDirectory
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))

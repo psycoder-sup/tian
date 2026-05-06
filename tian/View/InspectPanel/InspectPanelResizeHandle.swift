@@ -8,29 +8,17 @@ import SwiftUI
 struct InspectPanelResizeHandle: View {
     @Bindable var panelState: InspectPanelState
 
-    /// Visual thickness of the hairline divider.
-    private static let thickness: CGFloat = 1
-    /// Total hit-target width (wider than the visible line).
+    /// Total hit-target width.
     private static let hitWidth: CGFloat = 8
 
     @GestureState private var dragStart: CGFloat? = nil
     @State private var isHovering = false
 
     var body: some View {
-        ZStack {
-            // Invisible wider hit target
-            Color.clear
-                .frame(width: Self.hitWidth)
-                .contentShape(Rectangle())
-
-            // Visible hairline
-            Rectangle()
-                .fill(Color.white.opacity(isHovering ? 0.12 : 0.05))
-                .frame(width: Self.thickness)
-                .animation(.easeInOut(duration: 0.15), value: isHovering)
-        }
-        .frame(width: Self.hitWidth)
-        .frame(maxHeight: .infinity)
+        Color.clear
+            .frame(width: Self.hitWidth)
+            .contentShape(Rectangle())
+            .frame(maxHeight: .infinity)
         .onHover { hovering in
             isHovering = hovering
             if hovering {

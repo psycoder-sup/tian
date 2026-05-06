@@ -31,19 +31,18 @@ struct InspectPanelView: View {
             VStack(spacing: 0) {
                 InspectPanelHeader(
                     spaceName: spaceName,
-                    worktreeKind: viewModel.worktreeKind,
-                    onClose: { panelState.isVisible = false }
+                    worktreeKind: viewModel.worktreeKind
                 )
 
                 panelBody
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                InspectPanelStatusStrip(spaceName: spaceName)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12, style: .continuous))
+            .padding(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 4))
         }
         .frame(width: panelState.width)
         .frame(maxHeight: .infinity)
-        .background(Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.55))
     }
 
     // MARK: - Body content switch
@@ -97,7 +96,7 @@ struct InspectPanelView: View {
 #Preview("Hidden – toggle button") {
     Color.gray.opacity(0.2)
         .overlay(alignment: .topTrailing) {
-            InspectPanelRail(onShow: {})
+            InspectPanelRail(action: {})
                 .padding(.top, 10)
                 .padding(.trailing, 10)
         }

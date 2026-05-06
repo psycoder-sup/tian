@@ -1,17 +1,19 @@
 import SwiftUI
 
-/// Collapsed-state toggle for the inspect panel (FR-07).
+/// Toggle button for the inspect panel (FR-07).
 ///
 /// 32×32 circular liquid-glass button — gradient + inset highlights + drop
-/// shadow — floated at the top-trailing corner of the workspace content
-/// area. Tap fires `onShow`.
+/// shadow. Used both as the floating top-trailing toggle when the panel is
+/// collapsed and as the in-header toggle when the panel is open. Tap fires
+/// `action`, which the call site wires to either show or hide the panel.
 struct InspectPanelRail: View {
     static let size: CGFloat = 32
 
-    let onShow: () -> Void
+    let action: () -> Void
+    var accessibilityTitle: String = "Toggle inspect panel"
 
     var body: some View {
-        Button(action: onShow) {
+        Button(action: action) {
             inspectorIcon
                 .frame(width: 15, height: 15)
                 .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
@@ -19,7 +21,7 @@ struct InspectPanelRail: View {
         .buttonStyle(.plain)
         .frame(width: Self.size, height: Self.size)
         .liquidGlassCircle()
-        .accessibilityLabel("Show inspect panel")
+        .accessibilityLabel(accessibilityTitle)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -71,7 +73,7 @@ private extension CGRect {
 // MARK: - Previews
 
 #Preview("Toggle button") {
-    InspectPanelRail(onShow: {})
+    InspectPanelRail(action: {})
         .padding(40)
         .background(
             Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.95)
