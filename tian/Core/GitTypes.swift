@@ -149,3 +149,36 @@ struct GitDiffLine: Sendable, Equatable {
     let newLineNumber: Int?
     let text: String
 }
+
+// MARK: - Commit Graph (FR-T20 / FR-T20a / FR-T25)
+
+struct GitCommitGraph: Sendable, Equatable {
+    /// Ordered, HEAD's lane first; surplus lanes (FR-T20a) collapse into a
+    /// single trailing lane with `id == "__other__"`.
+    let lanes: [GitLane]
+    /// Newest → oldest, max 50 entries (FR-T20).
+    let commits: [GitCommit]
+    /// Number of branch tips folded into the trailing "other" lane. 0 when
+    /// the cap was not hit.
+    let collapsedLaneCount: Int
+}
+
+struct GitLane: Sendable, Equatable {
+    let id: String         // branch ref name, or "__other__"
+    let label: String
+    let colorIndex: Int    // resolved to a Color by the view from a fixed palette
+    let isCollapsed: Bool  // true only for the "other" lane
+}
+
+struct GitCommit: Sendable, Equatable {
+    let sha: String        // 40-char
+    let shortSha: String   // 7-char
+    let laneIndex: Int     // index into `GitCommitGraph.lanes`
+    let parentShas: [String]
+    let author: String
+    let when: Date
+    let subject: String
+    let isMerge: Bool
+    let headRefs: [String] // e.g. ["feature-auth", "origin/main"]
+    let tag: String?
+}

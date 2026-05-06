@@ -627,6 +627,370 @@ enum GitStatusService {
         }
     }
 
+    // MARK: - Commit Graph (FR-T20 / FR-T20a / FR-T25)
+
+    /// Incremented once per subprocess invoked by `commitGraph`. Readable in
+    /// tests to assert exactly 3 subprocess calls per fetch.
+    nonisolated(unsafe) static var commitGraphSubprocessCounter: Int = 0
+
+    /// Returns the commit graph rooted at HEAD for the active space's repo.
+    /// Walks back up to 50 commits along first-parent of all local branch
+    /// tips; lanes capped at 6 (FR-T20a). Returns `nil` when not inside a
+    /// git repo. Issues exactly three subprocess calls: `git log`,
+    /// `git for-each-ref`, `git tag -l`.
+    static func commitGraph(directory: String) async -> GitCommitGraph? {
+        // ── Subprocess #1: git log ──────────────────────────────────────────
+        // %H  = full SHA
+        // %h  = short SHA (7)
+        // %P  = parent SHAs (space-separated)
+        // %an = author name
+        // %at = author timestamp (unix)
+        // %s  = subject
+        // %D  = ref names (decoration, comma-separated, no parentheses)
+        let logFormat = "%H%x09%h%x09%P%x09%an%x09%at%x09%s%x09%D"
+        let logResult: (exitCode: Int32, stdout: String, stderr: String)
+        do {
+            logResult = try await runGit(
+                ["log", "--max-count=50", "--date-order",
+                 "--pretty=format:\(logFormat)", "--all"],
+                workingDirectory: directory
+            )
+            commitGraphSubprocessCounter += 1
+        } catch {
+            Log.git.error("commitGraph git log failed for \(directory): \(error)")
+            return nil
+        }
+        guard logResult.exitCode == 0 else {
+            Log.git.info("commitGraph: not a git repo or empty repo at \(directory)")
+            return nil
+        }
+
+        // ── Subprocess #2: git for-each-ref ────────────────────────────────
+        let refResult: (exitCode: Int32, stdout: String, stderr: String)
+        do {
+            refResult = try await runGit(
+                ["for-each-ref", "refs/heads", "refs/remotes",
+                 "--format=%(refname:short) %(objectname)"],
+                workingDirectory: directory
+            )
+            commitGraphSubprocessCounter += 1
+        } catch {
+            Log.git.error("commitGraph git for-each-ref failed for \(directory): \(error)")
+            return nil
+        }
+
+        // ── Subprocess #3: git tag -l ───────────────────────────────────────
+        let tagResult: (exitCode: Int32, stdout: String, stderr: String)
+        do {
+            tagResult = try await runGit(
+                ["tag", "-l", "--format=%(objectname:short) %(refname:short)"],
+                workingDirectory: directory
+            )
+            commitGraphSubprocessCounter += 1
+        } catch {
+            Log.git.error("commitGraph git tag failed for \(directory): \(error)")
+            return nil
+        }
+
+        // ── Parse tag dictionary: shortSha → tagName ───────────────────────
+        var tagByShortSha: [String: String] = [:]
+        for line in tagResult.stdout.components(separatedBy: "\n") {
+            let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+            guard parts.count >= 2 else { continue }
+            let tagShort = parts[0]
+            let tagName = parts[1...].joined(separator: " ")
+            tagByShortSha[tagShort] = tagName
+        }
+
+        // ── Parse for-each-ref: build refName → fullSha and fullSha → [refName] ──
+        var refBySha: [String: [String]] = [:]    // fullSha → local branch names
+        var remoteRefBySha: [String: [String]] = [:] // fullSha → remote ref names
+        for line in refResult.stdout.components(separatedBy: "\n") {
+            let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+            guard parts.count == 2 else { continue }
+            let refName = parts[0]
+            let sha = parts[1]
+            if refName.hasPrefix("origin/") || refName.contains("/") {
+                remoteRefBySha[sha, default: []].append(refName)
+            } else {
+                refBySha[sha, default: []].append(refName)
+            }
+        }
+
+        // ── Parse git log output ────────────────────────────────────────────
+        struct RawCommit {
+            let sha: String
+            let shortSha: String
+            let parentShas: [String]
+            let author: String
+            let when: Date
+            let subject: String
+            let decorations: [String] // ref decorations on this commit
+        }
+
+        var rawCommits: [RawCommit] = []
+        var headBranchName: String? = nil
+        var headShortSha: String? = nil
+        var trackedRemote: String? = nil   // e.g. "origin/beta"
+
+        for line in logResult.stdout.components(separatedBy: "\n") where !line.isEmpty {
+            let cols = line.components(separatedBy: "\t")
+            guard cols.count >= 6 else { continue }
+            let sha = cols[0]
+            let shortSha = cols[1]
+            let parentShasRaw = cols[2]
+            let author = cols[3]
+            let timestampStr = cols[4]
+            let subject = cols[5]
+            let decorationsRaw = cols.count >= 7 ? cols[6] : ""
+
+            let parentShas = parentShasRaw.isEmpty
+                ? []
+                : parentShasRaw.components(separatedBy: " ").filter { !$0.isEmpty }
+            let when = Date(timeIntervalSince1970: Double(timestampStr) ?? 0)
+
+            // Parse decoration string: "HEAD -> branchName, origin/branchName, tagName"
+            var decorations: [String] = []
+            var isHead = false
+            var decoratedBranch: String? = nil
+            var decoratedRemote: String? = nil
+
+            if !decorationsRaw.isEmpty {
+                let parts = decorationsRaw.components(separatedBy: ", ")
+                for part in parts {
+                    let trimmed = part.trimmingCharacters(in: .whitespaces)
+                    if trimmed.hasPrefix("HEAD -> ") {
+                        isHead = true
+                        let branchPart = String(trimmed.dropFirst("HEAD -> ".count))
+                        decoratedBranch = branchPart
+                        decorations.append(branchPart)
+                    } else if trimmed == "HEAD" {
+                        // Detached HEAD
+                        isHead = true
+                    } else {
+                        decorations.append(trimmed)
+                        if trimmed.hasPrefix("origin/") || trimmed.contains("/") {
+                            if decoratedRemote == nil { decoratedRemote = trimmed }
+                        }
+                    }
+                }
+            }
+
+            // Capture HEAD info from the first (newest) commit that carries HEAD
+            if isHead && headBranchName == nil {
+                headShortSha = shortSha
+                if let branch = decoratedBranch {
+                    headBranchName = branch
+                    // Check if there's a matching origin/<branch> in the same decoration
+                    // (e.g. "HEAD -> beta, origin/beta") → tracked remote
+                    let expectedRemote = "origin/\(branch)"
+                    if decorations.contains(expectedRemote) {
+                        trackedRemote = expectedRemote
+                    } else if let dr = decoratedRemote {
+                        trackedRemote = dr
+                    }
+                }
+                // else: detached HEAD — headBranchName stays nil
+            }
+
+            rawCommits.append(RawCommit(
+                sha: sha,
+                shortSha: shortSha,
+                parentShas: parentShas,
+                author: author,
+                when: when,
+                subject: subject,
+                decorations: decorations
+            ))
+        }
+
+        guard !rawCommits.isEmpty else {
+            // Empty repo
+            return GitCommitGraph(lanes: [], commits: [], collapsedLaneCount: 0)
+        }
+
+        let headShort = headShortSha ?? rawCommits[0].shortSha
+
+        // ── Build set of SHAs in the commit window ─────────────────────────
+        let commitShaSet = Set(rawCommits.map(\.sha))
+
+        // ── Determine candidate lanes ───────────────────────────────────────
+        // A lane corresponds to a local branch whose tip is in the commit window.
+        // Plus HEAD's branch (even if detached, we create a synthetic lane).
+
+        struct LaneCandidate {
+            let id: String
+            let label: String
+            let isHead: Bool
+            let hasTrackedRemote: Bool
+            var commitCount: Int   // number of commits in window this branch is "closest to"
+        }
+
+        // Count commits attributed to each local branch:
+        // For each commit, the "owning" branch is determined by for-each-ref SHA matches.
+        // We count how many commits in the window can be reached from each branch tip.
+        var branchCommitCount: [String: Int] = [:]
+        let allCommitShas = rawCommits.map(\.sha)
+
+        for (sha, branches) in refBySha {
+            // Only count branches whose tip is in the commit window
+            if let idx = allCommitShas.firstIndex(of: sha) {
+                for branch in branches {
+                    // Branch tip at position idx → it "owns" commits from idx onwards
+                    // (i.e., commits that are ancestors). Simple approximation:
+                    // count = commits from index idx to end of list (idx+1 because index
+                    // 0 is the newest; branches further from HEAD own fewer commits)
+                    branchCommitCount[branch] = (branchCommitCount[branch] ?? 0) + (allCommitShas.count - idx)
+                }
+            } else {
+                // Branch tip not in window — skip, count 0
+                for branch in branches {
+                    branchCommitCount[branch] = branchCommitCount[branch] ?? 0
+                }
+            }
+        }
+
+        // Build candidates from all local branches with tips in the commit window
+        var candidates: [LaneCandidate] = []
+        var seenIds = Set<String>()
+
+        // HEAD lane first
+        let headId: String
+        let headLabel: String
+        if let branch = headBranchName {
+            headId = branch
+            headLabel = branch
+        } else {
+            // Detached HEAD
+            headId = "HEAD@\(headShort)"
+            headLabel = headShort
+        }
+        candidates.append(LaneCandidate(
+            id: headId,
+            label: headLabel,
+            isHead: true,
+            hasTrackedRemote: trackedRemote != nil,
+            commitCount: branchCommitCount[headId] ?? (allCommitShas.count)
+        ))
+        seenIds.insert(headId)
+
+        // Collect remaining branches
+        var remaining: [LaneCandidate] = []
+        for (sha, branches) in refBySha {
+            guard commitShaSet.contains(sha) else { continue }
+            for branch in branches {
+                guard !seenIds.contains(branch) else { continue }
+                seenIds.insert(branch)
+                let isTrackedRemote: Bool
+                if let tr = trackedRemote {
+                    // Check if this branch's name matches the remote
+                    isTrackedRemote = (tr == "origin/\(branch)")
+                } else {
+                    isTrackedRemote = false
+                }
+                remaining.append(LaneCandidate(
+                    id: branch,
+                    label: branch,
+                    isHead: false,
+                    hasTrackedRemote: isTrackedRemote,
+                    commitCount: branchCommitCount[branch] ?? 0
+                ))
+            }
+        }
+
+        // Sort remaining: tracked remote first, then by commit count desc, then alphabetical
+        remaining.sort { a, b in
+            if a.hasTrackedRemote != b.hasTrackedRemote { return a.hasTrackedRemote }
+            if a.commitCount != b.commitCount { return a.commitCount > b.commitCount }
+            return a.id < b.id
+        }
+        candidates.append(contentsOf: remaining)
+
+        // ── Apply 6-lane cap ────────────────────────────────────────────────
+        let maxNamedLanes = 6
+        let namedCandidates: [LaneCandidate]
+        let collapsedCount: Int
+        if candidates.count > maxNamedLanes {
+            namedCandidates = Array(candidates.prefix(maxNamedLanes))
+            collapsedCount = candidates.count - maxNamedLanes
+        } else {
+            namedCandidates = candidates
+            collapsedCount = 0
+        }
+
+        // Build GitLane array
+        var lanes: [GitLane] = namedCandidates.enumerated().map { idx, c in
+            GitLane(id: c.id, label: c.label, colorIndex: idx, isCollapsed: false)
+        }
+        if collapsedCount > 0 {
+            lanes.append(GitLane(
+                id: "__other__",
+                label: "other",
+                colorIndex: lanes.count,
+                isCollapsed: true
+            ))
+        }
+
+        // Build a fast lookup: laneId → laneIndex
+        var laneIndexByID: [String: Int] = [:]
+        for (idx, lane) in lanes.enumerated() {
+            laneIndexByID[lane.id] = idx
+        }
+        let otherLaneIndex = collapsedCount > 0 ? lanes.count - 1 : nil
+
+        // ── Build commit SHA→lane mapping ───────────────────────────────────
+        // For each commit, determine its primary lane:
+        //   1. If any decoration matches a named lane → use that lane
+        //   2. If HEAD is on this commit → headId lane
+        //   3. Otherwise → first lane whose tip SHA matches
+        //   4. Fallback: other lane (or lane 0)
+        func laneIndex(for raw: RawCommit) -> Int {
+            // Check decorations for named lanes
+            for dec in raw.decorations {
+                if let idx = laneIndexByID[dec] { return idx }
+            }
+            // Check for-each-ref: if this commit's SHA is a branch tip
+            if let branches = refBySha[raw.sha] {
+                for branch in branches {
+                    if let idx = laneIndexByID[branch] { return idx }
+                }
+            }
+            // Fallback to other or lane 0
+            return otherLaneIndex ?? 0
+        }
+
+        // ── Assemble GitCommit array ────────────────────────────────────────
+        let commits: [GitCommit] = rawCommits.map { raw in
+            // Collect headRefs: all branch names (local + remote) decorating this commit
+            var headRefs = raw.decorations.filter { !$0.hasPrefix("HEAD") }
+            // Add remote refs that point to this commit
+            if let remotes = remoteRefBySha[raw.sha] {
+                for r in remotes where !headRefs.contains(r) {
+                    headRefs.append(r)
+                }
+            }
+
+            // Tag lookup — try shortSha prefix match
+            let tag = tagByShortSha[raw.shortSha]
+                ?? tagByShortSha.first(where: { raw.sha.hasPrefix($0.key) })?.value
+
+            return GitCommit(
+                sha: raw.sha,
+                shortSha: raw.shortSha,
+                laneIndex: laneIndex(for: raw),
+                parentShas: raw.parentShas,
+                author: raw.author,
+                when: raw.when,
+                subject: raw.subject,
+                isMerge: raw.parentShas.count > 1,
+                headRefs: headRefs,
+                tag: tag
+            )
+        }
+
+        return GitCommitGraph(lanes: lanes, commits: commits, collapsedLaneCount: collapsedCount)
+    }
+
     private static func runProcess(
         executablePath: String,
         arguments: [String],
