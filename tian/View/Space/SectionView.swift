@@ -70,6 +70,7 @@ struct SectionView: View {
         } else {
             SectionTabBarView(
                 section: section,
+                spaceModel: spaceModel,
                 onNewTab: {
                     let wd = resolveWorkingDirectory()
                     spaceModel.createTab(in: section, workingDirectory: wd)

@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// Per-section tab bar. Shows a leading section-kind glyph (FR-26), the
-/// tab list, and a trailing "+" new-tab button. Reuses `TabBarItemView`
-/// for individual tabs. Cross-section drag-reorder is enforced in
-/// Phase 6; this phase only allows reorder within a single section.
+/// Per-section tab bar. Claude sections render a leading space-name +
+/// branch header in place of the kind glyph; terminal sections keep the
+/// `>_` glyph. The tab list and trailing "+" new-tab button follow.
+/// Cross-section drag-reorder is enforced in Phase 6; this phase only
+/// allows reorder within a single section.
 struct SectionTabBarView: View {
     /// Layout height of the section tab bar.
     static let height: CGFloat = 48
 
     let section: SectionModel
+    let spaceModel: SpaceModel?
     let trailingToolbar: AnyView?
     var onNewTab: () -> Void = {}
 
@@ -16,10 +18,12 @@ struct SectionTabBarView: View {
 
     init(
         section: SectionModel,
+        spaceModel: SpaceModel? = nil,
         onNewTab: @escaping () -> Void = {},
         @ViewBuilder trailingToolbar: () -> some View = { EmptyView() }
     ) {
         self.section = section
+        self.spaceModel = spaceModel
         self.onNewTab = onNewTab
         let built = trailingToolbar()
         if built is EmptyView {
@@ -31,9 +35,15 @@ struct SectionTabBarView: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            SectionKindGlyph(kind: section.kind, size: 20)
-                .padding(.leading, 4)
-                .padding(.trailing, 2)
+            if section.kind == .claude, let spaceModel {
+                ClaudeSectionHeaderView(spaceModel: spaceModel)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 6)
+            } else {
+                SectionKindGlyph(kind: section.kind, size: 20)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 2)
+            }
 
             GlassEffectContainer {
                 HStack(spacing: 6) {
@@ -119,5 +129,42 @@ struct SectionTabBarView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(section.kind == .claude ? "Claude" : "Terminal") tabs")
+    }
+}
+
+/// Leading header for a Claude section tab bar — replaces the wordmark "C"
+/// glyph (FR-26) with a git-branch icon, the space's name, and the primary
+/// repo's branch (worktree repo when set, otherwise the first pinned repo).
+private struct ClaudeSectionHeaderView: View {
+    @Bindable var spaceModel: SpaceModel
+
+    private var branchName: String? {
+        guard let repoID = spaceModel.gitContext.pinnedRepoOrder.first else { return nil }
+        return spaceModel.gitContext.repoStatuses[repoID]?.branchName
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.9))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(spaceModel.name)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text(branchName ?? "—")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Color(red: 180/255, green: 188/255, blue: 200/255).opacity(0.7))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(spaceModel.name)\(branchName.map { ", branch \($0)" } ?? "")")
     }
 }
