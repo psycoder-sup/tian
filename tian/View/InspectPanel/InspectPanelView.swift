@@ -16,6 +16,11 @@ struct InspectPanelView: View {
     @Bindable var viewModel: InspectFileTreeViewModel
     let spaceName: String
 
+    /// Tab-selection + diff/branch view-model state. Defaults to `.files`
+    /// on first appearance. Task 10 will lift this to the call site so the
+    /// active tab survives space switches.
+    @State private var tabState = InspectTabState()
+
     // MARK: - Body
 
     var body: some View {
@@ -27,12 +32,26 @@ struct InspectPanelView: View {
     private var fullPanel: some View {
         VStack(spacing: 0) {
             InspectPanelHeader(
+                tabState: tabState,
                 spaceName: spaceName,
-                worktreeKind: viewModel.worktreeKind
+                worktreeKind: viewModel.worktreeKind,
+                isInitialScan: viewModel.isInitialScanInFlight,
+                diffSummary: nil,   // wired in Task 10
+                branchLabel: nil,   // wired in Task 10
+                onHide: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        panelState.isVisible = false
+                    }
+                }
             )
 
             panelBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            InspectPanelStatusStrip(
+                spaceName: spaceName,
+                activeTab: tabState.activeTab
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .glassEffect(.regular, in: .rect(cornerRadius: 12, style: .continuous))

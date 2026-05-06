@@ -1,95 +1,126 @@
 import SwiftUI
 
-/// 48 px header for the Inspect panel (FR-03 / FR-04 / FR-05).
+/// 64 px header for the Inspect panel (FR-T01).
 ///
-/// Layout (left → right):
-///   - "Files" pill (segmented control, single item, always active in v1) — FR-04
-///   - Space-name label with optional WorktreeKind suffix — FR-05
+/// Composed of two rows:
+///   - 38 px `InspectPanelTabRow`  — FR-T01 / FR-T02 / FR-T03
+///   - 26 px `InspectPanelInfoStrip` — FR-T06 / FR-T07 / FR-T08
 ///
-/// The inspect-panel toggle is rendered as a window-level floating rail
-/// (`InspectPanelRail` overlay in `SidebarContainerView`) so its absolute
-/// position is identical whether the panel is open or collapsed.
+/// Callers pass the `InspectTabState` binding; the header owns no local
+/// selection state. The floating `InspectPanelRail` (in `SidebarContainerView`)
+/// handles the *re-open* case — the in-row `onHide` callback covers *hide*.
 struct InspectPanelHeader: View {
-    static let height: CGFloat = 48
+    static let height: CGFloat = InspectPanelTabRow.height + InspectPanelInfoStrip.height
 
+    @Bindable var tabState: InspectTabState
     let spaceName: String
     let worktreeKind: WorktreeKind
-
-    // MARK: - Subviews
-
-    /// "Files" segmented control pill — always active in v1 (FR-04).
-    private var filesPill: some View {
-        Text("Files")
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(Color.primary.opacity(0.9))
-            .padding(.horizontal, 10)
-            .frame(height: 22)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.1))
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                    )
-            )
-    }
-
-    /// `{spaceName} · {contextSuffix}` label (FR-05).
-    private var spaceLabel: some View {
-        let suffix = worktreeKind.label
-        let text = suffix.map { "\(spaceName) · \($0)" } ?? spaceName
-        return Text(text)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(Color.primary.opacity(0.35))
-            .lineLimit(1)
-            .truncationMode(.tail)
-    }
+    /// `true` during initial file-tree scan (FR-T16a — mutes Diff / Branch tabs).
+    let isInitialScan: Bool
+    /// Info-strip data for the Diff tab. Passed through from the call site
+    /// (wired in Task 10; `nil` until then shows "No changes").
+    let diffSummary: InspectPanelInfoStrip.DiffSummary?
+    /// Active branch label or short SHA for detached HEAD. Wired in Task 10.
+    let branchLabel: String?
+    /// Fires when the user taps the in-row hide button.
+    let onHide: () -> Void
 
     // MARK: - Body
 
     var body: some View {
-        HStack(spacing: 8) {
-            filesPill
-            spaceLabel
-                .frame(maxWidth: .infinity, alignment: .leading)
-            // Trailing space reserved for the floating InspectPanelRail
-            // overlay (rail size 22 + trailing inset 10).
-            Color.clear.frame(width: 32, height: 1)
-        }
-        .padding(.leading, 10)
-        .frame(height: Self.height)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.05))
-                .frame(height: 0.5)
+        VStack(spacing: 0) {
+            InspectPanelTabRow(
+                tabState: tabState,
+                isInitialScan: isInitialScan,
+                onHide: onHide
+            )
+
+            InspectPanelInfoStrip(
+                activeTab: tabState.activeTab,
+                filesContext: .init(
+                    spaceName: spaceName,
+                    worktreeKindLabel: worktreeKind.label
+                ),
+                diffSummary: diffSummary,
+                branchLabel: branchLabel,
+                isNoRepo: worktreeKind == .notARepo || worktreeKind == .noWorkingDirectory
+            )
         }
     }
 }
 
 // MARK: - Previews
 
-#Preview("Header – worktree") {
+#Preview("Header – Files / worktree") {
+    let state = InspectTabState()
     InspectPanelHeader(
+        tabState: state,
         spaceName: "tian",
-        worktreeKind: .linkedWorktree
+        worktreeKind: .linkedWorktree,
+        isInitialScan: false,
+        diffSummary: nil,
+        branchLabel: "main",
+        onHide: {}
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }
 
-#Preview("Header – repo") {
+#Preview("Header – Diff / with changes") {
+    let state = InspectTabState(activeTab: .diff)
     InspectPanelHeader(
+        tabState: state,
         spaceName: "my-project",
-        worktreeKind: .mainCheckout
+        worktreeKind: .mainCheckout,
+        isInitialScan: false,
+        diffSummary: .init(fileCount: 3, additions: 54, deletions: 12),
+        branchLabel: "feat/new-ui",
+        onHide: {}
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }
 
-#Preview("Header – no dir") {
+#Preview("Header – Branch") {
+    let state = InspectTabState(activeTab: .branch)
     InspectPanelHeader(
+        tabState: state,
+        spaceName: "tian",
+        worktreeKind: .linkedWorktree,
+        isInitialScan: false,
+        diffSummary: nil,
+        branchLabel: "feat/inspect-panel-tabs",
+        onHide: {}
+    )
+    .frame(width: 320)
+    .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
+}
+
+#Preview("Header – initial scan") {
+    let state = InspectTabState()
+    InspectPanelHeader(
+        tabState: state,
+        spaceName: "tian",
+        worktreeKind: .mainCheckout,
+        isInitialScan: true,
+        diffSummary: nil,
+        branchLabel: nil,
+        onHide: {}
+    )
+    .frame(width: 320)
+    .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
+}
+
+#Preview("Header – no working dir") {
+    let state = InspectTabState()
+    InspectPanelHeader(
+        tabState: state,
         spaceName: "untitled",
-        worktreeKind: .noWorkingDirectory
+        worktreeKind: .noWorkingDirectory,
+        isInitialScan: false,
+        diffSummary: nil,
+        branchLabel: nil,
+        onHide: {}
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))

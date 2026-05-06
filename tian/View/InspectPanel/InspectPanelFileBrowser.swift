@@ -1,60 +1,17 @@
 import SwiftUI
 
-/// Files-tab body: subheader (FR-11) + scrollable LazyVStack of rows (FR-12 / FR-13).
+/// Files-tab body: scrollable LazyVStack of rows (FR-12 / FR-13).
+///
+/// v1's 24 px subheader (FR-11) has been removed — that context information
+/// now lives in `InspectPanelInfoStrip` (FR-T09).
 struct InspectPanelFileBrowser: View {
     @Bindable var viewModel: InspectFileTreeViewModel
     let spaceName: String
-
-    // MARK: - Subheader (FR-11)
-
-    private var contextSuffix: String {
-        viewModel.worktreeKind.label?.uppercased() ?? ""
-    }
-
-    private var rootName: String {
-        viewModel.rootDirectory?.lastPathComponent ?? spaceName
-    }
-
-    private var subheader: some View {
-        HStack(spacing: 0) {
-            Image(systemName: "folder.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(Color(red: 96/255, green: 165/255, blue: 250/255))
-                .frame(width: 14)
-
-            Spacer().frame(width: 5)
-
-            Text(rootName)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.65))
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            Spacer(minLength: 4)
-
-            if !contextSuffix.isEmpty {
-                Text(contextSuffix)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .tracking(0.5)
-                    .foregroundStyle(Color.primary.opacity(0.3))
-                    .padding(.trailing, 10)
-            }
-        }
-        .frame(height: 24)
-        .padding(.leading, 10)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.white.opacity(0.05))
-                .frame(height: 0.5)
-        }
-    }
 
     // MARK: - Body
 
     var body: some View {
         VStack(spacing: 0) {
-            subheader
-
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleRows) { node in
