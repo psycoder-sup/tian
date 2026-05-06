@@ -110,24 +110,33 @@ enum GitStatusService {
     static func diffStatus(
         directory: String
     ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
-        await parseDiffStatus(directory: directory, maxFiles: 100)
+        await parseDiffStatus(directory: directory, maxFiles: 100, recurseUntracked: false)
     }
 
-    /// Same shape as `diffStatus` but returns the full file list (no 100-cap).
-    /// Used by the inspect panel where every changed entry must badge.
+    /// Same shape as `diffStatus` but returns the full file list (no 100-cap)
+    /// and expands untracked directories into individual files. Used by the
+    /// inspect panel where every entry under an untracked directory must badge
+    /// (otherwise `git status` collapses `?? dir/` and the per-file ancestor
+    /// propagation in `InspectFileTreeViewModel.updateStatus` can't reach
+    /// nested directories or the files themselves).
     static func diffStatusFull(
         directory: String
     ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
-        await parseDiffStatus(directory: directory, maxFiles: nil)
+        await parseDiffStatus(directory: directory, maxFiles: nil, recurseUntracked: true)
     }
 
     private static func parseDiffStatus(
         directory: String,
-        maxFiles: Int?
+        maxFiles: Int?,
+        recurseUntracked: Bool
     ) async -> (summary: GitDiffSummary, files: [GitChangedFile]) {
         do {
+            var args = ["status", "--porcelain=v1", "--ignore-submodules"]
+            if recurseUntracked {
+                args.append("--untracked-files=all")
+            }
             let result = try await runGit(
-                ["status", "--porcelain=v1", "--ignore-submodules"],
+                args,
                 workingDirectory: directory
             )
             guard result.exitCode == 0 else {

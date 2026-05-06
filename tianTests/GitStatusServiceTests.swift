@@ -230,6 +230,28 @@ struct GitStatusServiceTests {
         #expect(capped.summary.added == 150)
     }
 
+    @Test func diffStatusFullExpandsUntrackedDirectories() async throws {
+        // Regression: without --untracked-files=all, git collapses an untracked
+        // dir into a single `?? dir/` entry and the inspect panel's ancestor
+        // propagation can't reach the nested directory or its files.
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let nestedDir = (repo as NSString).appendingPathComponent("docs/test")
+        try FileManager.default.createDirectory(atPath: nestedDir,
+                                                  withIntermediateDirectories: true)
+        let filePath = (nestedDir as NSString).appendingPathComponent("this-is-test-file")
+        try "test".write(toFile: filePath, atomically: true, encoding: .utf8)
+
+        let full = await GitStatusService.diffStatusFull(directory: repo)
+        #expect(full.files.contains(where: { $0.path == "docs/test/this-is-test-file" }))
+        #expect(full.files.allSatisfy { !$0.path.hasSuffix("/") })
+
+        // The capped/legacy variant still collapses (keeps existing behavior).
+        let capped = await GitStatusService.diffStatus(directory: repo)
+        #expect(capped.files.contains(where: { $0.path == "docs/" }))
+    }
+
     // MARK: - fetchPRStatus
 
     @Test func fetchPRStatusReturnsNilForNonGitDir() async throws {
