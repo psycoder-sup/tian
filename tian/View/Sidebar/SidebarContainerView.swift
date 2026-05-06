@@ -45,10 +45,25 @@ struct SidebarContainerView: View {
     /// Leading inset that reserves room for the traffic lights + sidebar
     /// toggle when the sidebar is collapsed, and matches the sidebar width
     /// when expanded. 104pt = 80pt traffic-light gutter + 6pt HStack spacing
-    /// + ~18pt toggle button. Shared by both the toggle overlay and the
-    /// content's leading padding so the overlay never covers content.
+    /// + ~18pt toggle button. Used to size the toggle button overlay frame.
     private var toggleGutterWidth: CGFloat {
         max(sidebarState.mode.width, 104)
+    }
+
+    /// Inset applied to the leading edge of the leftmost section's tab bar
+    /// so the bar doesn't slide under the sidebar toggle / traffic lights.
+    /// Drops to zero when the sidebar is wide enough to swallow the toggle.
+    private var sectionTabBarLeadingInset: CGFloat {
+        max(104 - sidebarState.mode.width, 0)
+    }
+
+    /// Inset applied to the trailing edge of the rightmost section's tab
+    /// bar so the bar doesn't slide under the inspect-panel rail. Zero
+    /// when the panel is open (rail moves with the panel column).
+    private var sectionTabBarTrailingInset: CGFloat {
+        guard let workspace = activeWorkspace,
+              !workspace.inspectPanelState.isVisible else { return 0 }
+        return 26
     }
 
     var body: some View {
@@ -119,8 +134,7 @@ struct SidebarContainerView: View {
             }
 
             spaceContentStack
-                .padding(.leading, toggleGutterWidth)
-                .padding(.trailing, inspectRailGutter)
+                .padding(.leading, sidebarState.mode.width)
                 .padding(.bottom, bottomContentInset)
 
             HStack(spacing: 6) {
@@ -175,16 +189,6 @@ struct SidebarContainerView: View {
             .padding(.top, 13)
             .padding(.trailing, 10)
         }
-    }
-
-    /// Right gutter reserved for the floating inspect-panel rail when the
-    /// panel is collapsed, so the section tab bar's trailing toolbar sits
-    /// ~6 pt to the rail's left.
-    /// 26 = 22 pt rail width + 10 pt rail trailing inset − 6 pt overlap into pad.
-    private var inspectRailGutter: CGFloat {
-        guard let workspace = activeWorkspace,
-              !workspace.inspectPanelState.isVisible else { return 0 }
-        return 26
     }
 
     /// Inline show/hide-terminal toggle anchored to the bottom-leading
@@ -261,7 +265,9 @@ struct SidebarContainerView: View {
                     let isActive = space.id == spaceCollection.activeSpaceID
                     SpaceContentView(
                         spaceModel: space,
-                        resolveWorkingDirectory: { spaceCollection.resolveWorkingDirectory() }
+                        resolveWorkingDirectory: { spaceCollection.resolveWorkingDirectory() },
+                        windowLeadingInset: sectionTabBarLeadingInset,
+                        windowTrailingInset: sectionTabBarTrailingInset
                     )
                     .opacity(isActive ? 1 : 0)
                     .allowsHitTesting(isActive)

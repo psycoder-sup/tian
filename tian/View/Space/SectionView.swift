@@ -17,6 +17,13 @@ struct SectionView: View {
     /// focus ring / cursor accordingly.
     var isSectionFocused: Bool
 
+    /// Horizontal insets applied only to the section tab bar so it clears
+    /// the sidebar toggle (leading) and inspect-panel rail (trailing) when
+    /// this section sits against the corresponding window edge. The pane
+    /// surfaces below the tab bar still extend full-bleed.
+    var leadingTabBarInset: CGFloat = 0
+    var trailingTabBarInset: CGFloat = 0
+
     var body: some View {
         if section.kind == .claude && section.tabs.isEmpty {
             EmptyClaudePlaceholderView(
@@ -41,6 +48,8 @@ struct SectionView: View {
                 .padding(.top, SectionTabBarView.height)
 
                 tabBar(for: activeTab)
+                    .padding(.leading, leadingTabBarInset)
+                    .padding(.trailing, trailingTabBarInset)
                     // Tab bar before terminal pane in VoiceOver order.
                     .accessibilitySortPriority(1)
             }

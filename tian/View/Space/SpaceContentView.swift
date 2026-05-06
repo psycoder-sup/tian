@@ -13,6 +13,13 @@ struct SpaceContentView: View {
     @Bindable var spaceModel: SpaceModel
     var resolveWorkingDirectory: () -> String
 
+    /// Inset applied to a section's tab bar when that section touches the
+    /// window's leading edge (clears the traffic-lights + sidebar toggle).
+    var windowLeadingInset: CGFloat = 0
+    /// Inset applied to a section's tab bar when that section touches the
+    /// window's trailing edge (clears the inspect-panel rail).
+    var windowTrailingInset: CGFloat = 0
+
     /// Live ratio threaded from the divider drag gesture to the two
     /// sibling sections. `nil` when no drag is active.
     @State private var liveDragRatio: Double?
@@ -50,12 +57,25 @@ struct SpaceContentView: View {
             ? containerSize.width
             : containerSize.height
 
+        // Claude is the leading/topmost section in every layout, so it
+        // always pays the leading window inset. The trailing inset only
+        // applies when no terminal sits between Claude and the trailing
+        // edge — i.e. terminal hidden, or terminal docked at the bottom.
+        let terminalDockedRight = spaceModel.terminalVisible && spaceModel.dockPosition == .right
+        let claudeTrailing: CGFloat = terminalDockedRight ? 0 : windowTrailingInset
+        // Terminal needs the leading inset only when it spans the full
+        // width (docked bottom). The trailing inset always applies because
+        // the terminal section reaches the trailing edge in both layouts.
+        let terminalLeading: CGFloat = spaceModel.dockPosition == .bottom ? windowLeadingInset : 0
+
         ZStack(alignment: .topLeading) {
             SectionView(
                 spaceModel: spaceModel,
                 section: spaceModel.claudeSection,
                 resolveWorkingDirectory: resolveWorkingDirectory,
-                isSectionFocused: spaceModel.focusedSectionKind == .claude
+                isSectionFocused: spaceModel.focusedSectionKind == .claude,
+                leadingTabBarInset: windowLeadingInset,
+                trailingTabBarInset: claudeTrailing
             )
             .frame(
                 width: layout?.claude.width ?? containerSize.width,
@@ -71,7 +91,9 @@ struct SpaceContentView: View {
                     spaceModel: spaceModel,
                     section: spaceModel.terminalSection,
                     resolveWorkingDirectory: resolveWorkingDirectory,
-                    isSectionFocused: spaceModel.focusedSectionKind == .terminal
+                    isSectionFocused: spaceModel.focusedSectionKind == .terminal,
+                    leadingTabBarInset: terminalLeading,
+                    trailingTabBarInset: windowTrailingInset
                 )
                 .frame(width: layout.terminal.width, height: layout.terminal.height)
                 .offset(x: layout.terminal.minX, y: layout.terminal.minY)
