@@ -12,6 +12,12 @@ final class SpaceGitContext {
     /// Map of detected repos to their current status. Drives sidebar re-renders.
     private(set) var repoStatuses: [GitRepoID: GitRepoStatus] = [:]
 
+    /// Set of repos whose branch graph has been invalidated by an FSEvents
+    /// batch since the last successful Branch-tab fetch. The Branch view-
+    /// model reads + clears this. Working-tree-only events do NOT add to
+    /// this set.
+    private(set) var branchGraphDirty: Set<GitRepoID> = []
+
     /// Maps each pane ID to its detected repo (nil entry = not yet detected or not in a repo).
     private(set) var paneRepoAssignments: [UUID: GitRepoID] = [:]
 
@@ -199,6 +205,12 @@ final class SpaceGitContext {
             guard let directory = repoDirectories[repoID] else { continue }
             refreshRepo(repoID: repoID, directory: directory)
         }
+    }
+
+    /// Removes a repo from the `branchGraphDirty` set. Called by the Branch
+    /// view-model after a successful branch-graph refetch.
+    func clearBranchGraphDirty(repoID: GitRepoID) {
+        branchGraphDirty.remove(repoID)
     }
 
     /// Cancels all in-flight tasks and clears state. Called on Space close.
@@ -399,31 +411,41 @@ final class SpaceGitContext {
         guard watchers[repoID] == nil else { return }
 
         let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
-        // Canonicalize once so `pathsAffectPRState` doesn't call `realpath(3)`
-        // on every FSEvents batch.
+        // Canonicalize once so `pathsAffectPRState` / `pathsAffectBranchGraph`
+        // don't call `realpath(3)` on every FSEvents batch.
         let canonicalCommonDir = GitRepoWatcher.canonicalizedPath(location.commonDir)
 
         let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] paths in
-            // When a batch of events touches `refs/remotes/*` or `packed-refs`,
-            // drop the cached `gh pr view` result for this repo — the next
-            // refresh will refetch so `gh pr create`, `gh pr merge`, or remote
-            // ref updates are reflected immediately instead of waiting for the
-            // 60 s TTL to expire.
-            let affectsPR = GitRepoWatcher.pathsAffectPRState(
-                paths,
-                canonicalCommonDir: canonicalCommonDir
-            )
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard self.repoDirectories[repoID] != nil else { return }
-                if affectsPR {
-                    self.prCache.evict(repoID: repoID)
-                }
+                self.processFSEventBatch(
+                    repoID: repoID,
+                    paths: paths,
+                    canonicalCommonDir: canonicalCommonDir
+                )
                 self.refreshScheduler.schedule(key: repoID)
             }
         }
 
         watchers[repoID] = watcher
+    }
+
+    /// Processes a single FSEvents batch for a repo. Evicts PR cache on remote-ref
+    /// changes (existing behaviour) and sets `branchGraphDirty` on local-ref / HEAD
+    /// changes. Extracted for testability — the production watcher calls this on
+    /// the MainActor; tests call it directly without needing live FSEvents.
+    ///
+    /// - Note: Does NOT schedule a refresh; the caller (watcher or test) does that.
+    func processFSEventBatch(repoID: GitRepoID, paths: [String], canonicalCommonDir: String) {
+        // Existing PR-cache eviction path — unchanged.
+        if GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: canonicalCommonDir) {
+            prCache.evict(repoID: repoID)
+        }
+        // Branch-graph dirty flag — new.
+        if GitRepoWatcher.pathsAffectBranchGraph(paths, canonicalCommonDir: canonicalCommonDir) {
+            branchGraphDirty.insert(repoID)
+        }
     }
 
     private func stopWatcher(repoID: GitRepoID) {
