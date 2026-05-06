@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// Renders:
 ///   - Lane legend (FR-T23) — color swatch + label per lane, with the
-///     trailing collapsed lane (`__other__`) muted.
+///     trailing collapsed lane (`GitLane.collapsedID`) muted.
 ///   - Lane gutter overlay (FR-T22) — `BranchGraphCanvas` draws lane rails,
 ///     commit nodes (HEAD ring on the topmost), and parent edges as a single
 ///     `Canvas`. `.drawingGroup()` rasterizes through Metal so scrolling
@@ -18,8 +18,8 @@ struct InspectBranchBody: View {
     /// repo. FR-T19: no-repo wins over empty.
     let isNoRepo: Bool
 
-    /// Per-row vertical pitch — `BranchCommitRow` is 38 px tall.
-    private static let rowHeight: CGFloat = 38
+    /// Per-row vertical pitch — shared with `BranchCommitRow.rowHeight`.
+    private static let rowHeight: CGFloat = BranchCommitRow.rowHeight
     /// Per-lane horizontal pitch.
     private static let laneWidth: CGFloat = 14
     /// Padding between the rightmost rail and the commit text column.
@@ -29,15 +29,15 @@ struct InspectBranchBody: View {
 
     var body: some View {
         if isNoRepo {
-            CenteredMutedText("Not in a git repository.")
+            InspectPanelMutedMessage("Not in a git repository.")
         } else if viewModel.graph == nil && viewModel.isLoadingInitial {
-            CenteredMutedText("Loading…")
+            InspectPanelMutedMessage("Loading…")
         } else if let graph = viewModel.graph {
             graphBody(graph)
         } else {
             // Stale (no graph yet, no longer "loading initial") — render a
             // dim Loading… so the body is never blank.
-            CenteredMutedText("Loading…")
+            InspectPanelMutedMessage("Loading…")
         }
     }
 

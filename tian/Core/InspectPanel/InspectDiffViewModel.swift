@@ -82,6 +82,10 @@ final class InspectDiffViewModel {
     // MARK: - Internals
 
     private func runRefresh(directory: String) async {
+        // If the debounce task that led here was cancelled, don't spawn a
+        // child task that would write stale state after a newer debounce fires.
+        if Task.isCancelled { return }
+
         // Cancel any prior in-flight diff before issuing a new one.
         inFlightTask?.cancel()
 

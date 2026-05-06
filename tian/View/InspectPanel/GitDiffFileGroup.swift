@@ -76,12 +76,12 @@ struct GitDiffFileGroup: View {
             if file.additions > 0 {
                 Text("+\(file.additions)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 134/255, green: 239/255, blue: 172/255).opacity(0.85))
+                    .foregroundStyle(DiffColors.added.opacity(0.85))
             }
             if file.deletions > 0 {
                 Text("−\(file.deletions)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 252/255, green: 165/255, blue: 165/255).opacity(0.85))
+                    .foregroundStyle(DiffColors.deleted.opacity(0.85))
             }
         }
         .padding(.horizontal, 8)
@@ -120,15 +120,7 @@ struct GitDiffFileGroup: View {
 
     // MARK: - Tokens
 
-    private var statusColor: Color {
-        switch file.status {
-        case .added:    return Color(red: 134/255, green: 239/255, blue: 172/255)
-        case .modified: return Color(red: 250/255, green: 204/255, blue: 21/255)
-        case .deleted:  return Color(red: 252/255, green: 165/255, blue: 165/255)
-        case .renamed:  return Color(red: 147/255, green: 197/255, blue: 253/255)
-        case .unmerged: return Color(red: 251/255, green: 146/255, blue: 60/255)
-        }
-    }
+    private var statusColor: Color { file.status.color }
 
     private var statusWord: String {
         switch file.status {
@@ -191,8 +183,8 @@ struct DiffLineRow: View {
 
     private var markerColor: Color {
         switch line.kind {
-        case .added:   return Color(red: 134/255, green: 239/255, blue: 172/255).opacity(0.85)
-        case .deleted: return Color(red: 252/255, green: 165/255, blue: 165/255).opacity(0.85)
+        case .added:   return DiffColors.added.opacity(0.85)
+        case .deleted: return DiffColors.deleted.opacity(0.85)
         case .context: return Color.primary.opacity(0.3)
         }
     }
@@ -206,8 +198,8 @@ struct DiffLineRow: View {
 
     private var rowBackground: Color {
         switch line.kind {
-        case .added:   return Color(red: 34/255, green: 197/255, blue: 94/255).opacity(0.08)
-        case .deleted: return Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.09)
+        case .added:   return DiffColors.added.opacity(0.07)
+        case .deleted: return DiffColors.deleted.opacity(0.08)
         case .context: return Color.clear
         }
     }

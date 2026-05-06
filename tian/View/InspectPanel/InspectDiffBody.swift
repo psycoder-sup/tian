@@ -22,11 +22,11 @@ struct InspectDiffBody: View {
 
     var body: some View {
         if isNoRepo {
-            CenteredMutedText("Not in a git repository.")
+            InspectPanelMutedMessage("Not in a git repository.")
         } else if viewModel.isLoadingInitial {
-            CenteredMutedText("Loading…")
+            InspectPanelMutedMessage("Loading…")
         } else if viewModel.files.isEmpty {
-            CenteredMutedText("No changes against HEAD.")
+            InspectPanelMutedMessage("No changes against HEAD.")
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
@@ -51,24 +51,6 @@ struct InspectDiffBody: View {
                 .onAppear { proxy.scrollTo("diff-top", anchor: .top) }
             }
         }
-    }
-}
-
-// MARK: - Centered muted text helper
-
-/// Centered, dim placeholder used by Diff and Branch bodies for empty,
-/// loading, and no-repo states (FR-T17 / FR-T19 / FR-T26 / FR-T27).
-struct CenteredMutedText: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(Color.primary.opacity(0.35))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

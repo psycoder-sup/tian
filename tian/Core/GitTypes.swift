@@ -83,11 +83,11 @@ enum GitFileStatus: String, Sendable {
 
     var color: Color {
         switch self {
-        case .modified: .yellow
-        case .added: .green
-        case .deleted: .red
-        case .renamed: .blue
-        case .unmerged: .orange
+        case .modified: Color(red: 245/255, green: 158/255, blue: 11/255)
+        case .added:    Color(red: 110/255, green: 225/255, blue: 154/255)
+        case .deleted:  Color(red: 255/255, green: 154/255, blue: 154/255)
+        case .renamed:  Color(red: 96/255,  green: 165/255, blue: 250/255)
+        case .unmerged: Color(red: 251/255, green: 146/255, blue: 60/255)
         }
     }
 }
@@ -154,7 +154,7 @@ struct GitDiffLine: Sendable, Equatable {
 
 struct GitCommitGraph: Sendable, Equatable {
     /// Ordered, HEAD's lane first; surplus lanes (FR-T20a) collapse into a
-    /// single trailing lane with `id == "__other__"`.
+    /// single trailing lane with `id == GitLane.collapsedID`.
     let lanes: [GitLane]
     /// Newest → oldest, max 50 entries (FR-T20).
     let commits: [GitCommit]
@@ -164,10 +164,14 @@ struct GitCommitGraph: Sendable, Equatable {
 }
 
 struct GitLane: Sendable, Equatable {
-    let id: String         // branch ref name, or "__other__"
+    let id: String         // branch ref name, or `GitLane.collapsedID`
     let label: String
     let colorIndex: Int    // resolved to a Color by the view from a fixed palette
     let isCollapsed: Bool  // true only for the "other" lane
+
+    /// Magic lane ID used for the collapsed "other" lane that aggregates
+    /// surplus branches beyond the 6-lane cap (FR-T20a).
+    static let collapsedID = "__other__"
 }
 
 struct GitCommit: Sendable, Equatable {

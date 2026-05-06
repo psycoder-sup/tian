@@ -1,5 +1,16 @@
 import SwiftUI
 
+/// File-level cache for `RelativeDateTimeFormatter` to avoid repeated
+/// allocations inside `BranchCommitRow.a11yLabel`. `nonisolated(unsafe)`
+/// because `RelativeDateTimeFormatter` is not `Sendable` — safe here since
+/// the formatter is read-only after initialization and `a11yLabel` is called
+/// from the main actor.
+private nonisolated(unsafe) let relativeDateFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .short
+    return f
+}()
+
 /// One commit row in the Branch tab body (FR-T21).
 ///
 /// Layout (38 px tall):
@@ -21,6 +32,9 @@ struct BranchCommitRow: View {
     /// Lane gutter width — matches `BranchGraphCanvas.gutterWidth(for:)` so
     /// the row's content sits flush with the right edge of the rails.
     let gutterWidth: CGFloat
+
+    /// Row height shared with `InspectBranchBody` for canvas/row alignment.
+    static let rowHeight: CGFloat = 38
 
     init(commit: GitCommit, lanes: [GitLane], isHead: Bool = false, gutterWidth: CGFloat) {
         self.commit = commit
@@ -151,9 +165,7 @@ struct BranchCommitRow: View {
     // MARK: - A11y (FR-T34)
 
     private var a11yLabel: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        let relativeTime = formatter.localizedString(for: commit.when, relativeTo: Date())
+        let relativeTime = relativeDateFormatter.localizedString(for: commit.when, relativeTo: Date())
         var s = "\(commit.shortSha), \(commit.subject), by \(commit.author), \(relativeTime)"
         if commit.isMerge { s += ", merge" }
         return s

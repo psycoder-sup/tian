@@ -443,7 +443,8 @@ final class SpaceGitContext {
             prCache.evict(repoID: repoID)
         }
         // Branch-graph dirty flag — new.
-        if GitRepoWatcher.pathsAffectBranchGraph(paths, canonicalCommonDir: canonicalCommonDir) {
+        if GitRepoWatcher.pathsAffectBranchGraph(paths, canonicalCommonDir: canonicalCommonDir),
+           !branchGraphDirty.contains(repoID) {
             branchGraphDirty.insert(repoID)
         }
     }

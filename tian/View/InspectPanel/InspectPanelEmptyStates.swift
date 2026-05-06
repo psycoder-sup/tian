@@ -48,6 +48,23 @@ struct InspectPanelNoDirectoryView: View {
     }
 }
 
+/// Generic centered, dim placeholder for any muted message in the inspect
+/// panel (loading, empty, no-repo, etc.). Used by Diff and Branch bodies
+/// to avoid duplicating the style (FR-T17 / FR-T19 / FR-T26 / FR-T27).
+struct InspectPanelMutedMessage: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(Color.primary.opacity(0.35))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Loading") {

@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import os
 
 /// Resolved git repository paths for a directory. `isWorktree` lets callers
 /// tell apart a regular repo from a linked worktree without re-parsing the
@@ -222,19 +223,8 @@ enum GitStatusService {
     /// capped at 5 000 entries; hunks past the cap set `truncatedLines`.
     /// Returns `[]` when not inside a git repo.
     static func unifiedDiff(directory: String) async -> [GitFileDiff] {
-        // Verify we are inside a git repo.
-        do {
-            let check = try await runGit(
-                ["rev-parse", "--is-inside-work-tree"],
-                workingDirectory: directory
-            )
-            guard check.exitCode == 0 else { return [] }
-        } catch {
-            Log.git.error("unifiedDiff repo check failed for \(directory): \(error)")
-            return []
-        }
-
         // 1. Run `git status --porcelain` to identify untracked files (excluded from HEAD diff).
+        // A non-zero exit code here means we're not in a repo — return [] immediately.
         let untrackedPaths: [String]
         do {
             let statusResult = try await runGit(
@@ -358,6 +348,9 @@ enum GitStatusService {
         var oldLineCounter = 0
         var newLineCounter = 0
         var totalEmittedLines = 0  // across all hunks for the current file
+        // Running inline counters — avoids a flatMap+filter pass in flushFile.
+        var fileAdditions = 0
+        var fileDeletions = 0
         let lineCapPerFile = 5000
 
         func flushHunk() {
@@ -377,13 +370,11 @@ enum GitStatusService {
         func flushFile() {
             guard let path = currentPath else { return }
             flushHunk()
-            let additions = hunks.flatMap(\.lines).filter { $0.kind == .added }.count
-            let deletions = hunks.flatMap(\.lines).filter { $0.kind == .deleted }.count
             results.append(GitFileDiff(
                 path: path,
                 status: currentStatus,
-                additions: additions,
-                deletions: deletions,
+                additions: fileAdditions,
+                deletions: fileDeletions,
                 hunks: isBinary ? [] : hunks,
                 isBinary: isBinary
             ))
@@ -397,6 +388,8 @@ enum GitStatusService {
             oldLineCounter = 0
             newLineCounter = 0
             totalEmittedLines = 0
+            fileAdditions = 0
+            fileDeletions = 0
         }
 
         var i = 0
@@ -503,12 +496,14 @@ enum GitStatusService {
                     oldNum = nil
                     newNum = newLineCounter
                     newLineCounter += 1
+                    fileAdditions += 1
                     text = String(line.dropFirst(1))
                 } else if line.hasPrefix("-") {
                     kind = .deleted
                     oldNum = oldLineCounter
                     newNum = nil
                     oldLineCounter += 1
+                    fileDeletions += 1
                     text = String(line.dropFirst(1))
                 } else {
                     // Context line (starts with " " or could be empty for end-of-file)
@@ -537,14 +532,17 @@ enum GitStatusService {
         return results
     }
 
+    /// Pre-compiled regex for hunk header lines (hoisted to avoid per-call
+    /// recompilation — pattern is constant).
+    private static let hunkHeaderRegex = try! NSRegularExpression(
+        pattern: #"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@"#
+    )
+
     /// Parses a hunk header line like `@@ -10,6 +10,8 @@ optional context`.
     private static func parseHunkHeader(
         _ header: String
     ) -> (oldStart: Int, oldLen: Int, newStart: Int, newLen: Int)? {
-        // Format: @@ -<oldStart>[,<oldLen>] +<newStart>[,<newLen>] @@
-        let pattern = #"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(
+        guard let match = Self.hunkHeaderRegex.firstMatch(
                   in: header,
                   range: NSRange(header.startIndex..., in: header)
               ) else {
@@ -630,8 +628,16 @@ enum GitStatusService {
     // MARK: - Commit Graph (FR-T20 / FR-T20a / FR-T25)
 
     /// Incremented once per subprocess invoked by `commitGraph`. Readable in
-    /// tests to assert exactly 3 subprocess calls per fetch.
-    nonisolated(unsafe) static var commitGraphSubprocessCounter: Int = 0
+    /// tests to assert exactly 3 subprocess calls per fetch. Thread-safe via
+    /// `OSAllocatedUnfairLock`.
+    private static let _commitGraphSubprocessCounter = OSAllocatedUnfairLock(initialState: 0)
+    static var commitGraphSubprocessCounter: Int {
+        get { _commitGraphSubprocessCounter.withLock { $0 } }
+        set { _commitGraphSubprocessCounter.withLock { $0 = newValue } }
+    }
+    private static func incrementCommitGraphSubprocessCounter() {
+        _commitGraphSubprocessCounter.withLock { $0 += 1 }
+    }
 
     /// Returns the commit graph rooted at HEAD for the active space's repo.
     /// Walks back up to 50 commits along first-parent of all local branch
@@ -655,7 +661,7 @@ enum GitStatusService {
                  "--pretty=format:\(logFormat)", "--all"],
                 workingDirectory: directory
             )
-            commitGraphSubprocessCounter += 1
+            incrementCommitGraphSubprocessCounter()
         } catch {
             Log.git.error("commitGraph git log failed for \(directory): \(error)")
             return nil
@@ -665,28 +671,30 @@ enum GitStatusService {
             return nil
         }
 
-        // ── Subprocess #2: git for-each-ref ────────────────────────────────
+        // ── Subprocesses #2 and #3: run in parallel ────────────────────────
+        async let refFetch = runGit(
+            ["for-each-ref", "refs/heads", "refs/remotes",
+             "--format=%(refname:short) %(objectname)"],
+            workingDirectory: directory
+        )
+        async let tagFetch = runGit(
+            ["tag", "-l", "--format=%(objectname:short) %(refname:short)"],
+            workingDirectory: directory
+        )
+
         let refResult: (exitCode: Int32, stdout: String, stderr: String)
         do {
-            refResult = try await runGit(
-                ["for-each-ref", "refs/heads", "refs/remotes",
-                 "--format=%(refname:short) %(objectname)"],
-                workingDirectory: directory
-            )
-            commitGraphSubprocessCounter += 1
+            refResult = try await refFetch
+            incrementCommitGraphSubprocessCounter()
         } catch {
             Log.git.error("commitGraph git for-each-ref failed for \(directory): \(error)")
             return nil
         }
 
-        // ── Subprocess #3: git tag -l ───────────────────────────────────────
         let tagResult: (exitCode: Int32, stdout: String, stderr: String)
         do {
-            tagResult = try await runGit(
-                ["tag", "-l", "--format=%(objectname:short) %(refname:short)"],
-                workingDirectory: directory
-            )
-            commitGraphSubprocessCounter += 1
+            tagResult = try await tagFetch
+            incrementCommitGraphSubprocessCounter()
         } catch {
             Log.git.error("commitGraph git tag failed for \(directory): \(error)")
             return nil
@@ -921,7 +929,7 @@ enum GitStatusService {
         }
         if collapsedCount > 0 {
             lanes.append(GitLane(
-                id: "__other__",
+                id: GitLane.collapsedID,
                 label: "other",
                 colorIndex: lanes.count,
                 isCollapsed: true

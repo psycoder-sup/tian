@@ -70,9 +70,9 @@ struct GitStatusServiceCommitGraphTests {
         let graph = await GitStatusService.commitGraph(directory: repo)
         let g = try #require(graph)
 
-        // Should have 7 lanes: 6 named + 1 "__other__"
+        // Should have 7 lanes: 6 named + 1 collapsed "other" lane
         #expect(g.lanes.count == 7)
-        #expect(g.lanes.last?.id == "__other__")
+        #expect(g.lanes.last?.id == GitLane.collapsedID)
         #expect(g.lanes.last?.isCollapsed == true)
         // 9 branch tips total, 6 named lanes → 3 collapsed
         #expect(g.collapsedLaneCount == 3)

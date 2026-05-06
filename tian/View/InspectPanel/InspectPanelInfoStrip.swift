@@ -39,17 +39,15 @@ struct InspectPanelInfoStrip: View {
     // MARK: - Body
 
     var body: some View {
-        HStack(spacing: 0) {
-            Group {
-                switch activeTab {
-                case .files:  filesContent
-                case .diff:   diffContent
-                case .branch: branchContent
-                }
+        Group {
+            switch activeTab {
+            case .files:  filesContent
+            case .diff:   diffContent
+            case .branch: branchContent
             }
-            .padding(.leading, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.leading, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: Self.height)
         .background(
             Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.3)
@@ -89,11 +87,11 @@ struct InspectPanelInfoStrip: View {
 
                 Text("+\(summary.additions)")
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 134/255, green: 239/255, blue: 172/255).opacity(0.85))
+                    .foregroundStyle(DiffColors.added.opacity(0.85))
 
                 Text("−\(summary.deletions)")
                     .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 252/255, green: 165/255, blue: 165/255).opacity(0.85))
+                    .foregroundStyle(DiffColors.deleted.opacity(0.85))
             }
         } else {
             // Empty diff or data not yet loaded (FR-T07).

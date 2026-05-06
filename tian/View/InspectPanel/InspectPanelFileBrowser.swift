@@ -11,25 +11,23 @@ struct InspectPanelFileBrowser: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    ForEach(viewModel.visibleRows) { node in
-                        InspectPanelFileRow(
-                            node: node,
-                            depth: node.depth,
-                            isExpanded: viewModel.expandedPaths.contains(node.id),
-                            isSelected: viewModel.selectedPath == node.id,
-                            status: viewModel.statusByRelativePath[node.relativePath],
-                            onTap: {
-                                if node.isDirectory {
-                                    viewModel.toggle(node.id)
-                                } else {
-                                    viewModel.select(node.id)
-                                }
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.visibleRows) { node in
+                    InspectPanelFileRow(
+                        node: node,
+                        depth: node.depth,
+                        isExpanded: viewModel.expandedPaths.contains(node.id),
+                        isSelected: viewModel.selectedPath == node.id,
+                        status: viewModel.statusByRelativePath[node.relativePath],
+                        onTap: {
+                            if node.isDirectory {
+                                viewModel.toggle(node.id)
+                            } else {
+                                viewModel.select(node.id)
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }

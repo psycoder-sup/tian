@@ -31,13 +31,7 @@ struct InspectPanelFileRow: View {
 
     private var badgeColor: Color? {
         guard let status else { return nil }
-        switch status {
-        case .modified:  return Color(red: 245/255, green: 158/255, blue: 11/255)  // #f59e0b
-        case .added:     return Color(red: 110/255, green: 225/255, blue: 154/255) // #6ee19a
-        case .deleted:   return Color(red: 255/255, green: 154/255, blue: 154/255) // #ff9a9a
-        case .renamed:   return Color(red: 96/255,  green: 165/255, blue: 250/255) // #60a5fa
-        case .unmerged:  return Color(red: 245/255, green: 158/255, blue: 11/255)
-        }
+        return status.color
     }
 
     // MARK: - Icon tint (FR-14)
