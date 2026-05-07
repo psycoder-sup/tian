@@ -16,6 +16,9 @@ struct InspectPanelFileRow: View {
     let isExpanded: Bool
     let isSelected: Bool
     let status: GitFileStatus?
+    /// `true` when this row is gitignored (directly or via an ancestor).
+    /// Dims the icon + text so users can scan past build output / `.env` etc.
+    let isIgnored: Bool
     let onTap: () -> Void
 
     @State private var isHovering = false
@@ -150,6 +153,7 @@ struct InspectPanelFileRow: View {
         .frame(height: Self.rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground)
+        .opacity(isIgnored && !isSelected ? 0.45 : 1)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture { onTap() }
@@ -219,6 +223,7 @@ private struct Spacing: View {
             isExpanded: true,
             isSelected: false,
             status: nil,
+            isIgnored: false,
             onTap: {}
         )
         InspectPanelFileRow(
@@ -227,6 +232,7 @@ private struct Spacing: View {
             isExpanded: false,
             isSelected: true,
             status: .modified,
+            isIgnored: false,
             onTap: {}
         )
         InspectPanelFileRow(
@@ -235,6 +241,7 @@ private struct Spacing: View {
             isExpanded: false,
             isSelected: false,
             status: .added,
+            isIgnored: false,
             onTap: {}
         )
         InspectPanelFileRow(
@@ -243,6 +250,7 @@ private struct Spacing: View {
             isExpanded: false,
             isSelected: false,
             status: .deleted,
+            isIgnored: false,
             onTap: {}
         )
         InspectPanelFileRow(
@@ -251,6 +259,7 @@ private struct Spacing: View {
             isExpanded: false,
             isSelected: false,
             status: .renamed,
+            isIgnored: false,
             onTap: {}
         )
         InspectPanelFileRow(
@@ -259,6 +268,7 @@ private struct Spacing: View {
             isExpanded: false,
             isSelected: false,
             status: nil,
+            isIgnored: false,
             onTap: {}
         )
     }

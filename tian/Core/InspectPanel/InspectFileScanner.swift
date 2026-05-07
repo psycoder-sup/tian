@@ -3,14 +3,14 @@ import Foundation
 enum InspectFileScanner {
 
     /// Returns POSIX-relative paths (no leading `./`) for every tracked or
-    /// untracked-not-ignored file under `workingTree`. Throws if `git`
-    /// returns a non-zero exit code.
+    /// untracked non-ignored file under `workingTree`.
+    /// Throws if `git` returns a non-zero exit code.
     ///
     /// Implementation note: shells out to
-    /// `git ls-files --cached --others --exclude-standard -z` and decodes
-    /// the NUL-separated output. Using git itself avoids re-implementing
-    /// `.gitignore` parsing and keeps semantics identical to the user's
-    /// `git status` output (FR-15, FR-15a, FR-16).
+    /// `git ls-files --cached --others --exclude-standard -z`.
+    /// Ignored entries are omitted here; callers that want to show them as
+    /// single dimmed nodes merge in the rolled-up directory entries returned
+    /// by `scanGitIgnored`. `git ls-files` itself never recurses into `.git/`.
     static func scanGitTracked(workingTree: String) async throws -> [String] {
         let result = try await runGit(
             ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -19,13 +19,39 @@ enum InspectFileScanner {
         guard result.exitCode == 0 else {
             throw ScannerError.gitFailed(exitCode: result.exitCode, stderr: result.stderr)
         }
-        // -z separates entries by NUL. Decode and drop the trailing empty
-        // element that follows the final NUL byte.
         guard let raw = String(data: result.stdoutData, encoding: .utf8) else {
             throw ScannerError.decodeFailed
         }
         return raw.split(separator: "\0", omittingEmptySubsequences: true)
             .map(String.init)
+    }
+
+    /// Returns the set of relative paths git considers ignored under
+    /// `workingTree` — both individual files and rolled-up directories
+    /// (a `.gitignore` line of `node_modules/` produces the directory
+    /// `node_modules` here, not its 50k descendants). Callers that need
+    /// per-descendant lookup should walk parent prefixes and check each
+    /// against the set. `--directory` keeps this query cheap on big repos.
+    static func scanGitIgnored(workingTree: String) async throws -> Set<String> {
+        let result = try await runGit(
+            ["ls-files", "--others", "--ignored", "--exclude-standard",
+             "--directory", "-z"],
+            workingDirectory: workingTree
+        )
+        guard result.exitCode == 0 else {
+            throw ScannerError.gitFailed(exitCode: result.exitCode, stderr: result.stderr)
+        }
+        guard let raw = String(data: result.stdoutData, encoding: .utf8) else {
+            throw ScannerError.decodeFailed
+        }
+        var set = Set<String>()
+        for entry in raw.split(separator: "\0", omittingEmptySubsequences: true) {
+            // Normalize trailing slash on directory entries so callers can
+            // do a simple `Set.contains(relativePath)` lookup.
+            let s = String(entry)
+            set.insert(s.hasSuffix("/") ? String(s.dropLast()) : s)
+        }
+        return set
     }
 
     /// Returns POSIX-relative paths for every non-hidden file under `root`

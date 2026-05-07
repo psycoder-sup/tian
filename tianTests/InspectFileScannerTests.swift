@@ -4,8 +4,11 @@ import Testing
 
 struct InspectFileScannerTests {
 
-    // FR-15 / FR-15a / FR-20 — `git ls-files --cached --others --exclude-standard -z`
-    // must yield tracked + untracked-not-ignored files, never ignored ones.
+    // `git ls-files --cached --others --exclude-standard -z` yields tracked
+    // and untracked non-ignored files. Ignored entries are intentionally
+    // excluded from the scanner; the view model merges rolled-up ignored
+    // directory entries from `scanGitIgnored` separately so they appear as
+    // single dimmed nodes instead of 50k+ individual paths.
     @Test func gitTrackedReturnsTrackedAndUntrackedNotIgnored() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
@@ -24,13 +27,15 @@ struct InspectFileScannerTests {
         let untrackedPath = (repo as NSString).appendingPathComponent("untracked.txt")
         try "untracked".write(toFile: untrackedPath, atomically: true, encoding: .utf8)
 
-        // Ignored file — present on disk but referenced by .gitignore.
+        // Ignored file — present on disk and referenced by .gitignore.
         let ignoredPath = (repo as NSString).appendingPathComponent("ignored.txt")
         try "ignored".write(toFile: ignoredPath, atomically: true, encoding: .utf8)
 
         let result = try await InspectFileScanner.scanGitTracked(workingTree: repo)
         #expect(result.contains("tracked.txt"))
         #expect(result.contains("untracked.txt"))
+        // With --exclude-standard the scanner no longer returns ignored files;
+        // the view model merges rolled-up ignored dirs from scanGitIgnored.
         #expect(!result.contains("ignored.txt"))
     }
 

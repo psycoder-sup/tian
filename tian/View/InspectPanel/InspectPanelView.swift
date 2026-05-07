@@ -37,12 +37,7 @@ struct InspectPanelView: View {
                 worktreeKind: viewModel.worktreeKind,
                 isInitialScan: viewModel.isInitialScanInFlight,
                 diffSummary: liveDiffSummary,
-                branchLabel: liveBranchLabel,
-                onHide: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        panelState.isVisible = false
-                    }
-                }
+                branchLabel: liveBranchLabel
             )
 
             panelBody

@@ -156,12 +156,30 @@ struct BranchGraphCanvas: View {
                 rowBySha[c.sha] = i
             }
 
-            // 1. Lane rails — vertical lines from row 0 to row N for each lane.
-            for laneIndex in 0..<columns {
+            // 1. Lane rails — per-lane, span only between the earliest (topmost)
+            // and latest (bottommost) commit on that lane. Rails never extend
+            // above the topmost or below the bottommost commit of the graph,
+            // and lanes with a single visible commit get no rail at all (the
+            // node alone tells the story).
+            var laneRowRange: [Int: (top: Int, bottom: Int)] = [:]
+            for (rowIndex, commit) in graph.commits.enumerated() {
+                let lane = commit.laneIndex
+                if let existing = laneRowRange[lane] {
+                    laneRowRange[lane] = (
+                        top: min(existing.top, rowIndex),
+                        bottom: max(existing.bottom, rowIndex)
+                    )
+                } else {
+                    laneRowRange[lane] = (top: rowIndex, bottom: rowIndex)
+                }
+            }
+            for (laneIndex, range) in laneRowRange where range.top != range.bottom {
                 let cx = CGFloat(laneIndex) * laneWidth + laneWidth / 2
+                let yTop = CGFloat(range.top) * rowHeight + rowHeight / 2
+                let yBottom = CGFloat(range.bottom) * rowHeight + rowHeight / 2
                 var path = Path()
-                path.move(to: CGPoint(x: cx, y: 0))
-                path.addLine(to: CGPoint(x: cx, y: CGFloat(rows) * rowHeight))
+                path.move(to: CGPoint(x: cx, y: yTop))
+                path.addLine(to: CGPoint(x: cx, y: yBottom))
                 let color = laneIndex < graph.lanes.count
                     ? Self.color(for: graph.lanes[laneIndex]).opacity(0.35)
                     : Color.primary.opacity(0.15)

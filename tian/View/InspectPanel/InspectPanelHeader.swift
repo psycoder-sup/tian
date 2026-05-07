@@ -3,12 +3,13 @@ import SwiftUI
 /// 64 px header for the Inspect panel (FR-T01).
 ///
 /// Composed of two rows:
-///   - 38 px `InspectPanelTabRow`  — FR-T01 / FR-T02 / FR-T03
+///   - 38 px `InspectPanelTabRow`  — FR-T01 / FR-T02
 ///   - 26 px `InspectPanelInfoStrip` — FR-T06 / FR-T07 / FR-T08
 ///
 /// Callers pass the `InspectTabState` binding; the header owns no local
-/// selection state. The floating `InspectPanelRail` (in `SidebarContainerView`)
-/// handles the *re-open* case — the in-row `onHide` callback covers *hide*.
+/// selection state. The panel-toggle button is the floating
+/// `InspectPanelRail` overlay owned by `SidebarContainerView`, which handles
+/// both the open and hide case from a single fixed position.
 struct InspectPanelHeader: View {
     static let height: CGFloat = InspectPanelTabRow.height + InspectPanelInfoStrip.height
 
@@ -22,8 +23,6 @@ struct InspectPanelHeader: View {
     let diffSummary: InspectPanelInfoStrip.DiffSummary?
     /// Active branch label or short SHA for detached HEAD.
     let branchLabel: String?
-    /// Fires when the user taps the in-row hide button.
-    let onHide: () -> Void
 
     // MARK: - Body
 
@@ -31,8 +30,7 @@ struct InspectPanelHeader: View {
         VStack(spacing: 0) {
             InspectPanelTabRow(
                 tabState: tabState,
-                isInitialScan: isInitialScan,
-                onHide: onHide
+                isInitialScan: isInitialScan
             )
 
             InspectPanelInfoStrip(
@@ -59,8 +57,7 @@ struct InspectPanelHeader: View {
         worktreeKind: .linkedWorktree,
         isInitialScan: false,
         diffSummary: nil,
-        branchLabel: "main",
-        onHide: {}
+        branchLabel: "main"
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -74,8 +71,7 @@ struct InspectPanelHeader: View {
         worktreeKind: .mainCheckout,
         isInitialScan: false,
         diffSummary: .init(fileCount: 3, additions: 54, deletions: 12),
-        branchLabel: "feat/new-ui",
-        onHide: {}
+        branchLabel: "feat/new-ui"
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -89,8 +85,7 @@ struct InspectPanelHeader: View {
         worktreeKind: .linkedWorktree,
         isInitialScan: false,
         diffSummary: nil,
-        branchLabel: "feat/inspect-panel-tabs",
-        onHide: {}
+        branchLabel: "feat/inspect-panel-tabs"
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -104,8 +99,7 @@ struct InspectPanelHeader: View {
         worktreeKind: .mainCheckout,
         isInitialScan: true,
         diffSummary: nil,
-        branchLabel: nil,
-        onHide: {}
+        branchLabel: nil
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
@@ -119,8 +113,7 @@ struct InspectPanelHeader: View {
         worktreeKind: .noWorkingDirectory,
         isInitialScan: false,
         diffSummary: nil,
-        branchLabel: nil,
-        onHide: {}
+        branchLabel: nil
     )
     .frame(width: 320)
     .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))

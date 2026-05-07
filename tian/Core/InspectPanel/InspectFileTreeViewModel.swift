@@ -7,12 +7,22 @@ import SwiftUI
 /// `InspectFileScanner`. Tests inject blocking / fixed-result implementations.
 protocol InspectFileScanning: Sendable {
     func scanGitTracked(workingTree: String) async throws -> [String]
+    func scanGitIgnored(workingTree: String) async throws -> Set<String>
     func scanFileSystem(root: URL) async throws -> [String]
+}
+
+extension InspectFileScanning {
+    /// Default: no ignored entries. Tests that don't care about ignored
+    /// state inherit this and don't need to override.
+    func scanGitIgnored(workingTree: String) async throws -> Set<String> { [] }
 }
 
 struct LiveInspectFileScanner: InspectFileScanning {
     func scanGitTracked(workingTree: String) async throws -> [String] {
         try await InspectFileScanner.scanGitTracked(workingTree: workingTree)
+    }
+    func scanGitIgnored(workingTree: String) async throws -> Set<String> {
+        try await InspectFileScanner.scanGitIgnored(workingTree: workingTree)
     }
     func scanFileSystem(root: URL) async throws -> [String] {
         try await InspectFileScanner.scanFileSystem(root: root)
@@ -29,8 +39,24 @@ final class InspectFileTreeViewModel {
     /// Recomputed on scan completion or expand/collapse.
     private(set) var visibleRows: [FileTreeNode] = []
     private(set) var statusByRelativePath: [String: GitFileStatus] = [:]
+    /// Relative paths git considers ignored. May contain rolled-up directory
+    /// entries — use `isIgnored(_:)` to look up a node correctly.
+    private var ignoredEntries: Set<String> = []
     private(set) var isInitialScanInFlight: Bool = false
     private(set) var isInitialScanSlow: Bool = false
+
+    /// Returns `true` if `relativePath` is gitignored, either directly or
+    /// because one of its parent directories is.
+    func isIgnored(_ relativePath: String) -> Bool {
+        if ignoredEntries.isEmpty { return false }
+        if ignoredEntries.contains(relativePath) { return true }
+        var current = relativePath
+        while let lastSlash = current.lastIndex(of: "/") {
+            current = String(current[..<lastSlash])
+            if ignoredEntries.contains(current) { return true }
+        }
+        return false
+    }
 
     var expandedPaths: Set<String> = []   // by canonical absolute path
     var selectedPath: String?
@@ -224,10 +250,14 @@ final class InspectFileTreeViewModel {
 
         // Pick the right scanner method based on kind.
         let paths: [String]
+        var ignored: Set<String> = []
         do {
             switch kind {
             case .linkedWorktree, .mainCheckout:
-                paths = try await scanner.scanGitTracked(workingTree: url.path)
+                async let pathsFetch = scanner.scanGitTracked(workingTree: url.path)
+                async let ignoredFetch = scanner.scanGitIgnored(workingTree: url.path)
+                paths = try await pathsFetch
+                ignored = (try? await ignoredFetch) ?? []
             case .notARepo:
                 paths = try await scanner.scanFileSystem(root: url)
             case .noWorkingDirectory:
@@ -245,16 +275,34 @@ final class InspectFileTreeViewModel {
         // landing during the scan must not let us write stale results.
         if Task.isCancelled { return }
 
+        // Merge rolled-up ignored directory entries (e.g. `node_modules/`)
+        // so the file tree shows them as single dimmed nodes without listing
+        // their 50k+ descendants. De-duplicate against tracked paths.
+        let mergedPaths: [String]
+        if ignored.isEmpty {
+            mergedPaths = paths
+        } else {
+            let trackedSet = Set(paths)
+            var combined = paths
+            for entry in ignored where !trackedSet.contains(entry) {
+                combined.append(entry)
+            }
+            mergedPaths = combined
+        }
+
         // Build the tree off the MainActor — at 10k+ entries this loop is
         // non-trivial and would visibly stall the UI if run inline.
         let urlPath = url.path
         let result = await Task.detached(priority: .userInitiated) {
-            InspectFileTreeViewModel.buildNodes(rootPath: urlPath, paths: paths)
+            InspectFileTreeViewModel.buildNodes(rootPath: urlPath, paths: mergedPaths)
         }.value
         if Task.isCancelled { return }
 
         allNodes = result.nodes
         childrenByParent = result.childrenByParent
+        if ignoredEntries != ignored {
+            ignoredEntries = ignored
+        }
 
         // FR-26: clear selection if it points at a path that no longer exists.
         if let selected = selectedPath, !result.nodes.contains(where: { $0.id == selected }) {

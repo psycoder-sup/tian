@@ -20,6 +20,7 @@ struct InspectPanelFileBrowser: View {
                         isExpanded: viewModel.expandedPaths.contains(node.id),
                         isSelected: viewModel.selectedPath == node.id,
                         status: viewModel.statusByRelativePath[node.relativePath],
+                        isIgnored: viewModel.isIgnored(node.relativePath),
                         onTap: {
                             if node.isDirectory {
                                 viewModel.toggle(node.id)

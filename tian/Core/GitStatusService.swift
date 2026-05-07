@@ -227,8 +227,12 @@ enum GitStatusService {
         // A non-zero exit code here means we're not in a repo — return [] immediately.
         let untrackedPaths: [String]
         do {
+            // `--untracked-files=all` expands new directories into their files;
+            // without it git collapses `?? newdir/` into a single entry that
+            // `git diff --no-index` can't diff (it requires a file path).
             let statusResult = try await runGit(
-                ["status", "--porcelain=v1", "--ignore-submodules"],
+                ["status", "--porcelain=v1", "--ignore-submodules",
+                 "--untracked-files=all"],
                 workingDirectory: directory
             )
             guard statusResult.exitCode == 0 else {

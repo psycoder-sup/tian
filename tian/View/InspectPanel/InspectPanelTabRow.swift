@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// 38 px tab row for the Inspect panel header (FR-T01 / FR-T02 / FR-T03).
+/// 38 px tab row for the Inspect panel header (FR-T01 / FR-T02).
 ///
-/// Layout (left → right):
-///   - Capsule segmented control: Files / Diff / Branch — FR-T02
-///   - Trailing hide button (sidebar.right icon) — FR-T03
+/// Layout: capsule segmented control (Files / Diff / Branch) on the left,
+/// empty space on the right where the floating panel-toggle button visually
+/// sits. The toggle itself is owned by `SidebarContainerView` so it stays in
+/// the same position whether the panel is open or collapsed.
 ///
 /// During initial scan (`isInitialScan == true`), Diff and Branch pills are
 /// muted and non-interactive (FR-T16a).
@@ -19,9 +20,6 @@ struct InspectPanelTabRow: View {
     @Bindable var tabState: InspectTabState
     /// When `true`, Diff and Branch tabs are muted and non-interactive (FR-T16a).
     let isInitialScan: Bool
-    /// Fires when the user taps the in-row hide button (FR-T03). The floating
-    /// `InspectPanelRail` handles the re-open case.
-    let onHide: () -> Void
 
     // MARK: - Body
 
@@ -32,7 +30,11 @@ struct InspectPanelTabRow: View {
 
             Spacer(minLength: 8)
 
-            hideButton
+            // Reserve the same slot the floating toggle (`InspectPanelRail`,
+            // owned by SidebarContainerView) overlays so the capsule's right
+            // edge doesn't slide under the button on narrow widths.
+            Color.clear
+                .frame(width: 22, height: 22)
                 .padding(.trailing, 10)
         }
         .frame(height: Self.height)
@@ -119,41 +121,27 @@ struct InspectPanelTabRow: View {
             )
     }
 
-    // MARK: - Hide button
-
-    private var hideButton: some View {
-        Button(action: onHide) {
-            Image(systemName: "sidebar.right")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Hide inspect panel")
-        .accessibilityAddTraits(.isButton)
-    }
 }
 
 // MARK: - Previews
 
 #Preview("Tab row – files active") {
     let state = InspectTabState()
-    InspectPanelTabRow(tabState: state, isInitialScan: false, onHide: {})
+    InspectPanelTabRow(tabState: state, isInitialScan: false)
         .frame(width: 320)
         .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }
 
 #Preview("Tab row – diff active") {
     let state = InspectTabState(activeTab: .diff)
-    InspectPanelTabRow(tabState: state, isInitialScan: false, onHide: {})
+    InspectPanelTabRow(tabState: state, isInitialScan: false)
         .frame(width: 320)
         .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }
 
 #Preview("Tab row – initial scan (diff+branch muted)") {
     let state = InspectTabState()
-    InspectPanelTabRow(tabState: state, isInitialScan: true, onHide: {})
+    InspectPanelTabRow(tabState: state, isInitialScan: true)
         .frame(width: 320)
         .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }

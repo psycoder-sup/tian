@@ -186,6 +186,11 @@ struct SidebarContainerView: View {
     /// at y = 24).
     @ViewBuilder
     private var inspectToggleOverlay: some View {
+        // Single, always-visible toggle anchored at the window's top-trailing
+        // corner. When the panel is open it sits visually over the empty
+        // right side of the tab row; when collapsed it floats alone in the
+        // same spot — so the toggle never moves. The tab row no longer hosts
+        // its own hide button.
         if let workspace = activeWorkspace {
             InspectPanelRail(
                 action: {
