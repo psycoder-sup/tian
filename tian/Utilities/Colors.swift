@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 extension NSColor {
     static var terminalBackground: NSColor {
@@ -13,4 +14,9 @@ extension NSColor {
             alpha: 1.0
         )
     }
+}
+
+extension Color {
+    /// Off-white used for chrome icons (tab `+`, section `…`, branch glyph, etc.).
+    static let chromeForeground = Color(red: 220/255, green: 228/255, blue: 240/255)
 }

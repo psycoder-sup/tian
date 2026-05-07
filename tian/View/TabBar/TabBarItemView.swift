@@ -3,6 +3,9 @@ import SwiftUI
 struct TabBarItemView: View {
     @Bindable var tab: TabModel
     let isActive: Bool
+    /// Compact pill (smaller height + tighter padding). Used by terminal
+    /// section tab bars; Claude keeps the original full-size pill.
+    var isCompact: Bool = false
     let namespace: Namespace.ID
     let onSelect: () -> Void
     let onClose: () -> Void
@@ -76,8 +79,8 @@ struct TabBarItemView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 14)
-        .frame(height: 30)
+        .padding(.horizontal, isCompact ? 11 : 14)
+        .frame(height: isCompact ? 24 : 30)
         .contentShape(Capsule())
         .overlay(
             Capsule()

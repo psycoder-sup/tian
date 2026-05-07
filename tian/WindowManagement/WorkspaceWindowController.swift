@@ -8,6 +8,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     private weak var workspaceManager: WorkspaceManager?
     private weak var windowCoordinator: WindowCoordinator?
     private var eventMonitor: Any?
+    private var bgColorObserver: NSObjectProtocol?
 
     init(
         workspaceCollection: WorkspaceCollection,
@@ -47,6 +48,23 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         installTrafficLightAligner(window: window)
         observeActiveWorkspaceName()
         installKeyboardMonitor()
+        observeTerminalBackground()
+    }
+
+    // MARK: - Terminal background sync
+
+    /// Re-applies `.terminalBackground` to the window when Ghostty's default
+    /// bg color changes (theme load, config reload, OSC 11). Keeps the area
+    /// behind the inspect panel and other chrome aligned with the Claude
+    /// section's terminal pane bg.
+    private func observeTerminalBackground() {
+        bgColorObserver = NotificationCenter.default.addObserver(
+            forName: GhosttyApp.defaultBackgroundColorChangedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.window?.backgroundColor = .terminalBackground
+        }
     }
 
     @available(*, unavailable)
@@ -217,10 +235,18 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
         Log.lifecycle.info("[WindowController.windowWillClose] window closing")
         trafficLightAligner?.tearDown()
         removeKeyboardMonitor()
+        removeBgColorObserver()
         windowCoordinator?.removeController(self)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
         workspaceManager?.activeWorkspaceID = workspaceCollection.activeWorkspaceID
+    }
+
+    private func removeBgColorObserver() {
+        if let bgColorObserver {
+            NotificationCenter.default.removeObserver(bgColorObserver)
+        }
+        bgColorObserver = nil
     }
 }

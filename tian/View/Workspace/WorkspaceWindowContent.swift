@@ -7,6 +7,10 @@ struct WorkspaceWindowContent: View {
     @State private var showDebugOverlay = false
     @State private var createSpaceRequest: CreateSpaceRequest?
     @State private var pendingResolveTask: Task<Void, Never>?
+    /// Mirrors `GhosttyApp.shared.defaultBackgroundColor` so the root
+    /// fills with the same color the Claude pane Metal layer paints.
+    /// Refreshed on `defaultBackgroundColorChangedNotification`.
+    @State private var rootBackgroundColor: Color = Color(nsColor: GhosttyApp.shared.defaultBackgroundColor)
     /// Tracks the capsule's *displayed* progress, distinct from the
     /// orchestrator's source-of-truth `setupProgress`. When a run ends with
     /// a recorded failure, we hold this for `setupCapsuleLingerSeconds` so
@@ -49,6 +53,7 @@ struct WorkspaceWindowContent: View {
                 }
             }
         }
+        .background(rootBackgroundColor.ignoresSafeArea())
         .overlay {
             if let req = createSpaceRequest, let workspace = req.workspace {
                 CreateSpaceView(
@@ -126,6 +131,11 @@ struct WorkspaceWindowContent: View {
                 lingerTask = nil
                 displayedProgress = nil
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: GhosttyApp.defaultBackgroundColorChangedNotification)) { _ in
+            let new = Color(nsColor: GhosttyApp.shared.defaultBackgroundColor)
+            guard new != rootBackgroundColor else { return }
+            rootBackgroundColor = new
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleDebugOverlay)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,

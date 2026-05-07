@@ -7,7 +7,15 @@ final class GhosttyApp: @unchecked Sendable {
 
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
-    private(set) var defaultBackgroundColor: NSColor = .windowBackgroundColor
+    private(set) var defaultBackgroundColor: NSColor = NSColor(ghosttyRGB: GhosttyApp.brandBackgroundRGB) {
+        didSet {
+            guard oldValue != defaultBackgroundColor else { return }
+            NotificationCenter.default.post(
+                name: GhosttyApp.defaultBackgroundColorChangedNotification,
+                object: nil
+            )
+        }
+    }
     private var appObservers: [NSObjectProtocol] = []
     private let notificationManager = NotificationManager()
 
@@ -69,6 +77,11 @@ final class GhosttyApp: @unchecked Sendable {
     /// or "paneId" (UUID) from IPC notify commands.
     static let surfaceBellNotification = Notification.Name("GhosttyApp.surfaceBell")
 
+    /// Posted when `defaultBackgroundColor` changes (config reload, theme,
+    /// or surface-level color change). Allows windows / SwiftUI views to
+    /// re-fill themselves so their bg matches the terminal pane bg.
+    static let defaultBackgroundColorChangedNotification = Notification.Name("GhosttyApp.defaultBackgroundColorChanged")
+
     // MARK: - Initialization
 
     private init() {
@@ -95,6 +108,11 @@ final class GhosttyApp: @unchecked Sendable {
             Log.ghostty.error("Failed to create ghostty config")
             return
         }
+        // Tian's default-overrides come first so the user's own config can
+        // still override them via ~/.config/ghostty/config. We seed our
+        // brand background here so the Metal layer and the SwiftUI window
+        // chrome paint the same color out of the box.
+        Self.loadTianDefaults(into: primaryConfig)
         ghostty_config_load_default_files(primaryConfig)
         ghostty_config_finalize(primaryConfig)
         updateDefaultBackground(from: primaryConfig)
@@ -261,10 +279,7 @@ final class GhosttyApp: @unchecked Sendable {
                 }
                 return true
             case GHOSTTY_ACTION_COLOR_CHANGE:
-                let cc = action.action.color_change
-                if cc.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND {
-                    defaultBackgroundColor = NSColor(ghosttyRGB: (cc.r, cc.g, cc.b))
-                }
+                applyAppLevelColorChange(action.action.color_change)
                 return true
             case GHOSTTY_ACTION_RING_BELL:
                 NSSound.beep()
@@ -328,6 +343,7 @@ final class GhosttyApp: @unchecked Sendable {
             return true
 
         case GHOSTTY_ACTION_COLOR_CHANGE:
+            applyAppLevelColorChange(action.action.color_change)
             return true
 
         case GHOSTTY_ACTION_CONFIG_CHANGE:
@@ -372,6 +388,7 @@ final class GhosttyApp: @unchecked Sendable {
 
     private func reloadConfig() {
         guard let newConfig = ghostty_config_new() else { return }
+        Self.loadTianDefaults(into: newConfig)
         ghostty_config_load_default_files(newConfig)
         ghostty_config_finalize(newConfig)
         if let app {
@@ -382,6 +399,48 @@ final class GhosttyApp: @unchecked Sendable {
         }
         self.config = newConfig
         updateDefaultBackground(from: newConfig)
+    }
+
+    /// Tian's brand bg used by both the seeded Ghostty config (so the Metal
+    /// layer paints it) and the SwiftUI window chrome (so they match before
+    /// any surface comes up). Single source of truth for the color.
+    static let brandBackgroundRGB: (UInt8, UInt8, UInt8) = (0x1E, 0x1E, 0x2F)
+
+    /// URL of the seeded-defaults config file. Materialized once per process
+    /// on first call to `loadTianDefaults`; subsequent reloads reuse the
+    /// existing file instead of rewriting it on every config refresh.
+    private static let tianDefaultsURL: URL = {
+        let body = String(
+            format: "background = %02X%02X%02X\n",
+            brandBackgroundRGB.0, brandBackgroundRGB.1, brandBackgroundRGB.2
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-defaults.config")
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            Log.ghostty.error("Failed to write tian defaults config: \(String(describing: error))")
+        }
+        return url
+    }()
+
+    /// Seeds Tian's brand defaults into a fresh Ghostty config before the
+    /// user's own files load — `~/.config/ghostty/config` overrides anything
+    /// set here.
+    private static func loadTianDefaults(into config: ghostty_config_t) {
+        tianDefaultsURL.path.withCString { ghostty_config_load_file(config, $0) }
+    }
+
+    /// Mirrors a Ghostty bg color-change (app- or surface-level: OSC 11,
+    /// theme apply, etc.) into `defaultBackgroundColor`. Always main-async
+    /// since the C callback can fire off the main thread and downstream
+    /// observers (`NSWindow`, SwiftUI) must run on main.
+    private func applyAppLevelColorChange(_ cc: ghostty_action_color_change_s) {
+        guard cc.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return }
+        let newColor = NSColor(ghosttyRGB: (cc.r, cc.g, cc.b))
+        DispatchQueue.main.async { [weak self] in
+            self?.defaultBackgroundColor = newColor
+        }
     }
 
     private func updateDefaultBackground(from config: ghostty_config_t) {

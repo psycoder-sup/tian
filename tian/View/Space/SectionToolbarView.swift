@@ -53,12 +53,12 @@ struct SectionToolbarView: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.chromeForeground.opacity(0.92))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 32, height: 32)
+        .frame(width: 26, height: 26)
         .liquidGlassCircle()
         .disabled(isDragging)
         .opacity(isDragging ? 0.5 : 1.0)

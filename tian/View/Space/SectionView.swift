@@ -45,7 +45,7 @@ struct SectionView: View {
                     isTabVisible: isSectionFocused
                         || spaceModel.focusedSectionKind != section.kind
                 )
-                .padding(.top, SectionTabBarView.height)
+                .padding(.top, SectionTabBarView.height(for: section.kind))
 
                 tabBar(for: activeTab)
                     .padding(.leading, leadingTabBarInset)

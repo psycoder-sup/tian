@@ -49,9 +49,6 @@ struct InspectPanelInfoStrip: View {
         .padding(.leading, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: Self.height)
-        .background(
-            Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.3)
-        )
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.05))

@@ -6,8 +6,12 @@ import SwiftUI
 /// Cross-section drag-reorder is enforced in Phase 6; this phase only
 /// allows reorder within a single section.
 struct SectionTabBarView: View {
-    /// Layout height of the section tab bar.
-    static let height: CGFloat = 48
+    /// Layout height of the section tab bar. Terminal sections use a denser
+    /// row; Claude keeps the original height because it pairs with the
+    /// space-name + branch header.
+    static func height(for kind: SectionKind) -> CGFloat {
+        kind == .terminal ? 36 : 48
+    }
 
     let section: SectionModel
     let spaceModel: SpaceModel?
@@ -15,6 +19,8 @@ struct SectionTabBarView: View {
     var onNewTab: () -> Void = {}
 
     @Namespace private var tabNamespace
+
+    private var isCompact: Bool { section.kind == .terminal }
 
     init(
         section: SectionModel,
@@ -40,7 +46,7 @@ struct SectionTabBarView: View {
                     .padding(.leading, 4)
                     .padding(.trailing, 6)
             } else {
-                SectionKindGlyph(kind: section.kind, size: 20)
+                SectionKindGlyph(kind: section.kind, size: isCompact ? 16 : 20)
                     .padding(.leading, 4)
                     .padding(.trailing, 2)
             }
@@ -51,6 +57,7 @@ struct SectionTabBarView: View {
                         TabBarItemView(
                             tab: tab,
                             isActive: tab.id == section.activeTabID,
+                            isCompact: isCompact,
                             namespace: tabNamespace,
                             onSelect: {
                                 withAnimation(.smooth(duration: 0.3)) {
@@ -90,11 +97,11 @@ struct SectionTabBarView: View {
 
             Button(action: onNewTab) {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.92))
+                    .font(.system(size: isCompact ? 12 : 14, weight: .medium))
+                    .foregroundStyle(Color.chromeForeground.opacity(0.92))
             }
             .buttonStyle(.plain)
-            .frame(width: 32, height: 32)
+            .frame(width: isCompact ? 26 : 32, height: isCompact ? 26 : 32)
             .liquidGlassCircle()
             .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
 
@@ -103,7 +110,7 @@ struct SectionTabBarView: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: Self.height)
+        .frame(height: Self.height(for: section.kind))
         .contentShape(Rectangle())
         .dropDestination(for: TabDragItem.self) { items, _ in
             guard let item = items.first else { return false }
@@ -147,13 +154,13 @@ private struct ClaudeSectionHeaderView: View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255).opacity(0.9))
+                .foregroundStyle(Color.chromeForeground.opacity(0.9))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(spaceModel.name)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color(red: 220/255, green: 228/255, blue: 240/255))
+                    .foregroundStyle(Color.chromeForeground)
                     .lineLimit(1)
                     .truncationMode(.tail)
 

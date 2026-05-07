@@ -38,9 +38,6 @@ struct InspectPanelTabRow: View {
                 .padding(.trailing, 10)
         }
         .frame(height: Self.height)
-        .background(
-            Color(red: 8/255, green: 11/255, blue: 18/255).opacity(0.4)
-        )
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color.white.opacity(0.05))
