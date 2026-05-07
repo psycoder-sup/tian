@@ -9,6 +9,62 @@ struct InspectFileScannerTests {
     // excluded from the scanner; the view model merges rolled-up ignored
     // directory entries from `scanGitIgnored` separately so they appear as
     // single dimmed nodes instead of 50k+ individual paths.
+    // `git ls-files --others --ignored --exclude-standard --directory` returns
+    // rolled-up directory entries with a trailing slash and individually-listed
+    // file entries without one. The scanner splits them so the view model can
+    // render directories as expandable nodes with lazy-loaded children.
+    @Test func gitIgnoredSplitsDirectoriesAndFiles() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // .gitignore: `node_modules/` (rolled-up dir) + `*.log` (file pattern).
+        let gitignorePath = (repo as NSString).appendingPathComponent(".gitignore")
+        try "node_modules/\n*.log\n".write(toFile: gitignorePath, atomically: true, encoding: .utf8)
+
+        // Ignored directory with descendants — `--directory` should roll up.
+        let nodeModules = (repo as NSString).appendingPathComponent("node_modules")
+        try FileManager.default.createDirectory(atPath: nodeModules, withIntermediateDirectories: true)
+        let nm1 = (nodeModules as NSString).appendingPathComponent("pkg.json")
+        try "{}".write(toFile: nm1, atomically: true, encoding: .utf8)
+
+        // Ignored individual file matching `*.log`.
+        let logPath = (repo as NSString).appendingPathComponent("debug.log")
+        try "log".write(toFile: logPath, atomically: true, encoding: .utf8)
+
+        let result = try await InspectFileScanner.scanGitIgnored(workingTree: repo)
+        #expect(result.directories.contains("node_modules"))
+        #expect(result.files.contains("debug.log"))
+        // Rolled-up dir must NOT also appear in files (and vice versa).
+        #expect(!result.files.contains("node_modules"))
+        #expect(!result.directories.contains("debug.log"))
+        // Descendants of the rolled-up dir must not be enumerated.
+        #expect(!result.files.contains("node_modules/pkg.json"))
+    }
+
+    // `scanImmediateChildren` powers lazy expansion of rolled-up ignored
+    // directories. Returns one-level children, each tagged file or directory.
+    @Test func scanImmediateChildrenReturnsOneLevelKinds() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let fileA = (dir as NSString).appendingPathComponent("a.txt")
+        try "a".write(toFile: fileA, atomically: true, encoding: .utf8)
+
+        let nestedDir = (dir as NSString).appendingPathComponent("nested")
+        try FileManager.default.createDirectory(atPath: nestedDir, withIntermediateDirectories: true)
+        // Grandchild — must NOT appear at the parent level.
+        let nestedFile = (nestedDir as NSString).appendingPathComponent("b.txt")
+        try "b".write(toFile: nestedFile, atomically: true, encoding: .utf8)
+
+        let children = try await InspectFileScanner.scanImmediateChildren(absolutePath: dir)
+        let byName = Dictionary(uniqueKeysWithValues: children.map { ($0.name, $0.isDirectory) })
+
+        #expect(byName["a.txt"] == false)
+        #expect(byName["nested"] == true)
+        // Grandchild must not surface — only one level deep.
+        #expect(byName["b.txt"] == nil)
+    }
+
     @Test func gitTrackedReturnsTrackedAndUntrackedNotIgnored() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }

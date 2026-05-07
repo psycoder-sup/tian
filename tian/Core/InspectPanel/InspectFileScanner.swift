@@ -1,5 +1,22 @@
 import Foundation
 
+/// Rolled-up ignored entries returned by `git ls-files --ignored --directory`,
+/// split by kind so callers can render the directory entries as expandable
+/// `.directory` nodes rather than mistakenly flattening them into files.
+struct InspectIgnoredEntries: Sendable, Equatable {
+    var directories: Set<String>
+    var files: Set<String>
+
+    static let empty = InspectIgnoredEntries(directories: [], files: [])
+
+    var all: Set<String> { directories.union(files) }
+}
+
+struct InspectChildEntry: Sendable, Hashable {
+    let name: String
+    let isDirectory: Bool
+}
+
 enum InspectFileScanner {
 
     /// Returns POSIX-relative paths (no leading `./`) for every tracked or
@@ -26,13 +43,14 @@ enum InspectFileScanner {
             .map(String.init)
     }
 
-    /// Returns the set of relative paths git considers ignored under
-    /// `workingTree` — both individual files and rolled-up directories
-    /// (a `.gitignore` line of `node_modules/` produces the directory
-    /// `node_modules` here, not its 50k descendants). Callers that need
-    /// per-descendant lookup should walk parent prefixes and check each
-    /// against the set. `--directory` keeps this query cheap on big repos.
-    static func scanGitIgnored(workingTree: String) async throws -> Set<String> {
+    /// Returns the relative paths git considers ignored under `workingTree`,
+    /// split into rolled-up directories and individually-listed files. A
+    /// `.gitignore` line of `node_modules/` produces the directory entry
+    /// `node_modules` (its 50k descendants are NOT enumerated; expand-on-demand
+    /// uses `scanImmediateChildren` instead). A pattern like `*.log` produces
+    /// individual file entries. `--directory` keeps this query cheap on big
+    /// repos. Callers walk parent prefixes when checking inheritance.
+    static func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries {
         let result = try await runGit(
             ["ls-files", "--others", "--ignored", "--exclude-standard",
              "--directory", "-z"],
@@ -44,14 +62,65 @@ enum InspectFileScanner {
         guard let raw = String(data: result.stdoutData, encoding: .utf8) else {
             throw ScannerError.decodeFailed
         }
-        var set = Set<String>()
+        var directories: Set<String> = []
+        var files: Set<String> = []
         for entry in raw.split(separator: "\0", omittingEmptySubsequences: true) {
-            // Normalize trailing slash on directory entries so callers can
-            // do a simple `Set.contains(relativePath)` lookup.
             let s = String(entry)
-            set.insert(s.hasSuffix("/") ? String(s.dropLast()) : s)
+            // git's `--directory` flag emits a trailing `/` for rolled-up
+            // directories, which is the only signal we have to distinguish
+            // them from individual ignored files (e.g. `*.log` matches).
+            if s.hasSuffix("/") {
+                directories.insert(String(s.dropLast()))
+            } else {
+                files.insert(s)
+            }
         }
-        return set
+        return InspectIgnoredEntries(directories: directories, files: files)
+    }
+
+    /// Returns immediate (one-level, non-recursive) children of `absolutePath`,
+    /// each tagged as file or directory. Used to lazy-load contents of
+    /// rolled-up ignored directories when the user expands them — the rolled-
+    /// up form means we never enumerated descendants during the main scan.
+    /// Symlinks count as files; junk like `.DS_Store` is filtered out.
+    static func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
+        try await Task.detached(priority: .userInitiated) {
+            try enumerateImmediateChildren(absolutePath: absolutePath)
+        }.value
+    }
+
+    private static func enumerateImmediateChildren(absolutePath: String) throws -> [InspectChildEntry] {
+        let url = URL(filePath: absolutePath)
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey],
+            options: []
+        )
+        return contents.compactMap { child in
+            guard let meta = childMetadata(at: child) else { return nil }
+            return InspectChildEntry(name: meta.name, isDirectory: meta.isDirectory)
+        }
+    }
+
+    /// Common file-classification logic for `FileManager`-based scans:
+    /// strips `.DS_Store` noise and resolves directory/symlink kind without
+    /// following symlinks (FR-17). Returns nil for entries the caller should
+    /// skip outright.
+    private static func childMetadata(
+        at url: URL
+    ) -> (name: String, isSymlink: Bool, isDirectory: Bool, isRegular: Bool)? {
+        let name = url.lastPathComponent
+        if name == ".DS_Store" { return nil }
+        let values = try? url.resourceValues(forKeys: [
+            .isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey,
+        ])
+        let isSymlink = values?.isSymbolicLink ?? false
+        return (
+            name: name,
+            isSymlink: isSymlink,
+            isDirectory: !isSymlink && (values?.isDirectory ?? false),
+            isRegular: values?.isRegularFile ?? false
+        )
     }
 
     /// Returns POSIX-relative paths for every non-hidden file under `root`
@@ -85,21 +154,9 @@ enum InspectFileScanner {
 
         var paths: [String] = []
         for case let url as URL in enumerator {
-            // Determine kind without following symlinks (FR-17).
-            let resourceValues = try? url.resourceValues(forKeys: [
-                .isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey,
-            ])
-            let isSymlink = resourceValues?.isSymbolicLink ?? false
-            let isRegular = resourceValues?.isRegularFile ?? false
-
-            // Symlinks count as files; regular files are obvious. Skip dirs
-            // (they're traversed by the enumerator) and unknown specials.
-            guard isSymlink || isRegular else { continue }
-
-            // Filter common noise.
-            let name = url.lastPathComponent
-            if name == ".DS_Store" { continue }
-
+            guard let meta = childMetadata(at: url) else { continue }
+            // Skip dirs (traversed by the enumerator) and unknown specials.
+            guard meta.isSymlink || meta.isRegular else { continue }
             let absolute = url.standardizedFileURL.path
             guard let relative = relativize(absolute, against: rootPath) else { continue }
             paths.append(relative)

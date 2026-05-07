@@ -220,6 +220,134 @@ struct InspectFileTreeViewModelTests {
         #expect(vm.visibleRows.contains(where: { $0.id == tokensID }))
     }
 
+    // MARK: - Rolled-up ignored directories render as folders, not files
+
+    @Test func ignoredDirectoryAppearsAsDirectoryNode() async {
+        let scanner = FixedScanner(
+            gitTracked: ["src/main.swift", "README.md"],
+            gitIgnored: InspectIgnoredEntries(directories: ["node_modules"], files: [])
+        )
+        let vm = InspectFileTreeViewModel(
+            scanner: scanner,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+
+        vm.setRoot(URL(filePath: "/tmp/fake-root"))
+        await vm.waitForFirstScan()
+
+        let node = vm.allNodesContaining(relativePath: "node_modules")
+        #expect(node != nil)
+        #expect(node?.isDirectory == true)
+        // Sanity: a regular ignored *file* still renders as a file.
+        let ignoredFiles = InspectIgnoredEntries(directories: [], files: ["debug.log"])
+        let scanner2 = FixedScanner(gitTracked: ["src/main.swift"], gitIgnored: ignoredFiles)
+        let vm2 = InspectFileTreeViewModel(
+            scanner: scanner2,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+        vm2.setRoot(URL(filePath: "/tmp/fake-root"))
+        await vm2.waitForFirstScan()
+        let logNode = vm2.allNodesContaining(relativePath: "debug.log")
+        #expect(logNode != nil)
+        #expect(logNode?.isDirectory == false)
+    }
+
+    @Test func ignoredDirectoryReportedAsIgnored() async {
+        let scanner = FixedScanner(
+            gitTracked: ["src/main.swift"],
+            gitIgnored: InspectIgnoredEntries(directories: ["node_modules"], files: [])
+        )
+        let vm = InspectFileTreeViewModel(
+            scanner: scanner,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+
+        vm.setRoot(URL(filePath: "/tmp/fake-root"))
+        await vm.waitForFirstScan()
+
+        // Both the rolled-up dir itself AND descendants must report as ignored
+        // so the view can dim them — descendants come from parent walking.
+        #expect(vm.isIgnored("node_modules"))
+        #expect(vm.isIgnored("node_modules/pkg/index.js"))
+        #expect(!vm.isIgnored("src/main.swift"))
+    }
+
+    // MARK: - Lazy expansion of rolled-up ignored directories
+
+    @Test func togglingIgnoredDirectoryLazyLoadsChildren() async {
+        let root = URL(filePath: "/tmp/fake-root")
+        let nodeModulesAbs = root.path + "/node_modules"
+        let scanner = FixedScanner(
+            gitTracked: ["src/main.swift"],
+            gitIgnored: InspectIgnoredEntries(directories: ["node_modules"], files: []),
+            immediateChildren: [
+                nodeModulesAbs: [
+                    InspectChildEntry(name: "lodash", isDirectory: true),
+                    InspectChildEntry(name: "package.json", isDirectory: false),
+                ]
+            ]
+        )
+        let vm = InspectFileTreeViewModel(
+            scanner: scanner,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+
+        vm.setRoot(root)
+        await vm.waitForFirstScan()
+
+        #expect(vm.allNodesContaining(relativePath: "node_modules/lodash") == nil)
+        #expect(vm.allNodesContaining(relativePath: "node_modules/package.json") == nil)
+
+        vm.toggle(nodeModulesAbs)
+        await vm.waitForPendingIgnoredChildrenLoads()
+
+        let lodash = vm.allNodesContaining(relativePath: "node_modules/lodash")
+        let pkg = vm.allNodesContaining(relativePath: "node_modules/package.json")
+        #expect(lodash?.isDirectory == true)
+        #expect(pkg?.isDirectory == false)
+        // Visible rows must include the lazy-loaded children, sorted dirs-first.
+        let visibleRels = vm.visibleRows.map(\.relativePath)
+        #expect(visibleRels.contains("node_modules/lodash"))
+        #expect(visibleRels.contains("node_modules/package.json"))
+        // And lazy-loaded descendants are still ignored (parent walk).
+        #expect(vm.isIgnored("node_modules/lodash"))
+        #expect(vm.isIgnored("node_modules/package.json"))
+    }
+
+    @Test func collapsingIgnoredDirectoryDoesNotReFetch() async {
+        let root = URL(filePath: "/tmp/fake-root")
+        let nodeModulesAbs = root.path + "/node_modules"
+        let scanner = CountingScanner(
+            gitTracked: ["src/main.swift"],
+            gitIgnored: InspectIgnoredEntries(directories: ["node_modules"], files: []),
+            immediateChildren: [
+                nodeModulesAbs: [InspectChildEntry(name: "pkg.json", isDirectory: false)]
+            ]
+        )
+        let vm = InspectFileTreeViewModel(
+            scanner: scanner,
+            classify: { _ in .mainCheckout },
+            slowFlagDelay: .milliseconds(50)
+        )
+
+        vm.setRoot(root)
+        await vm.waitForFirstScan()
+
+        vm.toggle(nodeModulesAbs)             // expand → triggers load
+        await vm.waitForPendingIgnoredChildrenLoads()
+        #expect(scanner.immediateChildrenCallCount == 1)
+
+        vm.toggle(nodeModulesAbs)             // collapse — no scan
+        await vm.waitForPendingIgnoredChildrenLoads()
+        vm.toggle(nodeModulesAbs)             // re-expand — children already loaded
+        await vm.waitForPendingIgnoredChildrenLoads()
+        #expect(scanner.immediateChildrenCallCount == 1)
+    }
+
     // MARK: - FR-32 / FR-34 — slow scan flag
 
     @Test func slowScanFlagFlipsAfterFiveSeconds() async throws {
@@ -244,10 +372,56 @@ struct InspectFileTreeViewModelTests {
 
 private final class FixedScanner: InspectFileScanning, @unchecked Sendable {
     private let gitTracked: [String]
-    init(gitTracked: [String]) { self.gitTracked = gitTracked }
+    private let gitIgnored: InspectIgnoredEntries
+    /// Keyed by absolute path; returned by `scanImmediateChildren` to drive
+    /// lazy expansion of rolled-up ignored directories.
+    private let immediateChildren: [String: [InspectChildEntry]]
+
+    init(
+        gitTracked: [String],
+        gitIgnored: InspectIgnoredEntries = .empty,
+        immediateChildren: [String: [InspectChildEntry]] = [:]
+    ) {
+        self.gitTracked = gitTracked
+        self.gitIgnored = gitIgnored
+        self.immediateChildren = immediateChildren
+    }
 
     func scanGitTracked(workingTree: String) async throws -> [String] { gitTracked }
+    func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries { gitIgnored }
     func scanFileSystem(root: URL) async throws -> [String] { gitTracked }
+    func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
+        immediateChildren[absolutePath] ?? []
+    }
+}
+
+/// Scanner variant that records how many times `scanImmediateChildren` is
+/// called — used to verify lazy-load caching (don't re-fetch on every toggle).
+private final class CountingScanner: InspectFileScanning, @unchecked Sendable {
+    private let gitTracked: [String]
+    private let gitIgnored: InspectIgnoredEntries
+    private let immediateChildren: [String: [InspectChildEntry]]
+    private let lock = OSAllocatedUnfairLock<Int>(initialState: 0)
+
+    var immediateChildrenCallCount: Int { lock.withLock { $0 } }
+
+    init(
+        gitTracked: [String],
+        gitIgnored: InspectIgnoredEntries,
+        immediateChildren: [String: [InspectChildEntry]]
+    ) {
+        self.gitTracked = gitTracked
+        self.gitIgnored = gitIgnored
+        self.immediateChildren = immediateChildren
+    }
+
+    func scanGitTracked(workingTree: String) async throws -> [String] { gitTracked }
+    func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries { gitIgnored }
+    func scanFileSystem(root: URL) async throws -> [String] { gitTracked }
+    func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
+        lock.withLock { $0 += 1 }
+        return immediateChildren[absolutePath] ?? []
+    }
 }
 
 private final class BlockingScanner: InspectFileScanning, Sendable {

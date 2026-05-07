@@ -7,25 +7,30 @@ import SwiftUI
 /// `InspectFileScanner`. Tests inject blocking / fixed-result implementations.
 protocol InspectFileScanning: Sendable {
     func scanGitTracked(workingTree: String) async throws -> [String]
-    func scanGitIgnored(workingTree: String) async throws -> Set<String>
+    func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries
     func scanFileSystem(root: URL) async throws -> [String]
+    /// Returns immediate (non-recursive) children of `absolutePath`. Used to
+    /// lazy-load descendants of rolled-up ignored directories on expand.
+    func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry]
 }
 
 extension InspectFileScanning {
-    /// Default: no ignored entries. Tests that don't care about ignored
-    /// state inherit this and don't need to override.
-    func scanGitIgnored(workingTree: String) async throws -> Set<String> { [] }
+    func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries { .empty }
+    func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] { [] }
 }
 
 struct LiveInspectFileScanner: InspectFileScanning {
     func scanGitTracked(workingTree: String) async throws -> [String] {
         try await InspectFileScanner.scanGitTracked(workingTree: workingTree)
     }
-    func scanGitIgnored(workingTree: String) async throws -> Set<String> {
+    func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries {
         try await InspectFileScanner.scanGitIgnored(workingTree: workingTree)
     }
     func scanFileSystem(root: URL) async throws -> [String] {
         try await InspectFileScanner.scanFileSystem(root: root)
+    }
+    func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
+        try await InspectFileScanner.scanImmediateChildren(absolutePath: absolutePath)
     }
 }
 
@@ -73,6 +78,8 @@ final class InspectFileTreeViewModel {
         slowFlagTask = nil
         isInitialScanSlow = false
 
+        cancelPendingIgnoredChildrenLoads()
+
         // Tear down old watcher.
         watcher?.stop()
         watcher = nil
@@ -83,6 +90,7 @@ final class InspectFileTreeViewModel {
             // Empty state.
             allNodes = []
             childrenByParent = [:]
+            nodeByID = [:]
             visibleRows = []
             worktreeKind = .noWorkingDirectory
             isInitialScanInFlight = false
@@ -115,12 +123,15 @@ final class InspectFileTreeViewModel {
         }
     }
 
-    /// Toggles directory expansion (FR-13).
+    /// Toggles directory expansion (FR-13). Expanding a rolled-up ignored
+    /// directory whose children we haven't enumerated yet kicks off a lazy
+    /// FileManager scan; results land asynchronously and update the tree.
     func toggle(_ path: String) {
         if expandedPaths.contains(path) {
             expandedPaths.remove(path)
         } else {
             expandedPaths.insert(path)
+            loadIgnoredChildrenIfNeeded(forID: path)
         }
         recomputeVisibleRows()
     }
@@ -179,8 +190,17 @@ final class InspectFileTreeViewModel {
         scanTask = nil
         slowFlagTask?.cancel()
         slowFlagTask = nil
+        cancelPendingIgnoredChildrenLoads()
         watcher?.stop()
         watcher = nil
+    }
+
+    /// Cancels every in-flight lazy children load. Lazy loads are tied to a
+    /// specific tree root, so any teardown or re-root must clear them — they'd
+    /// otherwise land into a stale tree.
+    private func cancelPendingIgnoredChildrenLoads() {
+        for (_, task) in ignoredChildrenLoadTasks { task.cancel() }
+        ignoredChildrenLoadTasks.removeAll()
     }
 
     // MARK: - Test seams (Debug only)
@@ -200,6 +220,13 @@ final class InspectFileTreeViewModel {
 
     /// Test affordance: exposes the unfiltered tree for assertions.
     var allNodesForTest: [FileTreeNode] { allNodes }
+
+    /// Test affordance: awaits all in-flight lazy children loads (toggle on
+    /// rolled-up ignored directories). No-ops if no loads are pending.
+    func waitForPendingIgnoredChildrenLoads() async {
+        let tasks = Array(ignoredChildrenLoadTasks.values)
+        for task in tasks { await task.value }
+    }
     #endif
 
     // MARK: - Construction
@@ -228,6 +255,16 @@ final class InspectFileTreeViewModel {
     /// this + `expandedPaths` to produce `visibleRows`.
     private var allNodes: [FileTreeNode] = []
     private var childrenByParent: [String: [FileTreeNode]] = [:]
+    /// Node id (absolute path) → node. Mirrors `allNodes` for O(1) lookup.
+    /// `loadIgnoredChildrenIfNeeded` and the post-rebuild reload loop hit this
+    /// per click / per expanded path — a linear scan over `allNodes` would be
+    /// quadratic on large repos.
+    private var nodeByID: [String: FileTreeNode] = [:]
+
+    /// In-flight `scanImmediateChildren` calls, keyed by node id (absolute path).
+    /// Prevents firing duplicate FS scans when the user rapidly toggles a row,
+    /// and lets `setRoot`/`teardown` cancel any pending lazy loads.
+    private var ignoredChildrenLoadTasks: [String: Task<Void, Never>] = [:]
 
     // MARK: - Scan flow
 
@@ -250,14 +287,14 @@ final class InspectFileTreeViewModel {
 
         // Pick the right scanner method based on kind.
         let paths: [String]
-        var ignored: Set<String> = []
+        var ignored: InspectIgnoredEntries = .empty
         do {
             switch kind {
             case .linkedWorktree, .mainCheckout:
                 async let pathsFetch = scanner.scanGitTracked(workingTree: url.path)
                 async let ignoredFetch = scanner.scanGitIgnored(workingTree: url.path)
                 paths = try await pathsFetch
-                ignored = (try? await ignoredFetch) ?? []
+                ignored = (try? await ignoredFetch) ?? .empty
             case .notARepo:
                 paths = try await scanner.scanFileSystem(root: url)
             case .noWorkingDirectory:
@@ -275,33 +312,42 @@ final class InspectFileTreeViewModel {
         // landing during the scan must not let us write stale results.
         if Task.isCancelled { return }
 
-        // Merge rolled-up ignored directory entries (e.g. `node_modules/`)
-        // so the file tree shows them as single dimmed nodes without listing
-        // their 50k+ descendants. De-duplicate against tracked paths.
+        // Merge rolled-up ignored *file* entries (e.g. matches of `*.log`)
+        // into the file path list, de-duplicated against tracked paths.
+        // Ignored *directories* are passed separately so `buildNodes` creates
+        // them as `.directory` nodes (foldable, lazy-loaded on expand) rather
+        // than mistakenly flattening them into files.
+        let trackedSet = Set(paths)
         let mergedPaths: [String]
-        if ignored.isEmpty {
+        if ignored.files.isEmpty {
             mergedPaths = paths
         } else {
-            let trackedSet = Set(paths)
             var combined = paths
-            for entry in ignored where !trackedSet.contains(entry) {
-                combined.append(entry)
+            for file in ignored.files where !trackedSet.contains(file) {
+                combined.append(file)
             }
             mergedPaths = combined
         }
+        let ignoredDirs = ignored.directories.subtracting(trackedSet)
+        let allIgnored = ignored.all
 
         // Build the tree off the MainActor — at 10k+ entries this loop is
         // non-trivial and would visibly stall the UI if run inline.
         let urlPath = url.path
         let result = await Task.detached(priority: .userInitiated) {
-            InspectFileTreeViewModel.buildNodes(rootPath: urlPath, paths: mergedPaths)
+            InspectFileTreeViewModel.buildNodes(
+                rootPath: urlPath,
+                paths: mergedPaths,
+                ignoredDirectories: ignoredDirs
+            )
         }.value
         if Task.isCancelled { return }
 
         allNodes = result.nodes
         childrenByParent = result.childrenByParent
-        if ignoredEntries != ignored {
-            ignoredEntries = ignored
+        nodeByID = Dictionary(uniqueKeysWithValues: result.nodes.map { ($0.id, $0) })
+        if ignoredEntries != allIgnored {
+            ignoredEntries = allIgnored
         }
 
         // FR-26: clear selection if it points at a path that no longer exists.
@@ -317,6 +363,14 @@ final class InspectFileTreeViewModel {
 
         recomputeVisibleRows()
 
+        // After a rebuild, any rolled-up ignored directories that are still
+        // expanded need their children re-fetched — `buildNodes` rolled them
+        // up so `childrenByParent` no longer carries them. Without this, an
+        // expanded `node_modules` would render as an empty disclosure.
+        for expanded in expandedPaths {
+            loadIgnoredChildrenIfNeeded(forID: expanded)
+        }
+
         // Initial scans manage the loading flag + watcher; refresh scans leave
         // both untouched (the tree stays visible during the rescan and the
         // watcher is already running).
@@ -327,6 +381,70 @@ final class InspectFileTreeViewModel {
             isInitialScanSlow = false
             startWatcher(for: url)
         }
+    }
+
+    /// Lazy-loads immediate children of a rolled-up ignored directory the
+    /// first time it's expanded (or after a rebuild that wiped them). No-ops
+    /// for tracked directories — those come pre-populated via path prefixes
+    /// in `buildNodes` — and for ignored directories that are already loaded.
+    private func loadIgnoredChildrenIfNeeded(forID id: String) {
+        guard let node = nodeByID[id], node.isDirectory else { return }
+        // A non-nil entry — even an empty array — marks "already loaded".
+        if childrenByParent[node.relativePath] != nil { return }
+        guard isIgnored(node.relativePath) else { return }
+        if ignoredChildrenLoadTasks[id] != nil { return }
+
+        let absolute = node.id
+        let parentRelative = node.relativePath
+        let parentDepth = node.depth
+        let scanner = self.scanner
+        let expectedRoot = self.rootDirectory
+
+        let task = Task { [weak self] in
+            let entries: [InspectChildEntry]
+            do {
+                entries = try await scanner.scanImmediateChildren(absolutePath: absolute)
+            } catch is CancellationError {
+                return
+            } catch {
+                entries = []
+            }
+            if Task.isCancelled { return }
+            await MainActor.run {
+                guard let self else { return }
+                self.ignoredChildrenLoadTasks[absolute] = nil
+                // A re-root or a rebuild that no longer recognizes this dir
+                // (e.g. user un-gitignored it) means our results are stale.
+                guard self.rootDirectory == expectedRoot,
+                      let rootPath = self.rootDirectory?.path,
+                      self.nodeByID[absolute] != nil
+                else { return }
+
+                let childNodes = entries.map { entry -> FileTreeNode in
+                    let rel = parentRelative.isEmpty
+                        ? entry.name
+                        : parentRelative + "/" + entry.name
+                    let kind: FileTreeNode.Kind = entry.isDirectory
+                        ? .directory(canRead: true)
+                        : .file(ext: Self.fileExtension(rel))
+                    return FileTreeNode(
+                        id: Self.absoluteJoin(rootPath, rel),
+                        name: entry.name,
+                        kind: kind,
+                        relativePath: rel,
+                        depth: parentDepth + 1
+                    )
+                }.sorted(by: Self.nodeOrder)
+                // Empty array still gets stored — it marks "loaded, no kids".
+                self.childrenByParent[parentRelative] = childNodes
+                self.allNodes.append(contentsOf: childNodes)
+                for child in childNodes {
+                    self.nodeByID[child.id] = child
+                }
+                self.recomputeVisibleRows()
+            }
+        }
+        ignoredChildrenLoadTasks[id] = task
     }
 
     private func startWatcher(for url: URL) {
@@ -344,33 +462,37 @@ final class InspectFileTreeViewModel {
     // MARK: - Tree construction
 
     /// Builds the unfiltered node list from a flat list of POSIX-relative
-    /// paths. Directories are derived from path prefixes.
+    /// paths. Directories are derived from path prefixes plus any explicit
+    /// rolled-up ignored directories the caller supplies.
     ///
     /// Returns:
     ///   - nodes: every directory + file under root, depth-first ordered with
     ///            directories-first, alphabetical within each level.
     ///   - childrenByParent: parent-id → ordered children, used by the
     ///                       expansion walker in `recomputeVisibleRows()`.
-    private nonisolated static func buildNodes(
+    nonisolated static func buildNodes(
         rootPath: String,
-        paths: [String]
+        paths: [String],
+        ignoredDirectories: Set<String> = []
     ) -> (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]]) {
-        // Collect directory relative paths (every prefix of every file path).
-        var dirRelative = Set<String>()
+        // Collect directory relative paths (every prefix of every file path)
+        // plus any rolled-up ignored directories the caller supplied.
+        var dirRelative = ignoredDirectories
         var fileRelative = Set<String>()
         for raw in paths {
             // Defensive: some scanners might emit "" for an empty root —
             // skip them.
             guard !raw.isEmpty else { continue }
-            fileRelative.insert(raw)
-            // Each path component except the last contributes a directory.
-            var components = raw.split(separator: "/").map(String.init)
-            _ = components.popLast()
-            var prefix = ""
-            for c in components {
-                prefix = prefix.isEmpty ? c : prefix + "/" + c
-                dirRelative.insert(prefix)
+            // A path that's also explicitly an ignored directory belongs in
+            // dirRelative only — never duplicated as a file (would clash on
+            // the nodesByRelative key and produce a phantom file row).
+            if !ignoredDirectories.contains(raw) {
+                fileRelative.insert(raw)
             }
+            for prefix in parentPrefixes(of: raw) { dirRelative.insert(prefix) }
+        }
+        for dir in ignoredDirectories {
+            for prefix in parentPrefixes(of: dir) { dirRelative.insert(prefix) }
         }
 
         // Build nodes (directories + files), keyed by relativePath.
@@ -468,6 +590,20 @@ final class InspectFileTreeViewModel {
             return String(relative[..<slash])
         }
         return ""
+    }
+
+    /// Every ancestor directory of `relative`, root-first. `"a/b/c.txt"` →
+    /// `["a", "a/b"]`. Used to derive directory nodes from flat path lists.
+    private nonisolated static func parentPrefixes(of relative: String) -> [String] {
+        var components = relative.split(separator: "/").map(String.init)
+        _ = components.popLast()
+        var prefixes: [String] = []
+        var prefix = ""
+        for c in components {
+            prefix = prefix.isEmpty ? c : prefix + "/" + c
+            prefixes.append(prefix)
+        }
+        return prefixes
     }
 
     private nonisolated static func fileExtension(_ relative: String) -> String? {
