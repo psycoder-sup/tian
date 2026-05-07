@@ -168,6 +168,45 @@ struct GitStatusServiceCommitGraphTests {
         }
     }
 
+    // MARK: - localBranchWithSlashGetsOwnLane
+
+    /// Local branches whose names contain `/` (e.g. `fix/foo`, `feature/x`)
+    /// must get their own lane. Earlier `for-each-ref` parsing classified any
+    /// short ref name containing `/` as a remote ref, which collapsed slash-
+    /// named local branches onto main's lane.
+    @Test func localBranchWithSlashGetsOwnLane() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let defaultBranch = try getDefaultBranch(repo)
+
+        // Create a local branch with a slash in its name and commit to it
+        try runGitSync(["checkout", "-b", "fix/git-ignored-dir"], in: repo)
+        let f = (repo as NSString).appendingPathComponent("fix.txt")
+        try "fix".write(toFile: f, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: repo)
+        try runGitSync(["commit", "-m", "fix commit"], in: repo)
+        let fixSha = try getSHA(repo)
+
+        // Return to default branch (HEAD on main/master)
+        try runGitSync(["checkout", defaultBranch], in: repo)
+
+        let graph = await GitStatusService.commitGraph(directory: repo)
+        let g = try #require(graph)
+
+        // The slash-named branch must appear as its own lane.
+        let laneIDs = g.lanes.map(\.id)
+        #expect(laneIDs.contains("fix/git-ignored-dir"))
+
+        // The branch's tip commit must sit on the fix lane, not on the
+        // default branch's lane.
+        let fixLaneIdx = try #require(laneIDs.firstIndex(of: "fix/git-ignored-dir"))
+        let defaultLaneIdx = try #require(laneIDs.firstIndex(of: defaultBranch))
+        let fixCommit = try #require(g.commits.first { $0.sha == fixSha })
+        #expect(fixCommit.laneIndex == fixLaneIdx)
+        #expect(fixCommit.laneIndex != defaultLaneIdx)
+    }
+
     // MARK: - FR-T25: tagsResolvedFromBulkCall
 
     @Test func tagsResolvedFromBulkCall() async throws {

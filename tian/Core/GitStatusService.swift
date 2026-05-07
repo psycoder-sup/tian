@@ -687,7 +687,7 @@ enum GitStatusService {
         // ── Subprocesses #2 and #3: run in parallel ────────────────────────
         async let refFetch = runGit(
             ["for-each-ref", "refs/heads", "refs/remotes",
-             "--format=%(refname:short) %(objectname)"],
+             "--format=%(refname) %(objectname)"],
             workingDirectory: directory
         )
         async let tagFetch = runGit(
@@ -724,19 +724,26 @@ enum GitStatusService {
         }
 
         // ── Parse for-each-ref: build refName → fullSha and fullSha → [refName] ──
+        // Refs are classified by their `refs/heads/` vs `refs/remotes/` prefix
+        // rather than by short-name shape — local branches can contain `/`
+        // (e.g. `fix/foo`) and must not be misclassified as remotes.
         var refBySha: [String: [String]] = [:]    // fullSha → local branch names
         var remoteRefBySha: [String: [String]] = [:] // fullSha → remote ref names
         var allRemoteRefNames = Set<String>()         // all remote ref short names (e.g. "origin/beta")
+        let localPrefix = "refs/heads/"
+        let remotePrefix = "refs/remotes/"
         for line in refResult.stdout.components(separatedBy: "\n") {
             let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
             guard parts.count == 2 else { continue }
             let refName = parts[0]
             let sha = parts[1]
-            if refName.hasPrefix("origin/") || refName.contains("/") {
-                remoteRefBySha[sha, default: []].append(refName)
-                allRemoteRefNames.insert(refName)
-            } else {
-                refBySha[sha, default: []].append(refName)
+            if refName.hasPrefix(localPrefix) {
+                let short = String(refName.dropFirst(localPrefix.count))
+                refBySha[sha, default: []].append(short)
+            } else if refName.hasPrefix(remotePrefix) {
+                let short = String(refName.dropFirst(remotePrefix.count))
+                remoteRefBySha[sha, default: []].append(short)
+                allRemoteRefNames.insert(short)
             }
         }
 
