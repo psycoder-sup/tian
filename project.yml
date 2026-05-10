@@ -170,6 +170,11 @@ targets:
           PRODUCT_MODULE_NAME: tian
           INFOPLIST_KEY_CFBundleName: Tian (debug)
           INFOPLIST_KEY_CFBundleDisplayName: Tian (debug)
+        Release:
+          DEVELOPMENT_TEAM: S5UNLP3V56
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
 
   tianTests:
     type: bundle.unit-test
