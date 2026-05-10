@@ -183,16 +183,38 @@ struct BranchGraphCanvas: View {
                     }
 
                     var edge = Path()
-                    edge.move(to: CGPoint(x: cx, y: cy + Self.nodeRadius))
+                    let yStart = cy + Self.nodeRadius
+                    let yEnd = pcy - Self.nodeRadius
+                    edge.move(to: CGPoint(x: cx, y: yStart))
                     if pcx == cx {
-                        edge.addLine(to: CGPoint(x: pcx, y: pcy - Self.nodeRadius))
+                        edge.addLine(to: CGPoint(x: pcx, y: yEnd))
                     } else {
-                        let midY = (cy + pcy) / 2
+                        // Vertical run on the side (higher-x) lane plus a
+                        // short S-curve at the junction with main. Short edges
+                        // skip the line and use a midpoint cubic so the curve
+                        // doesn't degenerate.
+                        let totalSpan = yEnd - yStart
+                        let junctionH = min(rowHeight * 1.6, max(rowHeight * 0.9, totalSpan * 0.6))
+                        let childIsSide = cx > pcx
+                        let curveStartY = totalSpan <= rowHeight * 1.2
+                            ? yStart
+                            : (childIsSide ? yEnd - junctionH : yStart)
+                        let curveEndY = totalSpan <= rowHeight * 1.2
+                            ? yEnd
+                            : (childIsSide ? yEnd : yStart + junctionH)
+                        let curveMidY = (curveStartY + curveEndY) / 2
+
+                        if childIsSide && curveStartY > yStart {
+                            edge.addLine(to: CGPoint(x: cx, y: curveStartY))
+                        }
                         edge.addCurve(
-                            to: CGPoint(x: pcx, y: pcy - Self.nodeRadius),
-                            control1: CGPoint(x: cx, y: midY),
-                            control2: CGPoint(x: pcx, y: midY)
+                            to: CGPoint(x: pcx, y: curveEndY),
+                            control1: CGPoint(x: cx, y: curveMidY),
+                            control2: CGPoint(x: pcx, y: curveMidY)
                         )
+                        if !childIsSide && curveEndY < yEnd {
+                            edge.addLine(to: CGPoint(x: pcx, y: yEnd))
+                        }
                     }
                     ctx.stroke(edge, with: .color(laneColor.opacity(0.6)), lineWidth: 1)
                 }
