@@ -198,18 +198,38 @@ struct BranchGraphCanvas: View {
                     let pcy = CGFloat(parentRow) * rowHeight + rowHeight / 2
 
                     var path = Path()
-                    path.move(to: CGPoint(x: cx, y: cy + Self.nodeRadius))
+                    let yStart = cy + Self.nodeRadius
+                    let yEnd = pcy - Self.nodeRadius
+                    path.move(to: CGPoint(x: cx, y: yStart))
                     if pcx == cx {
-                        path.addLine(to: CGPoint(x: pcx, y: pcy - Self.nodeRadius))
+                        path.addLine(to: CGPoint(x: pcx, y: yEnd))
                     } else {
-                        // Curved connector — moves down to mid-row, eases
-                        // across, drops onto the parent's lane.
-                        let midY = (cy + pcy) / 2
+                        // Vertical run on the side (higher-x) lane plus a
+                        // short S-curve at the junction with main. Short edges
+                        // skip the line and use a midpoint cubic so the curve
+                        // doesn't degenerate.
+                        let totalSpan = yEnd - yStart
+                        let junctionH = min(rowHeight * 1.6, max(rowHeight * 0.9, totalSpan * 0.6))
+                        let childIsSide = cx > pcx
+                        let curveStartY = totalSpan <= rowHeight * 1.2
+                            ? yStart
+                            : (childIsSide ? yEnd - junctionH : yStart)
+                        let curveEndY = totalSpan <= rowHeight * 1.2
+                            ? yEnd
+                            : (childIsSide ? yEnd : yStart + junctionH)
+                        let curveMidY = (curveStartY + curveEndY) / 2
+
+                        if childIsSide && curveStartY > yStart {
+                            path.addLine(to: CGPoint(x: cx, y: curveStartY))
+                        }
                         path.addCurve(
-                            to: CGPoint(x: pcx, y: pcy - Self.nodeRadius),
-                            control1: CGPoint(x: cx, y: midY),
-                            control2: CGPoint(x: pcx, y: midY)
+                            to: CGPoint(x: pcx, y: curveEndY),
+                            control1: CGPoint(x: cx, y: curveMidY),
+                            control2: CGPoint(x: pcx, y: curveMidY)
                         )
+                        if !childIsSide && curveEndY < yEnd {
+                            path.addLine(to: CGPoint(x: pcx, y: yEnd))
+                        }
                     }
                     let edgeColor = (commit.laneIndex < graph.lanes.count)
                         ? Self.color(for: graph.lanes[commit.laneIndex]).opacity(0.6)
