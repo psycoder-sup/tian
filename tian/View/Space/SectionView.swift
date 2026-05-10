@@ -43,7 +43,6 @@ struct SectionView: View {
                     node: activeTab.paneViewModel.splitTree.root,
                     viewModel: activeTab.paneViewModel,
                     isTabVisible: isSectionFocused
-                        || spaceModel.focusedSectionKind != section.kind
                 )
                 .padding(.top, SectionTabBarView.height(for: section.kind))
 

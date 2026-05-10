@@ -81,7 +81,7 @@ struct SidebarContainerView: View {
         ))
         .onChange(of: sidebarState.focusTarget) { _, newTarget in
             if newTarget == .terminal {
-                returnFocusToTerminal()
+                returnFocusToActivePane()
             }
         }
         .onChange(of: workspaceCollection.activeWorkspaceID) { _, _ in
@@ -347,6 +347,7 @@ struct SidebarContainerView: View {
                     SpaceContentView(
                         spaceModel: space,
                         resolveWorkingDirectory: { spaceCollection.resolveWorkingDirectory() },
+                        isActive: isActive,
                         windowLeadingInset: sectionTabBarLeadingInset,
                         windowTrailingInset: sectionTabBarTrailingInset
                     )
@@ -390,14 +391,16 @@ struct SidebarContainerView: View {
         // isTabVisible flips true, but that requires a SwiftUI rerender. Call
         // explicitly here to cover fast tab/space switches where the rerender
         // order isn't guaranteed.
-        returnFocusToTerminal()
+        returnFocusToActivePane()
     }
 
-    private func returnFocusToTerminal() {
+    /// Make the active space's focused-section active pane the window's
+    /// first responder. Falls back to Claude when Terminal is hidden or
+    /// empty (see `SpaceModel.effectiveFocusedSection`).
+    private func returnFocusToActivePane() {
         guard let space = displayedSpaceCollection?.activeSpace,
-              let tab = space.activeTab else { return }
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
-        guard let surfaceView = tab.paneViewModel.surfaceView(for: paneID) else { return }
+              let tab = space.effectiveFocusedSection.activeTab,
+              let surfaceView = tab.paneViewModel.focusedSurfaceView else { return }
         // nsWindow (via WindowAccessor binding) can lag during the first
         // renders; fall back to the surface view's own window.
         guard let window = nsWindow ?? surfaceView.window else { return }

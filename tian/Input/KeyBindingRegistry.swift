@@ -128,9 +128,12 @@ struct KeyBindingRegistry {
         // `` Ctrl+` `` — keyCode 50 is the backtick key on US layouts.
         registry.bindings[.toggleTerminalSection] = [KeyBinding(
             characters: nil, keyCode: 50, modifiers: [.control])]
-        // `` Cmd+Shift+` ``
-        registry.bindings[.cycleSectionFocus] = [KeyBinding(
-            characters: nil, keyCode: 50, modifiers: [.command, .shift])]
+        // `` Cmd+Shift+` `` and Cmd+' (no shift required for users on
+        // layouts where backtick needs Shift).
+        registry.bindings[.cycleSectionFocus] = [
+            KeyBinding(characters: nil, keyCode: 50, modifiers: [.command, .shift]),
+            KeyBinding(characters: "'", keyCode: nil, modifiers: [.command]),
+        ]
 
         // Debug
         registry.bindings[.toggleDebugOverlay] = [KeyBinding(
