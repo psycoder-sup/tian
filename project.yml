@@ -47,6 +47,7 @@ targets:
           - "Resources/shell-integration/**"
     dependencies:
       - target: tian-cli
+        embed: false
       - package: TOMLKit
         product: TOMLKit
     postCompileScripts:
@@ -175,6 +176,7 @@ targets:
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"
           OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
 
   tianTests:
     type: bundle.unit-test
@@ -215,3 +217,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.cli
         PRODUCT_NAME: tian-cli
+      configs:
+        Release:
+          DEVELOPMENT_TEAM: S5UNLP3V56
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO

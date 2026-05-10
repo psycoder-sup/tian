@@ -66,9 +66,20 @@ if [[ "$SKIP_NOTARIZE" == "1" ]]; then
   echo "    Users will see Gatekeeper warnings on first launch."
 else
   echo "==> Notarize (this can take a few minutes)"
-  xcrun notarytool submit "$DMG_PATH" \
+  SUBMIT_OUT="$(xcrun notarytool submit "$DMG_PATH" \
     --keychain-profile "$NOTARY_PROFILE" \
-    --wait
+    --wait --output-format json)"
+  echo "$SUBMIT_OUT"
+  STATUS="$(echo "$SUBMIT_OUT" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("status",""))')"
+  SUBMIT_ID="$(echo "$SUBMIT_OUT" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))')"
+  if [[ "$STATUS" != "Accepted" ]]; then
+    echo "Notarization failed: status=$STATUS" >&2
+    if [[ -n "$SUBMIT_ID" ]]; then
+      echo "Fetching Apple log:" >&2
+      xcrun notarytool log "$SUBMIT_ID" --keychain-profile "$NOTARY_PROFILE" >&2 || true
+    fi
+    exit 1
+  fi
 
   echo "==> Staple ticket"
   xcrun stapler staple "$DMG_PATH"
