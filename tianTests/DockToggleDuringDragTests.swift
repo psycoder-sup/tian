@@ -8,15 +8,15 @@ struct DockToggleDuringDragTests {
     @Test func dockToggleMidDragIsQueuedUntilGestureEnd() {
         let space = SpaceCollection(workingDirectory: "/tmp").activeSpace!
         space.showTerminal()
-        #expect(space.dockPosition == .right)
+        #expect(space.dockPosition == .bottom)
 
         // Start drag.
         space.sectionDividerDragController.beginDrag()
-        space.setDockPosition(.bottom)  // should be queued
-        #expect(space.dockPosition == .right)  // unchanged mid-drag
+        space.setDockPosition(.right)  // should be queued
+        #expect(space.dockPosition == .bottom)  // unchanged mid-drag
 
         // End drag; queued toggle applies.
         space.sectionDividerDragController.endDrag(finalRatio: 0.6)
-        #expect(space.dockPosition == .bottom)
+        #expect(space.dockPosition == .right)
     }
 }

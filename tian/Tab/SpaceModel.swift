@@ -54,7 +54,7 @@ final class SpaceModel: Identifiable {
         claudeSection: SectionModel,
         terminalSection: SectionModel,
         terminalVisible: Bool = false,
-        dockPosition: DockPosition = .right,
+        dockPosition: DockPosition = .bottom,
         splitRatio: Double = 0.7,
         focusedSectionKind: SectionKind = .claude,
         defaultWorkingDirectory: URL? = nil,
