@@ -86,9 +86,9 @@ struct SpaceModelSectionTests {
         #expect(space.terminalSection.tabs.isEmpty)
     }
 
-    @Test func defaultDockPositionIsRight() {
+    @Test func defaultDockPositionIsBottom() {
         let space = SpaceCollection(workingDirectory: "/tmp").activeSpace!
-        #expect(space.dockPosition == .right)
+        #expect(space.dockPosition == .bottom)
     }
 
     @Test func cycleFocusedSectionMovesFocusBetweenSections() {
