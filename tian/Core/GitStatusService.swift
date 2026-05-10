@@ -1025,6 +1025,10 @@ enum GitStatusService {
         process.executableURL = URL(filePath: executablePath)
         process.arguments = arguments
         process.currentDirectoryURL = URL(filePath: workingDirectory)
+        // GUI apps launched from /Applications inherit a minimal PATH that
+        // omits Homebrew/MacPorts, so `env gh` returns 127 unless we add
+        // the standard third-party install dirs back in.
+        process.environment = environmentWithUserBinPaths()
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -1057,6 +1061,14 @@ enum GitStatusService {
                 process.terminate()
             }
         }
+    }
+
+    private static func environmentWithUserBinPaths() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let extras = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"]
+        let current = env["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        env["PATH"] = (extras + [current]).joined(separator: ":")
+        return env
     }
 
     // MARK: - Utilities
