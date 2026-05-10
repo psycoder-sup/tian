@@ -20,12 +20,23 @@ SKIP_NOTARIZE="${SKIP_NOTARIZE:-0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# Strip leading "v" so a tag-style "v0.4.2" still produces a numeric MARKETING_VERSION.
+VERSION_NUMERIC="${VERSION#v}"
+# CFBundleShortVersionString must be numeric (X[.Y[.Z]]). Fall back to 0.0.0 for dev/dirty
+# builds so xcodebuild doesn't reject the string.
+if [[ "$VERSION_NUMERIC" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+  MARKETING_VERSION="$VERSION_NUMERIC"
+else
+  MARKETING_VERSION="0.0.0"
+fi
+BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+
 RELEASE_DIR=".build/release"
 APP_PATH=".build/Build/Products/Release/tian.app"
 DMG_PATH="$RELEASE_DIR/tian-$VERSION.dmg"
 IDENTITY="Developer ID Application: Sanguk Park (S5UNLP3V56)"
 
-echo "==> Release $VERSION"
+echo "==> Release $VERSION (CFBundleShortVersionString=$MARKETING_VERSION, CFBundleVersion=$BUILD_NUMBER)"
 mkdir -p "$RELEASE_DIR"
 
 echo "==> xcodegen generate"
@@ -37,6 +48,8 @@ xcodebuild \
   -scheme tian \
   -configuration Release \
   -derivedDataPath .build \
+  MARKETING_VERSION="$MARKETING_VERSION" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   build
 
 echo "==> Verify app signature"
