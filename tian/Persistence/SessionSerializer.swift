@@ -7,7 +7,14 @@ enum SessionSerializer {
     static var stateDirectory: URL {
         FileManager.default
             .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/tian", isDirectory: true)
+            .appendingPathComponent("Library/Application Support/\(stateDirectoryName)", isDirectory: true)
+    }
+
+    /// Namespaces the state directory by build variant so tian and tian-debug
+    /// don't clobber each other's persisted tab state.
+    private static var stateDirectoryName: String {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        return bundleID.hasSuffix(".debug") ? "tian-debug" : "tian"
     }
 
     static var stateFileURL: URL {
