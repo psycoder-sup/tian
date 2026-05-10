@@ -79,6 +79,10 @@ final class PaneViewModel {
     /// jump was made.
     var onFocusCrossSection: ((NavigationDirection) -> Bool)?
 
+    /// SpaceModel uses this to keep `focusedSectionKind` in sync with
+    /// the actually-focused pane.
+    var onPaneFocused: ((UUID) -> Void)?
+
     // MARK: - Private
 
     nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
@@ -269,6 +273,10 @@ final class PaneViewModel {
         surfaceViews[paneID]
     }
 
+    var focusedSurfaceView: TerminalSurfaceView? {
+        surfaceViews[splitTree.focusedPaneID]
+    }
+
     func paneState(for paneID: UUID) -> PaneState {
         paneStates[paneID] ?? .running
     }
@@ -346,11 +354,13 @@ final class PaneViewModel {
     }
 
     func focusPane(paneID: UUID) {
-        guard splitTree.focusedPaneID != paneID else { return }
-        splitTree.focusedPaneID = paneID
-        bellNotifications.remove(paneID)
-        // Update title from the newly focused pane
-        // (title will update on next surfaceTitleNotification from that pane)
+        if splitTree.focusedPaneID != paneID {
+            splitTree.focusedPaneID = paneID
+            bellNotifications.remove(paneID)
+        }
+        // Fires unconditionally: a click on the already-focused pane
+        // still needs to flip the section if focus crossed sections.
+        onPaneFocused?(paneID)
     }
 
     func focusDirection(_ direction: NavigationDirection) {

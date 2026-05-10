@@ -136,7 +136,7 @@ struct InspectBranchViewModelTests {
                 tag: nil
             )
         ]
-        return GitCommitGraph(lanes: lanes, commits: commits, collapsedLaneCount: 0)
+        return GitCommitGraph(lanes: lanes, commits: commits, collapsedLaneCount: 0, headSha: commits.first?.sha)
     }
 }
 

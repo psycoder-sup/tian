@@ -163,6 +163,10 @@ struct GitCommitGraph: Sendable, Equatable {
     /// Number of branch tips folded into the trailing "other" lane. 0 when
     /// the cap was not hit.
     let collapsedLaneCount: Int
+    /// Full SHA of the commit HEAD points at. Anchors the HEAD ring and chip
+    /// on the actual HEAD commit (which may not be the topmost log entry, or
+    /// even on lane 0). `nil` for an empty repo or unresolved HEAD.
+    let headSha: String?
 }
 
 struct GitLane: Sendable, Equatable {

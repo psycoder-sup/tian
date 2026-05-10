@@ -175,7 +175,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 guard let space = collection.activeSpace else { return event }
                 let wd = collection.resolveWorkingDirectory()
                 // FR-18: new tab lands in the focused pane's section.
-                space.focusedSection.createTab(workingDirectory: wd)
+                space.createTab(in: space.focusedSection, workingDirectory: wd)
             case .nextTab:
                 collection.activeSpace?.focusedSection.nextTab()
             case .previousTab:

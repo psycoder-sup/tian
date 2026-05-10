@@ -89,6 +89,7 @@ final class SpaceModel: Identifiable {
                 wireDirectoryFallback(tab)
                 wireGitContext(tab)
                 wireCrossSectionFocus(tab)
+                wireSectionFocusSync(tab)
                 for (paneID, wd) in tab.paneViewModel.splitTree.allLeafInfo() {
                     gitContext.paneAdded(paneID: paneID, workingDirectory: wd)
                 }
@@ -187,6 +188,19 @@ final class SpaceModel: Identifiable {
         case .claude: return claudeSection
         case .terminal: return terminalSection
         }
+    }
+
+    /// `focusedSection` with a Claude fallback when the preferred section
+    /// can't actually receive focus right now (Terminal hidden, or the
+    /// section has no active tab). Single source of truth for "which
+    /// section currently owns focus" — used by both view rendering
+    /// (`SpaceContentView`) and explicit first-responder management
+    /// (`SidebarContainerView.returnFocusToActivePane`).
+    var effectiveFocusedSection: SectionModel {
+        let preferred = focusedSection
+        let reachable = preferred.activeTab != nil
+            && (preferred.kind != .terminal || terminalVisible)
+        return reachable ? preferred : claudeSection
     }
 
     var isEffectivelyEmpty: Bool {
@@ -301,6 +315,20 @@ final class SpaceModel: Identifiable {
         wireHierarchyContext(tab)
         wireGitContext(tab)
         wireCrossSectionFocus(tab)
+        wireSectionFocusSync(tab)
+    }
+
+    /// Keep `focusedSectionKind` aligned with the pane the user is
+    /// actually typing into. Without this, clicking a Claude pane while
+    /// the model still thinks Terminal is focused would route Cmd+T,
+    /// Cmd+1…9, etc. to the Terminal section.
+    private func wireSectionFocusSync(_ tab: TabModel) {
+        tab.paneViewModel.onPaneFocused = { [weak self, weak tab] _ in
+            guard let self, let tab else { return }
+            if self.focusedSectionKind != tab.sectionKind {
+                self.focusedSectionKind = tab.sectionKind
+            }
+        }
     }
 
     private func wireCrossSectionFocus(_ tab: TabModel) {

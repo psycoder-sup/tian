@@ -836,7 +836,7 @@ enum GitStatusService {
 
         guard !rawCommits.isEmpty else {
             // Empty repo
-            return GitCommitGraph(lanes: [], commits: [], collapsedLaneCount: 0)
+            return GitCommitGraph(lanes: [], commits: [], collapsedLaneCount: 0, headSha: nil)
         }
 
         let headShort = headShortSha ?? rawCommits[0].shortSha
@@ -844,144 +844,134 @@ enum GitStatusService {
         // ── Build set of SHAs in the commit window ─────────────────────────
         let commitShaSet = Set(rawCommits.map(\.sha))
 
-        // ── Determine candidate lanes ───────────────────────────────────────
-        // A lane corresponds to a local branch whose tip is in the commit window.
-        // Plus HEAD's branch (even if detached, we create a synthetic lane).
-
-        struct LaneCandidate {
-            let id: String
-            let label: String
-            let isHead: Bool
-            let hasTrackedRemote: Bool
-            var commitCount: Int   // number of commits in window this branch is "closest to"
+        // ── Compute lane assignment ─────────────────────────────────────────
+        // Lane 0 is the most-ahead branch's trunk: the first-parent walk back
+        // from the topmost log entry. Side branches pack greedily into the
+        // lowest non-trunk lane whose row occupancy doesn't collide.
+        var rowBySha: [String: Int] = [:]
+        var rawBySha: [String: RawCommit] = [:]
+        rowBySha.reserveCapacity(rawCommits.count)
+        rawBySha.reserveCapacity(rawCommits.count)
+        for (i, c) in rawCommits.enumerated() {
+            rowBySha[c.sha] = i
+            rawBySha[c.sha] = c
         }
 
-        // Count commits attributed to each local branch:
-        // For each commit, the "owning" branch is determined by for-each-ref SHA matches.
-        // We count how many commits in the window can be reached from each branch tip.
-        var branchCommitCount: [String: Int] = [:]
-        let allCommitShas = rawCommits.map(\.sha)
-
-        for (sha, branches) in refBySha {
-            // Only count branches whose tip is in the commit window
-            if let idx = allCommitShas.firstIndex(of: sha) {
-                for branch in branches {
-                    // Branch tip at position idx → it "owns" commits from idx onwards
-                    // (i.e., commits that are ancestors). Simple approximation:
-                    // count = commits from index idx to end of list (idx+1 because index
-                    // 0 is the newest; branches further from HEAD own fewer commits)
-                    branchCommitCount[branch] = (branchCommitCount[branch] ?? 0) + (allCommitShas.count - idx)
-                }
-            } else {
-                // Branch tip not in window — skip, count 0
-                for branch in branches {
-                    branchCommitCount[branch] = branchCommitCount[branch] ?? 0
-                }
+        var childrenBySha: [String: [String]] = [:]
+        for raw in rawCommits {
+            for p in raw.parentShas where commitShaSet.contains(p) {
+                childrenBySha[p, default: []].append(raw.sha)
             }
         }
 
-        // Build candidates from all local branches with tips in the commit window
-        var candidates: [LaneCandidate] = []
-        var seenIds = Set<String>()
+        // Resolve a representative ref name for a tip: prefer a local branch,
+        // then any decoration that isn't a HEAD marker, then a remote ref,
+        // then the short SHA. Used for both the trunk anchor and side-lane
+        // labels so the ranking policy lives in one place.
+        func tipLabel(for raw: RawCommit, preferLocalBranch: Bool) -> String {
+            if preferLocalBranch, let local = refBySha[raw.sha]?.first {
+                return local
+            }
+            if let dec = raw.decorations.first(where: { !$0.hasPrefix("HEAD") }) {
+                return dec
+            }
+            if let remote = remoteRefBySha[raw.sha]?.sorted().first {
+                return remote
+            }
+            return raw.shortSha
+        }
 
-        // HEAD lane first
-        let headId: String
-        let headLabel: String
-        if let branch = headBranchName {
-            headId = branch
-            headLabel = branch
+        // HEAD's full SHA anchors the visual HEAD emphasis (ring + chip) to
+        // the actual HEAD commit regardless of lane.
+        let headFullSha: String? = headShortSha.flatMap { hs in
+            rawCommits.first(where: { $0.shortSha == hs })?.sha
+        }
+
+        var trunkShas = Set<String>()
+        var trunkCursor = rawCommits.first?.sha
+        while let cur = trunkCursor,
+              !trunkShas.contains(cur),
+              let raw = rawBySha[cur] {
+            trunkShas.insert(cur)
+            trunkCursor = raw.parentShas.first
+        }
+
+        // Lane 0 is pre-seeded with the trunk's row span so side tips never
+        // get packed into it.
+        var laneOccupancy: [[ClosedRange<Int>]] = [[]]
+        let trunkRows = trunkShas.compactMap { rowBySha[$0] }
+        if let lo = trunkRows.min(), let hi = trunkRows.max() {
+            laneOccupancy[0].append(lo ... hi)
+        }
+
+        let trunkLabel: String
+        if let anchor = rawCommits.first {
+            trunkLabel = tipLabel(for: anchor, preferLocalBranch: true)
+        } else if let branch = headBranchName {
+            trunkLabel = branch
         } else {
-            // Detached HEAD
-            headId = "HEAD@\(headShort)"
-            headLabel = headShort
+            trunkLabel = headShort
         }
-        candidates.append(LaneCandidate(
-            id: headId,
-            label: headLabel,
-            isHead: true,
-            hasTrackedRemote: trackedRemote != nil,
-            commitCount: branchCommitCount[headId] ?? (allCommitShas.count)
-        ))
-        seenIds.insert(headId)
+        var lanes: [GitLane] = [
+            GitLane(id: trunkLabel, label: trunkLabel, colorIndex: 0, isCollapsed: false)
+        ]
 
-        // Collect remaining branches
-        var remaining: [LaneCandidate] = []
-        for (sha, branches) in refBySha {
-            guard commitShaSet.contains(sha) else { continue }
-            for branch in branches {
-                guard !seenIds.contains(branch) else { continue }
-                seenIds.insert(branch)
-                // A branch has a tracked remote if "origin/<branchName>" exists in the remote refs
-                let isTrackedRemote = allRemoteRefNames.contains("origin/\(branch)")
-                remaining.append(LaneCandidate(
-                    id: branch,
-                    label: branch,
-                    isHead: false,
-                    hasTrackedRemote: isTrackedRemote,
-                    commitCount: branchCommitCount[branch] ?? 0
-                ))
+        var laneByCommitSha: [String: Int] = [:]
+        for sha in trunkShas { laneByCommitSha[sha] = 0 }
+        for raw in rawCommits {
+            if trunkShas.contains(raw.sha) { continue }
+            guard let myRow = rowBySha[raw.sha] else { continue }
+
+            var lane: Int = -1
+            if let kids = childrenBySha[raw.sha] {
+                for childSha in kids {
+                    if let cl = laneByCommitSha[childSha], cl > 0 {
+                        lane = cl
+                        break
+                    }
+                }
             }
+
+            let parentRow = raw.parentShas.first.flatMap { rowBySha[$0] }
+            let occBottom = parentRow.map { max(myRow, $0 - 1) } ?? myRow
+            let myOccupancy = myRow ... occBottom
+
+            if lane == -1 {
+                for li in 1..<laneOccupancy.count
+                where !laneOccupancy[li].contains(where: { $0.overlaps(myOccupancy) }) {
+                    lane = li
+                    break
+                }
+                if lane == -1 {
+                    laneOccupancy.append([])
+                    lane = laneOccupancy.count - 1
+                    let label = tipLabel(for: raw, preferLocalBranch: false)
+                    lanes.append(GitLane(
+                        id: label, label: label, colorIndex: lane, isCollapsed: false
+                    ))
+                }
+            }
+
+            laneByCommitSha[raw.sha] = lane
+            laneOccupancy[lane].append(myOccupancy)
         }
 
-        // Sort remaining: tracked remote first, then by commit count desc, then alphabetical
-        remaining.sort { a, b in
-            if a.hasTrackedRemote != b.hasTrackedRemote { return a.hasTrackedRemote }
-            if a.commitCount != b.commitCount { return a.commitCount > b.commitCount }
-            return a.id < b.id
-        }
-        candidates.append(contentsOf: remaining)
-
-        // ── Apply 6-lane cap ────────────────────────────────────────────────
+        // 6-lane cap: surplus lanes collapse into a trailing "other" bucket
+        // that any over-cap commit gets rebound to.
         let maxNamedLanes = 6
-        let namedCandidates: [LaneCandidate]
-        let collapsedCount: Int
-        if candidates.count > maxNamedLanes {
-            namedCandidates = Array(candidates.prefix(maxNamedLanes))
-            collapsedCount = candidates.count - maxNamedLanes
-        } else {
-            namedCandidates = candidates
-            collapsedCount = 0
-        }
-
-        // Build GitLane array
-        var lanes: [GitLane] = namedCandidates.enumerated().map { idx, c in
-            GitLane(id: c.id, label: c.label, colorIndex: idx, isCollapsed: false)
-        }
+        let collapsedCount = max(0, lanes.count - maxNamedLanes)
         if collapsedCount > 0 {
+            lanes = Array(lanes.prefix(maxNamedLanes))
             lanes.append(GitLane(
                 id: GitLane.collapsedID,
                 label: "other",
                 colorIndex: lanes.count,
                 isCollapsed: true
             ))
-        }
-
-        // Build a fast lookup: laneId → laneIndex
-        var laneIndexByID: [String: Int] = [:]
-        for (idx, lane) in lanes.enumerated() {
-            laneIndexByID[lane.id] = idx
-        }
-        let otherLaneIndex = collapsedCount > 0 ? lanes.count - 1 : nil
-
-        // ── Build commit SHA→lane mapping ───────────────────────────────────
-        // For each commit, determine its primary lane:
-        //   1. If any decoration matches a named lane → use that lane
-        //   2. If HEAD is on this commit → headId lane
-        //   3. Otherwise → first lane whose tip SHA matches
-        //   4. Fallback: other lane (or lane 0)
-        func laneIndex(for raw: RawCommit) -> Int {
-            // Check decorations for named lanes
-            for dec in raw.decorations {
-                if let idx = laneIndexByID[dec] { return idx }
+            let collapsedIdx = lanes.count - 1
+            for (sha, laneIdx) in laneByCommitSha where laneIdx >= maxNamedLanes {
+                laneByCommitSha[sha] = collapsedIdx
             }
-            // Check for-each-ref: if this commit's SHA is a branch tip
-            if let branches = refBySha[raw.sha] {
-                for branch in branches {
-                    if let idx = laneIndexByID[branch] { return idx }
-                }
-            }
-            // Fallback to other or lane 0
-            return otherLaneIndex ?? 0
         }
 
         // ── Assemble GitCommit array ────────────────────────────────────────
@@ -1002,7 +992,7 @@ enum GitStatusService {
             return GitCommit(
                 sha: raw.sha,
                 shortSha: raw.shortSha,
-                laneIndex: laneIndex(for: raw),
+                laneIndex: laneByCommitSha[raw.sha] ?? 0,
                 parentShas: raw.parentShas,
                 author: raw.author,
                 when: raw.when,
@@ -1013,7 +1003,7 @@ enum GitStatusService {
             )
         }
 
-        return GitCommitGraph(lanes: lanes, commits: commits, collapsedLaneCount: collapsedCount)
+        return GitCommitGraph(lanes: lanes, commits: commits, collapsedLaneCount: collapsedCount, headSha: headFullSha)
     }
 
     private static func runProcess(

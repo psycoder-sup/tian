@@ -13,6 +13,12 @@ struct SpaceContentView: View {
     @Bindable var spaceModel: SpaceModel
     var resolveWorkingDirectory: () -> String
 
+    /// True only for the active space in the workspace. Inactive spaces
+    /// stay mounted (opacity 0) so their surfaces survive switches, but
+    /// they must not claim first responder — otherwise typing in the
+    /// active space lands on a hidden surface from another space.
+    var isActive: Bool = true
+
     /// Inset applied to a section's tab bar when that section touches the
     /// window's leading edge (clears the traffic-lights + sidebar toggle).
     var windowLeadingInset: CGFloat = 0
@@ -68,12 +74,18 @@ struct SpaceContentView: View {
         // the terminal section reaches the trailing edge in both layouts.
         let terminalLeading: CGFloat = spaceModel.dockPosition == .bottom ? windowLeadingInset : 0
 
+        // Inactive spaces never report focus — they're rendered only to
+        // keep their surfaces alive for the next switch.
+        let focusedKind = spaceModel.effectiveFocusedSection.kind
+        let isClaudeFocused = isActive && focusedKind == .claude
+        let isTerminalFocused = isActive && focusedKind == .terminal
+
         ZStack(alignment: .topLeading) {
             SectionView(
                 spaceModel: spaceModel,
                 section: spaceModel.claudeSection,
                 resolveWorkingDirectory: resolveWorkingDirectory,
-                isSectionFocused: spaceModel.focusedSectionKind == .claude,
+                isSectionFocused: isClaudeFocused,
                 leadingTabBarInset: windowLeadingInset,
                 trailingTabBarInset: claudeTrailing
             )
@@ -91,7 +103,7 @@ struct SpaceContentView: View {
                     spaceModel: spaceModel,
                     section: spaceModel.terminalSection,
                     resolveWorkingDirectory: resolveWorkingDirectory,
-                    isSectionFocused: spaceModel.focusedSectionKind == .terminal,
+                    isSectionFocused: isTerminalFocused,
                     leadingTabBarInset: terminalLeading,
                     trailingTabBarInset: windowTrailingInset
                 )

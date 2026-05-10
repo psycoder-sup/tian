@@ -147,13 +147,13 @@ final class WorkspaceCollection {
         guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
 
         if spaceIndex + 1 < sc.spaces.count {
-            sc.activeSpaceID = sc.spaces[spaceIndex + 1].id
+            activate(sc.spaces[spaceIndex + 1], in: sc)
         } else {
             let nextWsIndex = (wsIndex + 1) % workspaces.count
             activeWorkspaceID = workspaces[nextWsIndex].id
             let nextSC = workspaces[nextWsIndex].spaceCollection
             if let first = nextSC.spaces.first {
-                nextSC.activeSpaceID = first.id
+                activate(first, in: nextSC)
             }
         }
     }
@@ -166,14 +166,23 @@ final class WorkspaceCollection {
         guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
 
         if spaceIndex > 0 {
-            sc.activeSpaceID = sc.spaces[spaceIndex - 1].id
+            activate(sc.spaces[spaceIndex - 1], in: sc)
         } else {
             let prevWsIndex = (wsIndex - 1 + workspaces.count) % workspaces.count
             activeWorkspaceID = workspaces[prevWsIndex].id
             let prevSC = workspaces[prevWsIndex].spaceCollection
             if let last = prevSC.spaces.last {
-                prevSC.activeSpaceID = last.id
+                activate(last, in: prevSC)
             }
+        }
+    }
+
+    /// Cross-workspace space activation that also resets focus to the
+    /// Claude section — switching spaces should always land in Claude.
+    private func activate(_ space: SpaceModel, in collection: SpaceCollection) {
+        collection.activeSpaceID = space.id
+        if space.focusedSectionKind != .claude {
+            space.focusedSectionKind = .claude
         }
     }
 
