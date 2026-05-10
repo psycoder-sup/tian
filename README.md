@@ -17,14 +17,25 @@ Workspace → Space → Tab → Pane (split tree)
 - **Tab** — a single tab inside a space, owning a split tree of panes.
 - **Pane** — a single terminal session, mapped 1:1 to a Ghostty surface. Splits horizontally or vertically.
 
-## Requirements
+## Install
+
+Download the latest signed and notarized DMG from the [releases page](https://github.com/psycoder-sup/tian/releases/latest), open it, and drag **tian.app** to **Applications**. macOS 26 on Apple Silicon only.
+
+Optional verification:
+
+```sh
+shasum -a 256 -c tian-v*.dmg.sha256
+spctl -a -t open --context context:primary-signature -v tian-v*.dmg
+```
+
+## Build from source
+
+Requirements:
 
 - macOS 26
 - Xcode 26.3
 - [`zig`](https://ziglang.org/) (`brew install zig`) — required to build Ghostty
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) — generates the Xcode project
-
-## Build & install
 
 ```sh
 # 1. Build and vendor GhosttyKit.xcframework (run once, or after updating .ghostty-src)
