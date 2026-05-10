@@ -6,16 +6,36 @@ Ghostty handles the PTY, VT parsing, Metal rendering, font atlas, cursor, select
 
 ## Concepts
 
-tian organizes terminals in four levels:
+tian organizes terminals in five levels:
 
 ```
-Workspace → Space → Tab → Pane (split tree)
+Workspace → Space → Section (Terminal | Claude) → Tab → Pane (split tree)
 ```
 
 - **Workspace** — top-level unit, one per OS window. Has a name and a default working directory.
 - **Space** — a named group of tabs inside a workspace, similar to virtual desktops.
-- **Tab** — a single tab inside a space, owning a split tree of panes.
+- **Section** — every space has two parallel tab strips: a **Terminal** section and a dedicated **Claude** section. New panes opened in the Claude section auto-launch `claude`, so Claude Code sessions stay separated from regular shells. The two sections have independent tabs and a draggable divider; the Claude section can be docked on the right or at the bottom.
+- **Tab** — a single tab inside a section, owning a split tree of panes.
 - **Pane** — a single terminal session, mapped 1:1 to a Ghostty surface. Splits horizontally or vertically.
+
+## Interface
+
+- **Sidebar** (`⌘⇧S` / `⌘⇧W` to toggle, `⌘0` to focus) — a left rail listing every workspace and the spaces inside it. Each space row shows its pinned git repos, the latest pane status line, and one colored dot per Claude session in that space:
+  - orange — needs attention, Claude is waiting on user input
+  - green — active, Claude is responding
+  - gray — idle, Claude is waiting between turns
+  - animated spinner — busy, long-running tool call
+  
+  Dots are sorted by priority so a space that needs attention is visible at a glance, even when the workspace is collapsed.
+
+- **Inspect panel** — a right-side panel for the active space with three tabs:
+  - **Files** — file tree of the space's working directory with git status badges
+  - **Diff** — unified `git diff` against `HEAD`, with per-file additions/deletions
+  - **Branch** — local and remote branches with a commit graph
+  
+  Toggle it with the icon on the trailing edge of the window. When hidden, only a thin rail remains. Git tabs are populated only if the space's working directory is inside a git repo.
+
+- **Claude status monitor** — the colored dots in the sidebar are driven by `tian-cli status set --state <state>`, designed to be called from Claude Code hooks (`PreToolUse` / `PostToolUse` / `Stop`). State updates flow over the IPC socket, so a session signaling `needs_attention` lights up the sidebar even when the workspace isn't focused.
 
 ## Install
 
