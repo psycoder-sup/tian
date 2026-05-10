@@ -56,24 +56,24 @@ scripts/install.sh
 | Cycle section focus | `⌘⇧` `` ` `` |
 | Toggle debug overlay | `⌘⇧P` |
 
-## `tian` CLI
+## `tian-cli`
 
-Each pane runs with `TIAN_SOCKET`, `TIAN_PANE_ID`, `TIAN_TAB_ID`, `TIAN_SPACE_ID`, and `TIAN_WORKSPACE_ID` set, letting the bundled `tian` CLI talk to the running app over a Unix socket.
+Each pane runs with `TIAN_SOCKET`, `TIAN_PANE_ID`, `TIAN_TAB_ID`, `TIAN_SPACE_ID`, and `TIAN_WORKSPACE_ID` set, letting the bundled `tian-cli` binary talk to the running app over a Unix socket.
 
 ```sh
-tian ping                  # check the connection
-tian workspace …           # workspace commands
-tian space …               # space commands
-tian tab …                 # tab commands
-tian pane …                # pane commands
-tian status …              # surface status
-tian worktree …            # git worktree helpers
-tian git …                 # git helpers
-tian notify …              # send a notification
-tian config …              # read/write config
+tian-cli ping                  # check the connection
+tian-cli workspace …           # workspace commands
+tian-cli space …               # space commands
+tian-cli tab …                 # tab commands
+tian-cli pane …                # pane commands
+tian-cli status …              # surface status
+tian-cli worktree …            # git worktree helpers
+tian-cli git …                 # git helpers
+tian-cli notify …              # send a notification
+tian-cli config …              # read/write config
 ```
 
-The CLI only works from inside a tian terminal session — it errors out cleanly if `TIAN_SOCKET` is not set. Run `tian <command> --help` for subcommand details.
+The CLI only works from inside a tian terminal session — it errors out cleanly if `TIAN_SOCKET` is not set. Run `tian-cli <command> --help` for subcommand details.
 
 ## Logs
 
