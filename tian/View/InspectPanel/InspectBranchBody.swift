@@ -66,7 +66,7 @@ struct InspectBranchBody: View {
                                 BranchCommitRow(
                                     commit: commit,
                                     lanes: graph.lanes,
-                                    isHead: commit.sha == graph.commits.first?.sha,
+                                    isHead: commit.sha == graph.headSha,
                                     gutterWidth: gutterWidth(for: graph)
                                 )
                             }
@@ -156,69 +156,50 @@ struct BranchGraphCanvas: View {
                 rowBySha[c.sha] = i
             }
 
-            // 1. Lane rails — per-lane, span only between the earliest (topmost)
-            // and latest (bottommost) commit on that lane. Rails never extend
-            // above the topmost or below the bottommost commit of the graph,
-            // and lanes with a single visible commit get no rail at all (the
-            // node alone tells the story).
-            var laneRowRange: [Int: (top: Int, bottom: Int)] = [:]
-            for (rowIndex, commit) in graph.commits.enumerated() {
-                let lane = commit.laneIndex
-                if let existing = laneRowRange[lane] {
-                    laneRowRange[lane] = (
-                        top: min(existing.top, rowIndex),
-                        bottom: max(existing.bottom, rowIndex)
-                    )
-                } else {
-                    laneRowRange[lane] = (top: rowIndex, bottom: rowIndex)
-                }
-            }
-            for (laneIndex, range) in laneRowRange where range.top != range.bottom {
-                let cx = CGFloat(laneIndex) * laneWidth + laneWidth / 2
-                let yTop = CGFloat(range.top) * rowHeight + rowHeight / 2
-                let yBottom = CGFloat(range.bottom) * rowHeight + rowHeight / 2
-                var path = Path()
-                path.move(to: CGPoint(x: cx, y: yTop))
-                path.addLine(to: CGPoint(x: cx, y: yBottom))
-                let color = laneIndex < graph.lanes.count
-                    ? Self.color(for: graph.lanes[laneIndex]).opacity(0.35)
-                    : Color.primary.opacity(0.15)
-                ctx.stroke(path, with: .color(color), lineWidth: Self.railLineWidth)
-            }
-
-            // 2. Parent edges — connect each commit to each parent's row.
+            // 1. Rails + parent edges, single pass. The rail (lighter
+            // background line) is only drawn for first-parent edges that
+            // stay on the same lane — so unrelated commits sharing a packed
+            // side lane don't get a phantom vertical line strung between
+            // them.
             for (rowIndex, commit) in graph.commits.enumerated() {
                 let cx = CGFloat(commit.laneIndex) * laneWidth + laneWidth / 2
                 let cy = CGFloat(rowIndex) * rowHeight + rowHeight / 2
+                let laneColor: Color = commit.laneIndex < graph.lanes.count
+                    ? Self.color(for: graph.lanes[commit.laneIndex])
+                    : Color.primary.opacity(0.5)
 
-                for parentSha in commit.parentShas {
+                for (parentIdx, parentSha) in commit.parentShas.enumerated() {
                     guard let parentRow = rowBySha[parentSha] else { continue }
                     let parent = graph.commits[parentRow]
                     let pcx = CGFloat(parent.laneIndex) * laneWidth + laneWidth / 2
                     let pcy = CGFloat(parentRow) * rowHeight + rowHeight / 2
 
-                    var path = Path()
-                    path.move(to: CGPoint(x: cx, y: cy + Self.nodeRadius))
+                    if parentIdx == 0 && parent.laneIndex == commit.laneIndex {
+                        var rail = Path()
+                        rail.move(to: CGPoint(x: cx, y: cy))
+                        rail.addLine(to: CGPoint(x: cx, y: pcy))
+                        ctx.stroke(rail, with: .color(laneColor.opacity(0.35)),
+                                   lineWidth: Self.railLineWidth)
+                    }
+
+                    var edge = Path()
+                    edge.move(to: CGPoint(x: cx, y: cy + Self.nodeRadius))
                     if pcx == cx {
-                        path.addLine(to: CGPoint(x: pcx, y: pcy - Self.nodeRadius))
+                        edge.addLine(to: CGPoint(x: pcx, y: pcy - Self.nodeRadius))
                     } else {
-                        // Curved connector — moves down to mid-row, eases
-                        // across, drops onto the parent's lane.
                         let midY = (cy + pcy) / 2
-                        path.addCurve(
+                        edge.addCurve(
                             to: CGPoint(x: pcx, y: pcy - Self.nodeRadius),
                             control1: CGPoint(x: cx, y: midY),
                             control2: CGPoint(x: pcx, y: midY)
                         )
                     }
-                    let edgeColor = (commit.laneIndex < graph.lanes.count)
-                        ? Self.color(for: graph.lanes[commit.laneIndex]).opacity(0.6)
-                        : Color.primary.opacity(0.4)
-                    ctx.stroke(path, with: .color(edgeColor), lineWidth: 1)
+                    ctx.stroke(edge, with: .color(laneColor.opacity(0.6)), lineWidth: 1)
                 }
             }
 
-            // 3. Commit nodes (HEAD ring on row 0).
+            // 2. Commit nodes — merge commits get a hollow ring, HEAD's
+            // commit gets an outer emphasis ring (FR-T21 / FR-T22).
             for (rowIndex, commit) in graph.commits.enumerated() {
                 let cx = CGFloat(commit.laneIndex) * laneWidth + laneWidth / 2
                 let cy = CGFloat(rowIndex) * rowHeight + rowHeight / 2
@@ -233,14 +214,12 @@ struct BranchGraphCanvas: View {
                 )
                 let path = Path(ellipseIn: nodeRect)
                 if commit.isMerge {
-                    // Merge commit: hollow ring.
                     ctx.stroke(path, with: .color(nodeColor), lineWidth: 1.25)
                 } else {
                     ctx.fill(path, with: .color(nodeColor))
                 }
 
-                if rowIndex == 0 {
-                    // HEAD ring (FR-T21 / FR-T22).
+                if commit.sha == graph.headSha {
                     let ringRect = nodeRect.insetBy(dx: -2.5, dy: -2.5)
                     let ringPath = Path(ellipseIn: ringRect)
                     ctx.stroke(ringPath, with: .color(nodeColor.opacity(0.85)), lineWidth: 1)
