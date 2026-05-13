@@ -4,6 +4,8 @@ A native macOS terminal emulator built with SwiftUI, embedding [Ghostty](https:/
 
 Ghostty handles the PTY, VT parsing, Metal rendering, font atlas, cursor, selection, scrollback, and color themes. tian wraps it in a native macOS shell with a 4-level workspace model and a CLI for scripting the UI from inside your shell.
 
+![tian](docs/assets/main.png)
+
 ## Concepts
 
 tian organizes terminals in five levels:
