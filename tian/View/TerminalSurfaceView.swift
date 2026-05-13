@@ -16,8 +16,18 @@ final class TerminalSurfaceView: NSView {
     weak var delegate: TerminalSurfaceViewDelegate?
 
     /// Set by TerminalContentView to drive focus from the model.
-    /// Checked in viewDidMoveToWindow so focus is restored after SwiftUI view recreation.
-    var shouldBeFocused: Bool = false
+    /// When flipped to true, schedules an async makeFirstResponder so the
+    /// KVO notification on NSWindow.firstResponder doesn't fire inside a
+    /// SwiftUI view-graph update (which would re-enter via FirstResponderObserver
+    /// and hang the main thread — see crash log 2026-05-12).
+    var shouldBeFocused: Bool = false {
+        didSet {
+            guard shouldBeFocused != oldValue, shouldBeFocused else { return }
+            scheduleFocusRestoration()
+        }
+    }
+
+    private var focusRestorationPending = false
 
     /// Initial working directory for the shell, set before the view enters a window.
     var initialWorkingDirectory: String?
@@ -63,8 +73,28 @@ final class TerminalSurfaceView: NSView {
         updateSurfaceSize()
         updateTrackingAreas()
 
-        // Restore focus after SwiftUI view recreation (container destroyed/recreated)
-        if shouldBeFocused, window.firstResponder !== self {
+        // Restore focus after SwiftUI view recreation (container destroyed/recreated).
+        // Deferred via scheduleFocusRestoration so we never call makeFirstResponder
+        // synchronously from a SwiftUI lifecycle path.
+        if shouldBeFocused {
+            scheduleFocusRestoration()
+        }
+    }
+
+    /// Defers `window.makeFirstResponder(self)` to the next runloop tick.
+    /// Synchronous calls during a SwiftUI view-graph update trigger KVO that
+    /// SwiftUI's FirstResponderObserver turns into another graph update, creating
+    /// a feedback loop. The async hop ensures the KVO notification fires after
+    /// the active transaction completes.
+    private func scheduleFocusRestoration() {
+        guard !focusRestorationPending else { return }
+        focusRestorationPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.focusRestorationPending = false
+            guard self.shouldBeFocused,
+                  let window = self.window,
+                  window.firstResponder !== self else { return }
             window.makeFirstResponder(self)
         }
     }

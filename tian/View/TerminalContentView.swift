@@ -42,12 +42,11 @@ struct TerminalContentView: NSViewRepresentable {
             surfaceView.frame = container.bounds
         }
 
-        // Sync focus state — viewDidMoveToWindow uses shouldBeFocused
-        // to restore first responder after SwiftUI view recreation.
+        // Sync focus state. TerminalSurfaceView.shouldBeFocused defers the
+        // actual makeFirstResponder to the next runloop tick — calling it
+        // synchronously here re-entered SwiftUI's view graph via KVO and
+        // hung the main thread.
         surfaceView.shouldBeFocused = isFocused
-        if isFocused, let window = surfaceView.window, window.firstResponder !== surfaceView {
-            window.makeFirstResponder(surfaceView)
-        }
     }
 
     private func embedSurfaceView(in container: NSView, coordinator: Coordinator) {
