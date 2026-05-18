@@ -5,6 +5,18 @@
     <link>https://psycoder-sup.github.io/tian/appcast.xml</link>
     <description>tian release feed</description>
     <language>en</language>
+        <item>
+      <title>v0.3.1</title>
+      <sparkle:releaseNotesLink>https://github.com/psycoder-sup/tian/releases/tag/v0.3.1</sparkle:releaseNotesLink>
+      <pubDate>Mon, 18 May 2026 06:30:47 +0000</pubDate>
+      <sparkle:version>269</sparkle:version>
+      <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/psycoder-sup/tian/releases/download/v0.3.1/tian-0.3.1.dmg"
+                 length="12006401"
+                 type="application/octet-stream"
+                 sparkle:edSignature="pNXyYBMCOYwB5EvEf1+Cas3wt7IRL9nycbcBazkVn6uYbbVKwUSgrz0xq55N8qhroApPjv/LIWCl16YM2layCQ==" />
+    </item>
     <!-- items prepended by scripts/publish.sh -->
   </channel>
 </rss>
