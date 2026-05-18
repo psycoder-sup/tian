@@ -52,6 +52,25 @@ xcodebuild \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   build
 
+echo "==> Re-sign Sparkle nested binaries"
+# Sparkle ships its XPC services + Updater.app with adhoc signatures.
+# Apple notarization rejects those — we have to re-sign with our Developer ID,
+# a secure timestamp, and the hardened runtime. Order matters: innermost first.
+SPARKLE_FW="$APP_PATH/Contents/Frameworks/Sparkle.framework"
+SPARKLE_V="$SPARKLE_FW/Versions/B"
+SIGN_OPTS=(--force --sign "$IDENTITY" --timestamp --options=runtime)
+if [[ -d "$SPARKLE_V" ]]; then
+  for xpc in "$SPARKLE_V/XPCServices"/*.xpc; do
+    [[ -d "$xpc" ]] || continue
+    codesign "${SIGN_OPTS[@]}" "$xpc"
+  done
+  [[ -d "$SPARKLE_V/Updater.app" ]] && codesign "${SIGN_OPTS[@]}" "$SPARKLE_V/Updater.app"
+  [[ -f "$SPARKLE_V/Autoupdate" ]] && codesign "${SIGN_OPTS[@]}" "$SPARKLE_V/Autoupdate"
+  codesign "${SIGN_OPTS[@]}" "$SPARKLE_FW"
+  # The app's signature now references stale framework hashes — re-sign it.
+  codesign "${SIGN_OPTS[@]}" --entitlements tian/tian.entitlements "$APP_PATH"
+fi
+
 echo "==> Verify app signature"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 codesign -dv --verbose=2 "$APP_PATH" 2>&1 | grep -E "Authority|TeamIdentifier|Timestamp|Runtime"
