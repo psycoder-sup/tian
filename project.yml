@@ -13,6 +13,9 @@ packages:
   TOMLKit:
     url: https://github.com/LebJe/TOMLKit
     from: "0.6.0"
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
 
 settings:
   base:
@@ -50,6 +53,8 @@ targets:
         embed: false
       - package: TOMLKit
         product: TOMLKit
+      - package: Sparkle
+        product: Sparkle
     postCompileScripts:
       - script: cp -f "$BUILT_PRODUCTS_DIR/tian-cli" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/MacOS/tian-cli"
         name: Bundle tian-cli
@@ -126,7 +131,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.app
         PRODUCT_NAME: tian
-        INFOPLIST_FILE: ""
+        INFOPLIST_FILE: tian/Sparkle-Info.plist
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleDisplayName: tian
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools

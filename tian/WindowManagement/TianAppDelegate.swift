@@ -1,10 +1,16 @@
 import AppKit
+import Sparkle
 import UserNotifications
 
 @MainActor
 class TianAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let workspaceManager = WorkspaceManager()
     let windowCoordinator = WindowCoordinator()
+    let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
     private lazy var quitFlowCoordinator = QuitFlowCoordinator(windowCoordinator: windowCoordinator)
     private var ipcServer: IPCServer?
 

@@ -20,7 +20,10 @@ struct TianApp: App {
             EmptyView()
         }
         .commands {
-            WorkspaceCommands(windowCoordinator: appDelegate.windowCoordinator)
+            WorkspaceCommands(
+                windowCoordinator: appDelegate.windowCoordinator,
+                updater: appDelegate.updaterController.updater
+            )
         }
     }
 }

@@ -130,6 +130,60 @@ GH_FLAGS=(--title "$TAG" --generate-notes)
 echo "==> gh release create $TAG"
 gh release create "$TAG" "$DMG_PATH" "$SHA_PATH" "${GH_FLAGS[@]}"
 
+# ---- appcast update ---------------------------------------------------------
+
+APPCAST="docs/appcast.xml"
+REPO_SLUG="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+DMG_URL="https://github.com/$REPO_SLUG/releases/download/$TAG/$(basename "$DMG_PATH")"
+NOTES_URL="https://github.com/$REPO_SLUG/releases/tag/$TAG"
+BUILD_NUMBER="$(git rev-list --count HEAD)"
+PUBDATE="$(LC_ALL=C date -u +"%a, %d %b %Y %H:%M:%S +0000")"
+
+SIGN_UPDATE="$(find .build -type f -name sign_update -perm -111 -not -path '*/old_dsa_scripts/*' 2>/dev/null | head -n1)"
+[[ -n "$SIGN_UPDATE" ]] || { echo "sign_update not found under .build — has Sparkle been resolved?" >&2; exit 1; }
+
+echo "==> sign_update"
+SIGN_OUT="$("$SIGN_UPDATE" "$DMG_PATH")"
+ED_SIG="$(printf '%s\n' "$SIGN_OUT" | sed -nE 's/.*sparkle:edSignature="([^"]+)".*/\1/p')"
+LENGTH="$(printf '%s\n' "$SIGN_OUT" | sed -nE 's/.*length="([0-9]+)".*/\1/p')"
+[[ -n "$ED_SIG" && -n "$LENGTH" ]] || { echo "sign_update produced no signature: $SIGN_OUT" >&2; exit 1; }
+
+echo "==> Update $APPCAST"
+TAG="$TAG" VERSION="$VERSION" BUILD_NUMBER="$BUILD_NUMBER" \
+DMG_URL="$DMG_URL" NOTES_URL="$NOTES_URL" PUBDATE="$PUBDATE" \
+ED_SIG="$ED_SIG" LENGTH="$LENGTH" APPCAST="$APPCAST" \
+python3 <<'PY'
+import os, pathlib, html
+path = pathlib.Path(os.environ["APPCAST"])
+src = path.read_text()
+e = lambda k: html.escape(os.environ[k], quote=True)
+item = (
+    "    <item>\n"
+    f"      <title>{e('TAG')}</title>\n"
+    f"      <sparkle:releaseNotesLink>{e('NOTES_URL')}</sparkle:releaseNotesLink>\n"
+    f"      <pubDate>{e('PUBDATE')}</pubDate>\n"
+    f"      <sparkle:version>{e('BUILD_NUMBER')}</sparkle:version>\n"
+    f"      <sparkle:shortVersionString>{e('VERSION')}</sparkle:shortVersionString>\n"
+    "      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>\n"
+    f'      <enclosure url="{e("DMG_URL")}"\n'
+    f'                 length="{e("LENGTH")}"\n'
+    '                 type="application/octet-stream"\n'
+    f'                 sparkle:edSignature="{e("ED_SIG")}" />\n'
+    "    </item>\n"
+)
+marker = "<!-- items prepended by scripts/publish.sh -->"
+if marker in src:
+    new = src.replace(marker, item + "    " + marker, 1)
+else:
+    new = src.replace("</channel>", item + "  </channel>", 1)
+path.write_text(new)
+PY
+
+echo "==> Commit + push appcast"
+git add "$APPCAST"
+git commit -m "release: appcast for $TAG"
+git push origin "$BRANCH"
+
 PUBLISH_OK=1
 echo
 echo "Done: $(gh release view "$TAG" --json url --jq .url)"

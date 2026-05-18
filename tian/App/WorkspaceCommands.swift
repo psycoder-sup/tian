@@ -1,9 +1,15 @@
+import Sparkle
 import SwiftUI
 
 struct WorkspaceCommands: Commands {
     let windowCoordinator: WindowCoordinator
+    let updater: SPUUpdater
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesView(updater: updater)
+        }
+
         CommandGroup(after: .newItem) {
             Divider()
 
