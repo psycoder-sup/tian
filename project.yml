@@ -23,6 +23,10 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     ARCHS: arm64
+    # Defaults so Debug builds have a CFBundleVersion (Sparkle requires it).
+    # release.sh overrides both at the xcodebuild command line for tagged builds.
+    MARKETING_VERSION: "0.0.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 schemes:
   tian:
