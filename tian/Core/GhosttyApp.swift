@@ -362,6 +362,21 @@ final class GhosttyApp: @unchecked Sendable {
             }
             return true
 
+        case GHOSTTY_ACTION_OPEN_URL:
+            let openURL = action.action.open_url
+            guard let urlPtr = openURL.url, openURL.len > 0 else { return true }
+            // ghostty's url buffer is length-delimited, NOT null-terminated.
+            let data = Data(bytes: urlPtr, count: Int(openURL.len))
+            guard let urlString = String(data: data, encoding: .utf8),
+                  let url = URL(string: urlString),
+                  let scheme = url.scheme?.lowercased(),
+                  ["http", "https", "mailto"].contains(scheme)
+            else { return true }
+            DispatchQueue.main.async {
+                NSWorkspace.shared.open(url)
+            }
+            return true
+
         case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
             let notification = action.action.desktop_notification
             let title = notification.title.map { String(cString: $0) }
