@@ -42,6 +42,10 @@ enum EnvironmentBuilder {
             "TIAN_RESOURCES_DIR": resourcesDir,
             "TIAN_SHELL_INTEGRATION_DIR": shellIntegrationDir,
             "PATH": "\(resourcesDir):\(macOSDir):\(existingPath)",
+            // Suppress oh-my-zsh's auto-update "[Y/n]" prompt, which otherwise
+            // blocks shell startup in spawned panes. (The dotenv "Source it?"
+            // prompt is left intact — autostart runs after it is answered.)
+            "DISABLE_AUTO_UPDATE": "true",
         ]
 
         // ZDOTDIR injection for zsh shell integration.

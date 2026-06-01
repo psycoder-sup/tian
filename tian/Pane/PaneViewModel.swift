@@ -414,13 +414,14 @@ final class PaneViewModel {
         // may still be attached. Set the fields directly rather than via
         // SectionSpawner.configure (which asserts window==nil).
         surfaceView.initialWorkingDirectory = workingDirectory
-        surfaceView.environmentVariables = buildEnvironmentVariables(forPaneID: paneID)
-        // Reset initialInput so a Claude-kind pane re-seeds "claude\n" on
-        // restart, while a Terminal pane gets a clean shell.
-        switch sectionKind {
-        case .claude: surfaceView.initialInput = "claude\n"
-        case .terminal: surfaceView.initialInput = nil
-        }
+        // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches `claude`
+        // on restart (via the bundled .zshrc), while a Terminal pane gets a
+        // clean shell. initialInput stays nil — see SectionSpawner.
+        surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
+            kind: sectionKind,
+            base: buildEnvironmentVariables(forPaneID: paneID)
+        )
+        surfaceView.initialInput = nil
 
         if surfaceView.window != nil {
             newSurface.createSurface(view: surfaceView, workingDirectory: workingDirectory, environmentVariables: surfaceView.environmentVariables, initialInput: surfaceView.initialInput)
@@ -478,7 +479,14 @@ final class PaneViewModel {
     func applyEnvironmentVariables() {
         guard hierarchyContext != nil else { return }
         for (paneID, surfaceView) in surfaceViews {
-            surfaceView.environmentVariables = buildEnvironmentVariables(forPaneID: paneID)
+            // Re-merge the autostart var (TIAN_AUTOSTART_CMD) — this assignment
+            // runs after SectionSpawner.configure and would otherwise clobber it,
+            // since the full TIAN_* env is only computable once hierarchyContext
+            // is known. Without this, Claude panes never auto-launch `claude`.
+            surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
+                kind: sectionKind,
+                base: buildEnvironmentVariables(forPaneID: paneID)
+            )
         }
     }
 
