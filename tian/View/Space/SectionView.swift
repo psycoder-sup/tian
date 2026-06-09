@@ -40,8 +40,12 @@ struct SectionView: View {
             // Bar overlays terminal so its aurora glow isn't clipped by the opaque Metal layer.
             ZStack(alignment: .top) {
                 if let markdownFilePath = activeTab.markdownFilePath {
-                    MarkdownReaderView(filePath: markdownFilePath)
-                        .padding(.top, SectionTabBarView.height(for: section.kind))
+                    MarkdownReaderView(
+                        filePath: markdownFilePath,
+                        isFocused: isSectionFocused,
+                        onClose: { section.removeTab(id: activeTab.id) }
+                    )
+                    .padding(.top, SectionTabBarView.height(for: section.kind))
                 } else {
                     SplitTreeView(
                         node: activeTab.paneViewModel.splitTree.root,

@@ -5,11 +5,25 @@ import MarkdownUI
 /// surface). Opened from the Inspect Panel's Files tab by double-clicking a
 /// `.md` / `.markdown` file. Loads the file's contents and renders them with
 /// MarkdownUI; shows an inline error if the file can't be read.
+///
+/// Live-reloads: while open it polls the file's modification date and reloads
+/// when it changes on disk (handles editor saves, including atomic replaces).
+///
+/// A markdown tab has no terminal surface, so it can't intercept Cmd+W the way
+/// `TerminalSurfaceView` does. A focus-gated hidden button supplies that
+/// shortcut so Cmd+W closes the tab instead of falling through to "close
+/// window" (which would quit the app).
 struct MarkdownReaderView: View {
     let filePath: String
+    /// True only when this tab's section owns focus in the active space — gates
+    /// the Cmd+W shortcut so background readers don't steal it.
+    var isFocused: Bool = false
+    /// Closes this reader tab (wired to `SectionModel.removeTab`).
+    var onClose: () -> Void = {}
 
     @State private var content: String = ""
     @State private var loadError: String?
+    @State private var lastModified: Date?
 
     var body: some View {
         Group {
@@ -26,19 +40,49 @@ struct MarkdownReaderView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: filePath) { load() }
+        .overlay { closeShortcut }
+        .task(id: filePath) { await watch() }
     }
 
-    // MARK: - Loading
+    // MARK: - Cmd+W
+
+    private var closeShortcut: some View {
+        Button(action: onClose) { EmptyView() }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(!isFocused)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+    }
+
+    // MARK: - Loading / live reload
+
+    /// Initial load, then poll the modification date once a second and reload
+    /// on change. Cancelled automatically when the view disappears or the
+    /// `filePath` changes.
+    private func watch() async {
+        load()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled { break }
+            if modificationDate() != lastModified { load() }
+        }
+    }
 
     private func load() {
         do {
             content = try String(contentsOfFile: filePath, encoding: .utf8)
+            lastModified = modificationDate()
             loadError = nil
         } catch {
             content = ""
+            lastModified = modificationDate()
             loadError = "Couldn't open \((filePath as NSString).lastPathComponent)\n\(error.localizedDescription)"
         }
+    }
+
+    private func modificationDate() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: filePath))?[.modificationDate] as? Date
     }
 
     // MARK: - Error state
