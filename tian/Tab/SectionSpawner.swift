@@ -36,19 +36,42 @@ enum SectionSpawner {
     }
 
     /// Returns `base` with `TIAN_AUTOSTART_CMD` added for Claude panes so the
-    /// bundled `.zshrc` runs `claude` after the user's rc files complete.
+    /// bundled `.zshrc` runs the autostart command after the user's rc files
+    /// complete.
+    ///
+    /// - Parameter restoreCommand: a per-pane restore command (e.g.
+    ///   `"claude --resume <id>"`) registered via IPC and persisted across
+    ///   sessions. When present it *replaces* the bare `claude` launch so the
+    ///   session resumes — routed through the same `TIAN_AUTOSTART_CMD` path
+    ///   (which survives interactive rc prompts) rather than injected as
+    ///   keystrokes, which would race with `claude` already autostarting.
     @MainActor
     static func autostartEnvironment(
         kind: SectionKind,
-        base: [String: String]
+        base: [String: String],
+        restoreCommand: String? = nil
     ) -> [String: String] {
         var env = base
-        switch kind {
-        case .claude:
-            env["TIAN_AUTOSTART_CMD"] = claudeAutostartCommand
-        case .terminal:
-            break
+        if let cmd = autostartCommand(kind: kind, restoreCommand: restoreCommand) {
+            env["TIAN_AUTOSTART_CMD"] = cmd
         }
         return env
+    }
+
+    /// Resolves the shell command an autostart pane runs on its first prompt,
+    /// or `nil` if the pane should land on a plain shell. A restore command
+    /// takes precedence over the kind-based default. Terminal panes never
+    /// autostart — they replay any restore command as keystrokes instead.
+    @MainActor
+    static func autostartCommand(
+        kind: SectionKind,
+        restoreCommand: String?
+    ) -> String? {
+        switch kind {
+        case .claude:
+            return restoreCommand ?? claudeAutostartCommand
+        case .terminal:
+            return nil
+        }
     }
 }

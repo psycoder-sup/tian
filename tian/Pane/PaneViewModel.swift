@@ -244,8 +244,16 @@ final class PaneViewModel {
             surfaceViews[leaf.paneID] = surfaceView
             if let cmd = leaf.restoreCommand {
                 restoreCommands[leaf.paneID] = cmd
-                // restoreCommand takes precedence over the kind-based seed.
-                surfaceView.initialInput = cmd + "\n"
+                // Claude panes resume via TIAN_AUTOSTART_CMD (set in
+                // applyEnvironmentVariables once the hierarchy env is known), so
+                // the restore command runs through the same rc-prompt-resilient
+                // autostart path as the bare `claude` launch — never both, which
+                // would type `claude --resume <id>` *into* an already-running
+                // claude. Terminal panes have no autostart path, so replay the
+                // restore command as keystrokes.
+                if sectionKind == .terminal {
+                    surfaceView.initialInput = cmd + "\n"
+                }
             }
             if let state = leaf.claudeSessionState {
                 sessionStates[leaf.paneID] = state
@@ -414,12 +422,14 @@ final class PaneViewModel {
         // may still be attached. Set the fields directly rather than via
         // SectionSpawner.configure (which asserts window==nil).
         surfaceView.initialWorkingDirectory = workingDirectory
-        // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches `claude`
-        // on restart (via the bundled .zshrc), while a Terminal pane gets a
-        // clean shell. initialInput stays nil — see SectionSpawner.
+        // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches on restart
+        // (via the bundled .zshrc) — resuming its session if a restore command is
+        // registered, otherwise bare `claude` — while a Terminal pane gets a clean
+        // shell. initialInput stays nil — see SectionSpawner.
         surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
             kind: sectionKind,
-            base: buildEnvironmentVariables(forPaneID: paneID)
+            base: buildEnvironmentVariables(forPaneID: paneID),
+            restoreCommand: restoreCommands[paneID]
         )
         surfaceView.initialInput = nil
 
@@ -483,9 +493,12 @@ final class PaneViewModel {
             // runs after SectionSpawner.configure and would otherwise clobber it,
             // since the full TIAN_* env is only computable once hierarchyContext
             // is known. Without this, Claude panes never auto-launch `claude`.
+            // Pass the restore command so a restored Claude pane resumes its
+            // session (`claude --resume <id>`) instead of launching bare `claude`.
             surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
                 kind: sectionKind,
-                base: buildEnvironmentVariables(forPaneID: paneID)
+                base: buildEnvironmentVariables(forPaneID: paneID),
+                restoreCommand: restoreCommands[paneID]
             )
         }
     }
