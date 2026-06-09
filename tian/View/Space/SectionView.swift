@@ -39,20 +39,35 @@ struct SectionView: View {
         } else if let activeTab = section.activeTab {
             // Bar overlays terminal so its aurora glow isn't clipped by the opaque Metal layer.
             ZStack(alignment: .top) {
-                if let markdownFilePath = activeTab.markdownFilePath {
-                    MarkdownReaderView(
-                        filePath: markdownFilePath,
-                        isFocused: isSectionFocused,
-                        onClose: { section.removeTab(id: activeTab.id) }
-                    )
-                    .padding(.top, SectionTabBarView.height(for: section.kind))
-                } else {
+                // Terminal content for the active terminal tab. (Pane surfaces
+                // are model-owned and re-parented, so this is cheap to rebuild.)
+                if activeTab.markdownDocument == nil {
                     SplitTreeView(
                         node: activeTab.paneViewModel.splitTree.root,
                         viewModel: activeTab.paneViewModel,
                         isTabVisible: isSectionFocused
                     )
                     .padding(.top, SectionTabBarView.height(for: section.kind))
+                }
+
+                // Markdown readers are kept mounted across tab switches and just
+                // shown/hidden — unlike a terminal there's no model-owned NSView
+                // to re-parent, so tearing the view down would force MarkdownUI
+                // to re-lay-out the whole document on every switch. Holding them
+                // alive makes re-activation instant (mirrors surface reuse).
+                ForEach(section.tabs.filter(\.isMarkdownReader)) { tab in
+                    if let document = tab.markdownDocument {
+                        let isActive = tab.id == activeTab.id
+                        MarkdownReaderView(
+                            document: document,
+                            isFocused: isSectionFocused && isActive,
+                            onClose: { section.removeTab(id: tab.id) }
+                        )
+                        .padding(.top, SectionTabBarView.height(for: section.kind))
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                    }
                 }
 
                 tabBar(for: activeTab)

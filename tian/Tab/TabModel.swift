@@ -19,6 +19,11 @@ final class TabModel: Identifiable {
     /// (see `PaneViewModel.makeEmpty`) and renders `MarkdownReaderView`.
     var markdownFilePath: String?
 
+    /// Tab-lived backing store for a markdown reader tab. Holds the pre-parsed
+    /// content so switching to this tab doesn't re-read or re-parse the file.
+    /// `nil` for terminal / Claude tabs. Set together with `markdownFilePath`.
+    let markdownDocument: MarkdownDocument?
+
     /// `true` when this tab renders a markdown file instead of a terminal.
     var isMarkdownReader: Bool { markdownFilePath != nil }
 
@@ -30,6 +35,7 @@ final class TabModel: Identifiable {
         self.customName = customName
         self.createdAt = Date()
         self.sectionKind = sectionKind
+        self.markdownDocument = nil
         self.paneViewModel = PaneViewModel(workingDirectory: workingDirectory, sectionKind: sectionKind)
 
         // Wire cascading close: last pane → tab empty → space removes tab
@@ -45,6 +51,7 @@ final class TabModel: Identifiable {
         self.createdAt = Date()
         self.sectionKind = sectionKind
         self.markdownFilePath = markdownFilePath
+        self.markdownDocument = markdownFilePath.map(MarkdownDocument.init(filePath:))
         self.paneViewModel = paneViewModel
         self.paneViewModel.sectionKind = sectionKind
 
