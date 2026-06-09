@@ -1,8 +1,8 @@
 import Foundation
 
-/// Writes log lines to `~/Library/Logs/tian/tian.log` with size-based rotation.
-/// Thread-safe via serial dispatch queue. All errors are silently swallowed —
-/// logging must never crash the app.
+/// Writes log lines to `~/Library/Logs/tian/tian.log` (or `tian-debug/` for the
+/// debug build) with size-based rotation. Thread-safe via serial dispatch queue.
+/// All errors are silently swallowed — logging must never crash the app.
 final class FileLogWriter: @unchecked Sendable {
     static let shared = FileLogWriter()
 
@@ -22,11 +22,18 @@ final class FileLogWriter: @unchecked Sendable {
 
     private init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        logDirectory = home.appendingPathComponent("Library/Logs/tian")
+        logDirectory = home.appendingPathComponent("Library/Logs/\(Self.logDirectoryName)")
         logFileURL = logDirectory.appendingPathComponent("tian.log")
         backupFileURL = logDirectory.appendingPathComponent("tian.1.log")
         setupDirectory()
         openFile()
+    }
+
+    /// Namespaces the log directory by build variant so tian and tian-debug
+    /// don't race on the same file (concurrent FileHandle writes clobber lines).
+    private static var logDirectoryName: String {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        return bundleID.hasSuffix(".debug") ? "tian-debug" : "tian"
     }
 
     func write(level: String, category: String, message: String) {

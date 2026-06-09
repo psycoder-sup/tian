@@ -78,4 +78,4 @@ Use `.dev/tmp/` for temporary code, experiments, and scratch files instead of `/
 
 ## Logs
 
-File-logged categories (`ipc`, `lifecycle`, `persistence`, `git`) dual-write to `os.Logger` and `~/Library/Logs/tian/tian.log` (rotated to `tian.1.log`). See `tian/Utilities/FileLogWriter.swift`. Other categories (`core`, `view`, `ghostty`, `perf`, `worktree`) go to unified logging only — read with `log stream --predicate 'subsystem == "com.tian.app"'`.
+File-logged categories (`ipc`, `lifecycle`, `persistence`, `git`) dual-write to `os.Logger` and `~/Library/Logs/tian/tian.log` (rotated to `tian.1.log`). The debug build writes to `~/Library/Logs/tian-debug/tian.log` instead, so a running debug app and production app don't race on the same file. See `tian/Utilities/FileLogWriter.swift`. Other categories (`core`, `view`, `ghostty`, `perf`, `worktree`) go to unified logging only — read with `log stream --predicate 'subsystem == "com.tian.app"'`.
