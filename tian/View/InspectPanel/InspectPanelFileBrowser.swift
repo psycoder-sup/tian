@@ -7,6 +7,8 @@ import SwiftUI
 struct InspectPanelFileBrowser: View {
     @Bindable var viewModel: InspectFileTreeViewModel
     let spaceName: String
+    /// Invoked with a file's absolute path when it is opened (double-clicked).
+    var onOpenFile: (String) -> Void = { _ in }
 
     // MARK: - Body
 
@@ -27,6 +29,9 @@ struct InspectPanelFileBrowser: View {
                             } else {
                                 viewModel.select(node.id)
                             }
+                        },
+                        onOpen: {
+                            if !node.isDirectory { onOpenFile(node.id) }
                         }
                     )
                 }

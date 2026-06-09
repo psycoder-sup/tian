@@ -87,7 +87,8 @@ enum SessionSerializer {
                     restoreCommands: tab.paneViewModel.restoreCommands,
                     sessionStates: sessionStates
                 ),
-                sectionKind: section.kind
+                sectionKind: section.kind,
+                markdownFilePath: tab.markdownFilePath
             )
         }
         return SectionState(

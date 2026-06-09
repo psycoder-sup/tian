@@ -13,6 +13,15 @@ final class TabModel: Identifiable {
     /// changed — panes do not move sections (PRD NG5).
     let sectionKind: SectionKind
 
+    /// Absolute path of the markdown file this tab renders, when the tab is a
+    /// markdown reader rather than a terminal. `nil` for ordinary terminal /
+    /// Claude tabs. A markdown tab is backed by a surface-less PaneViewModel
+    /// (see `PaneViewModel.makeEmpty`) and renders `MarkdownReaderView`.
+    var markdownFilePath: String?
+
+    /// `true` when this tab renders a markdown file instead of a terminal.
+    var isMarkdownReader: Bool { markdownFilePath != nil }
+
     /// Called when the tab's last pane is closed. The owning SpaceModel should remove this tab.
     var onEmpty: (() -> Void)?
 
@@ -30,11 +39,12 @@ final class TabModel: Identifiable {
     }
 
     /// Restore a tab with a specific ID and pre-built PaneViewModel.
-    init(id: UUID, customName: String? = nil, paneViewModel: PaneViewModel, sectionKind: SectionKind = .terminal) {
+    init(id: UUID = UUID(), customName: String? = nil, paneViewModel: PaneViewModel, sectionKind: SectionKind = .terminal, markdownFilePath: String? = nil) {
         self.id = id
         self.customName = customName
         self.createdAt = Date()
         self.sectionKind = sectionKind
+        self.markdownFilePath = markdownFilePath
         self.paneViewModel = paneViewModel
         self.paneViewModel.sectionKind = sectionKind
 
@@ -48,9 +58,12 @@ final class TabModel: Identifiable {
         paneViewModel.title
     }
 
-    /// Display name: user-assigned custom name, or the terminal title if none set.
+    /// Display name: user-assigned custom name, the markdown file name for a
+    /// markdown reader tab, or the terminal title if none set.
     var displayName: String {
-        customName ?? title
+        if let customName { return customName }
+        if let markdownFilePath { return (markdownFilePath as NSString).lastPathComponent }
+        return title
     }
 
     func cleanup() {

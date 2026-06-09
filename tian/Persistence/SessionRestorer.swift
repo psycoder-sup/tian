@@ -292,6 +292,12 @@ enum SessionRestorer {
     @MainActor
     private static func buildSection(from state: SectionState) -> SectionModel {
         let tabs = state.tabs.map { tab -> TabModel in
+            // Markdown reader tabs restore surface-less — never rebuild a
+            // terminal surface (which would spawn a shell/claude process).
+            if let markdownFilePath = tab.markdownFilePath {
+                let pvm = PaneViewModel.makeEmpty(sectionKind: state.kind)
+                return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind, markdownFilePath: markdownFilePath)
+            }
             let pvm = PaneViewModel.fromState(tab.root, focusedPaneID: tab.activePaneId, sectionKind: state.kind)
             return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind)
         }

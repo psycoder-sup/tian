@@ -154,6 +154,24 @@ final class SpaceModel: Identifiable {
         return tab
     }
 
+    /// Opens a markdown file as a read-only reader tab in the Claude section.
+    /// If the file is already open, re-focuses its existing tab instead of
+    /// creating a duplicate. The tab is backed by a surface-less PaneViewModel,
+    /// so no terminal/`claude` process is launched.
+    @discardableResult
+    func openMarkdownReader(filePath: String) -> TabModel {
+        if let existing = claudeSection.tabs.first(where: { $0.markdownFilePath == filePath }) {
+            activate(tab: existing)
+            return existing
+        }
+        let pvm = PaneViewModel.makeEmpty(sectionKind: .claude)
+        let tab = TabModel(paneViewModel: pvm, sectionKind: .claude, markdownFilePath: filePath)
+        claudeSection.appendTab(tab)
+        wireTab(tab)
+        activate(tab: tab)
+        return tab
+    }
+
     func removeTab(id: UUID) { terminalSection.removeTab(id: id) }
     func activateTab(id: UUID) { terminalSection.activateTab(id: id) }
 

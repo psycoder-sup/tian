@@ -124,6 +124,10 @@ struct TabState: Codable, Sendable, Equatable {
     /// Required in v4 — migration sets it explicitly on every tab, and
     /// freshly-created tabs set it from their owning section (NG5).
     let sectionKind: SectionKind
+    /// Absolute path when this tab is a markdown reader (renders a file
+    /// instead of a terminal). Optional → decodes as nil for older sessions,
+    /// and `var`-with-default keeps the memberwise init omittable.
+    var markdownFilePath: String? = nil
 }
 
 // MARK: - Pane Node State

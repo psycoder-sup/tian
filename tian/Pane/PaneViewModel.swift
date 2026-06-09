@@ -111,6 +111,16 @@ final class PaneViewModel {
         }
     }
 
+    /// Builds a surface-less PaneViewModel for non-terminal tabs (e.g. the
+    /// markdown reader). Carries a single placeholder leaf so `splitTree` /
+    /// `activePaneId` stay valid for serialization, but creates no
+    /// `GhosttyTerminalSurface` — so `SectionSpawner` never runs and no
+    /// `claude`/shell process is launched. The leaf is never rendered.
+    static func makeEmpty(workingDirectory: String = "~", sectionKind: SectionKind = .claude) -> PaneViewModel {
+        let splitTree = SplitTree(paneID: UUID(), workingDirectory: workingDirectory)
+        return PaneViewModel(splitTree: splitTree, surfaces: [:], surfaceViews: [:], sectionKind: sectionKind)
+    }
+
     static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, sectionKind: SectionKind = .terminal) -> PaneViewModel {
         var surfaces: [UUID: GhosttyTerminalSurface] = [:]
         var surfaceViews: [UUID: TerminalSurfaceView] = [:]

@@ -164,7 +164,12 @@ struct SidebarContainerView: View {
                 panelState: panelState,
                 viewModel: workspace.inspectFileTreeViewModel,
                 tabState: workspace.inspectTabState,
-                spaceName: activeSpace?.name ?? workspace.name
+                spaceName: activeSpace?.name ?? workspace.name,
+                onOpenFile: { path in
+                    let ext = (path as NSString).pathExtension.lowercased()
+                    guard ext == "md" || ext == "markdown", let space = activeSpace else { return }
+                    space.openMarkdownReader(filePath: path)
+                }
             )
             // Animated width: 0 when hidden, panelState.width when visible.
             // .trailing alignment + .clipped() makes the panel slide in from

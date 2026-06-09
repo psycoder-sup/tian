@@ -20,6 +20,8 @@ struct InspectPanelFileRow: View {
     /// Dims the icon + text so users can scan past build output / `.env` etc.
     let isIgnored: Bool
     let onTap: () -> Void
+    /// Fired on double-click (e.g. open a markdown file in a reader tab).
+    var onOpen: () -> Void = {}
 
     @State private var isHovering = false
 
@@ -156,6 +158,7 @@ struct InspectPanelFileRow: View {
         .opacity(isIgnored && !isSelected ? 0.45 : 1)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
+        .onTapGesture(count: 2) { onOpen() }
         .onTapGesture { onTap() }
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityElement(children: .ignore)

@@ -20,6 +20,9 @@ struct InspectPanelView: View {
     @Bindable var viewModel: InspectFileTreeViewModel
     @Bindable var tabState: InspectTabState
     let spaceName: String
+    /// Invoked with a file's absolute path when it is opened (double-clicked)
+    /// in the Files tab. Wired by the call site to open a markdown reader tab.
+    var onOpenFile: (String) -> Void = { _ in }
 
     // MARK: - Body
 
@@ -98,7 +101,7 @@ struct InspectPanelView: View {
         } else if viewModel.visibleRows.isEmpty {
             InspectPanelEmptyContentView()
         } else {
-            InspectPanelFileBrowser(viewModel: viewModel, spaceName: spaceName)
+            InspectPanelFileBrowser(viewModel: viewModel, spaceName: spaceName, onOpenFile: onOpenFile)
         }
     }
 
