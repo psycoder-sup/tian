@@ -130,13 +130,20 @@ struct TabBarItemView: View {
                 .font(.system(size: 11.5, weight: .regular))
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                InlineRenameView(
-                    text: tab.displayName,
-                    isRenaming: $isRenaming,
-                    onCommit: { tab.customName = $0 }
-                )
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(isActive ? .primary : .secondary)
+                HStack(spacing: 5) {
+                    if tab.isMarkdownReader {
+                        Image(systemName: "text.document")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    InlineRenameView(
+                        text: tab.displayName,
+                        isRenaming: $isRenaming,
+                        onCommit: { tab.customName = $0 }
+                    )
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(isActive ? .primary : .secondary)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
