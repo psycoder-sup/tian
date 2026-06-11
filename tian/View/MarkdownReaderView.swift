@@ -14,24 +14,23 @@ import MarkdownUI
 /// shortcut so Cmd+W closes the tab instead of falling through to "close
 /// window" (which would quit the app).
 struct MarkdownReaderView: View {
-    let filePath: String
+    /// Tab-lived store holding the pre-parsed content. Persists across tab
+    /// switches, so re-activating this view renders already-parsed content
+    /// instead of re-reading and re-parsing the file.
+    let document: MarkdownDocument
     /// True only when this tab's section owns focus in the active space — gates
     /// the Cmd+W shortcut so background readers don't steal it.
     var isFocused: Bool = false
     /// Closes this reader tab (wired to `SectionModel.removeTab`).
     var onClose: () -> Void = {}
 
-    @State private var content: String = ""
-    @State private var loadError: String?
-    @State private var lastModified: Date?
-
     var body: some View {
         Group {
-            if let loadError {
+            if let loadError = document.loadError {
                 errorView(loadError)
             } else {
                 ScrollView(.vertical) {
-                    Markdown(content)
+                    Markdown(document.content)
                         .markdownTheme(.tianReader)
                         .textSelection(.enabled)
                         .padding(24)
@@ -41,7 +40,7 @@ struct MarkdownReaderView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { closeShortcut }
-        .task(id: filePath) { await watch() }
+        .task(id: document.filePath) { await watch() }
     }
 
     // MARK: - Cmd+W
@@ -57,32 +56,17 @@ struct MarkdownReaderView: View {
 
     // MARK: - Loading / live reload
 
-    /// Initial load, then poll the modification date once a second and reload
-    /// on change. Cancelled automatically when the view disappears or the
-    /// `filePath` changes.
+    /// Initial load (a no-op re-parse when already cached and unchanged), then
+    /// poll once a second and reload on change. Cancelled automatically when the
+    /// view disappears or the `filePath` changes. Reads/parses run off-main in
+    /// `MarkdownDocument`.
     private func watch() async {
-        load()
+        await document.refreshIfNeeded()
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             if Task.isCancelled { break }
-            if modificationDate() != lastModified { load() }
+            await document.refreshIfNeeded()
         }
-    }
-
-    private func load() {
-        do {
-            content = try String(contentsOfFile: filePath, encoding: .utf8)
-            lastModified = modificationDate()
-            loadError = nil
-        } catch {
-            content = ""
-            lastModified = modificationDate()
-            loadError = "Couldn't open \((filePath as NSString).lastPathComponent)\n\(error.localizedDescription)"
-        }
-    }
-
-    private func modificationDate() -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: filePath))?[.modificationDate] as? Date
     }
 
     // MARK: - Error state
