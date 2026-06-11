@@ -158,8 +158,19 @@ struct InspectPanelFileRow: View {
         .opacity(isIgnored && !isSelected ? 0.45 : 1)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .onTapGesture(count: 2) { onOpen() }
-        .onTapGesture { onTap() }
+        // A plain `.onTapGesture(count: 2)` stacked above a single-tap gesture
+        // forces SwiftUI to wait out the system double-click interval
+        // (0.5–1 s) before delivering the single tap, making expand/collapse
+        // feel sluggish. Instead, act on every click immediately and detect
+        // the double-click via the event's clickCount (Finder-style: the
+        // first click of a double-click also selects/toggles).
+        .onTapGesture {
+            if NSApp.currentEvent?.clickCount == 2 {
+                onOpen()
+            } else {
+                onTap()
+            }
+        }
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityElement(children: .ignore)
     }
