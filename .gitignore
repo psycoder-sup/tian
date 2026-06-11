@@ -21,6 +21,7 @@ build/
 # Claude Code local state
 .claude/scheduled_tasks.lock
 .claude/agent-memory/
+.claude/worktrees/
 
 # tian-cli config artifacts
 .tian/*.rejected
