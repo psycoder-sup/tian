@@ -32,7 +32,7 @@ enum QuitConfirmationDialog {
     // MARK: - Private
 
     private static func makeAlert(processCount: Int) -> NSAlert {
-        let alert = NSAlert()
+        let alert = ConfirmAlert()
         alert.alertStyle = .warning
         alert.messageText = "Quit tian?"
 

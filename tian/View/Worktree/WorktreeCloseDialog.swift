@@ -16,7 +16,7 @@ enum WorktreeCloseDialog {
         worktreePath: String,
         completion: @escaping (Response) -> Void
     ) {
-        let alert = NSAlert()
+        let alert = ConfirmAlert()
         alert.alertStyle = .warning
         alert.messageText = "Remove worktree?"
         alert.informativeText = "This space is backed by a git worktree at:\n\(worktreePath)"
