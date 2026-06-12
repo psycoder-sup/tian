@@ -53,7 +53,7 @@ enum CloseConfirmationDialog {
     // MARK: - Private
 
     private static func makeAlert(target: CloseTarget, processCount: Int) -> NSAlert {
-        let alert = NSAlert()
+        let alert = ConfirmAlert()
         alert.alertStyle = .warning
 
         switch target {

@@ -10,7 +10,7 @@ enum SkipTeardownConfirmationDialog {
         archiveCommandCount: Int,
         completion: @escaping (Response) -> Void
     ) {
-        let alert = NSAlert()
+        let alert = ConfirmAlert()
         alert.alertStyle = .warning
         alert.messageText = "Skip teardown?"
         alert.informativeText = """

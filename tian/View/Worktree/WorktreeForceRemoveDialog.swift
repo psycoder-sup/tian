@@ -13,7 +13,7 @@ enum WorktreeForceRemoveDialog {
         worktreePath: String,
         completion: @escaping (Response) -> Void
     ) {
-        let alert = NSAlert()
+        let alert = ConfirmAlert()
         alert.alertStyle = .warning
         alert.messageText = "Worktree has uncommitted changes"
         alert.informativeText = "Removing will discard uncommitted or untracked changes at:\n\(worktreePath)"
