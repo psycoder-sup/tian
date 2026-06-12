@@ -147,12 +147,6 @@ targets:
         INFOPLIST_KEY_UTExportedTypeDeclarations: |
           (
             {
-              UTTypeIdentifier = "com.tian.tab-drag-item";
-              UTTypeConformsTo = ("public.data");
-              UTTypeDescription = "tian Tab";
-              UTTypeTagSpecification = {};
-            },
-            {
               UTTypeIdentifier = "com.tian.space-drag-item";
               UTTypeConformsTo = ("public.data");
               UTTypeDescription = "tian Space";

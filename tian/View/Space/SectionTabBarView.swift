@@ -3,8 +3,10 @@ import SwiftUI
 /// Per-section tab bar. Claude sections render a leading space-name +
 /// branch header in place of the kind glyph; terminal sections keep the
 /// `>_` glyph. The tab list and trailing "+" new-tab button follow.
-/// Cross-section drag-reorder is enforced in Phase 6; this phase only
-/// allows reorder within a single section.
+/// Tabs reorder via a live in-bar drag: the grabbed pill slides along the
+/// row (clamped to it) while siblings shuffle aside, and release commits
+/// the arrangement. FR-22 (no cross-section moves) holds structurally —
+/// the gesture can only reorder within its own section's bar.
 struct SectionTabBarView: View {
     /// Layout height of the section tab bar. Terminal sections use a denser
     /// row; Claude keeps the original height because it pairs with the
@@ -19,6 +21,41 @@ struct SectionTabBarView: View {
     var onNewTab: () -> Void = {}
 
     @Namespace private var tabNamespace
+
+    // MARK: Live reorder drag state
+
+    /// Spacing between pills — shared by the layout and the slot math.
+    private static let tabSpacing: CGFloat = 6
+
+    @State private var dragTabID: UUID?
+    @State private var dragSourceIndex = 0
+    /// Clamped x-translation of the dragged pill. Never animated — the
+    /// pill tracks the cursor raw.
+    @State private var dragTranslation: CGFloat = 0
+    /// Slot the dragged pill would land in if released now. Changed only
+    /// inside an explicit `withAnimation` so sibling shuffles and the
+    /// commit share one animation curve (mixing curves causes a visible
+    /// wiggle at commit).
+    @State private var proposedIndex: Int?
+    /// Keeps the just-released pill above its neighbors until the commit
+    /// animation finishes.
+    @State private var settlingTabID: UUID?
+    /// Set when a mid-drag tab-list mutation cancels the drag; stops the
+    /// still-live gesture from re-seeding with a stale baseline.
+    @State private var dragSessionCancelled = false
+    /// True while a pill drag gesture is actively tracking. `@GestureState`
+    /// resets even when the system cancels the gesture without calling
+    /// onEnded, so its falling edge clears stuck drag state.
+    @GestureState private var isDragGestureActive = false
+    /// Measured width of the pill row, for slot math.
+    @State private var rowWidth: CGFloat = 0
+
+    /// Pills are equal width, so one slot = pill width + one spacing gap.
+    private var slotWidth: CGFloat {
+        let count = section.tabs.count
+        guard count > 0, rowWidth > 0 else { return 0 }
+        return (rowWidth + Self.tabSpacing) / CGFloat(count)
+    }
 
     private var isCompact: Bool { section.kind == .terminal }
 
@@ -52,8 +89,8 @@ struct SectionTabBarView: View {
             }
 
             GlassEffectContainer {
-                HStack(spacing: 6) {
-                    ForEach(section.tabs) { tab in
+                HStack(spacing: Self.tabSpacing) {
+                    ForEach(Array(section.tabs.enumerated()), id: \.element.id) { index, tab in
                         TabBarItemView(
                             tab: tab,
                             isActive: tab.id == section.activeTabID,
@@ -91,9 +128,15 @@ struct SectionTabBarView: View {
                             }
                         )
                         .frame(maxWidth: .infinity)
+                        .offset(x: offsetForTab(at: index, id: tab.id))
+                        .zIndex(tab.id == dragTabID || tab.id == settlingTabID ? 1 : 0)
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(reorderGesture(for: tab, at: index))
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
             }
+            .background(WindowDragBlocker())
 
             Button(action: onNewTab) {
                 Image(systemName: "plus")
@@ -102,6 +145,9 @@ struct SectionTabBarView: View {
             }
             .buttonStyle(.plain)
             .frame(width: isCompact ? 26 : 32, height: isCompact ? 26 : 32)
+            // Before liquidGlassCircle so the blocker sits above its
+            // material platform view in AppKit hit-testing.
+            .background(WindowDragBlocker())
             .liquidGlassCircle()
             .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
 
@@ -112,30 +158,92 @@ struct SectionTabBarView: View {
         .padding(.horizontal, 12)
         .frame(height: Self.height(for: section.kind))
         .contentShape(Rectangle())
-        .dropDestination(for: TabDragItem.self) { items, _ in
-            guard let item = items.first else { return false }
-            // FR-22 — reject drops that cross the section boundary.
-            // Items without an explicit sectionKind (legacy payloads)
-            // are treated conservatively: accept only when the tabID is
-            // already in this section.
-            if let srcKind = item.sectionKind {
-                guard SectionTabBarDropCoordinator.canAccept(
-                    sourceSectionKind: srcKind,
-                    destinationSectionKind: section.kind,
-                    tabID: item.tabID
-                ) else { return false }
-            }
-            guard let sourceIndex = section.tabs.firstIndex(where: { $0.id == item.tabID }) else {
-                return false
-            }
-            let destIndex = section.tabs.count - 1
-            if sourceIndex != destIndex {
-                section.reorderTab(from: sourceIndex, to: destIndex)
-            }
-            return true
+        .onChange(of: section.tabs.map(\.id)) { _, _ in
+            // A tab appeared or vanished mid-drag — indices and slot width
+            // are stale, so cancel. Our own commit nils dragTabID in the
+            // same transaction as the reorder, so it never reaches this.
+            guard dragTabID != nil else { return }
+            clearDragState()
+            dragSessionCancelled = true
+        }
+        .onChange(of: isDragGestureActive) { _, active in
+            // Normal releases clear dragTabID in onEnded before this fires;
+            // if it's still set, the system cancelled the gesture mid-flight.
+            guard !active, dragTabID != nil else { return }
+            withAnimation(.smooth(duration: 0.2)) { clearDragState() }
+            settlingTabID = nil
+            dragSessionCancelled = false
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(section.kind == .claude ? "Claude" : "Terminal") tabs")
+    }
+
+    // MARK: Live reorder
+
+    /// Resets all live-drag state. Callers choose the animation context.
+    private func clearDragState() {
+        dragTabID = nil
+        proposedIndex = nil
+        dragTranslation = 0
+    }
+
+    private func offsetForTab(at index: Int, id: UUID) -> CGFloat {
+        guard let dragTabID, let proposedIndex else { return 0 }
+        if id == dragTabID { return dragTranslation }
+        return TabReorderMath.siblingOffset(
+            index: index,
+            sourceIndex: dragSourceIndex,
+            proposedIndex: proposedIndex,
+            slotWidth: slotWidth
+        )
+    }
+
+    private func reorderGesture(for tab: TabModel, at index: Int) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .updating($isDragGestureActive) { _, state, _ in state = true }
+            .onChanged { value in
+                guard !dragSessionCancelled else { return }
+                if dragTabID == nil {
+                    // Deliberately no activation here (Safari-style): activating
+                    // swaps the visible pane content and steals first responder,
+                    // which cancels this gesture mid-flight. Click still selects.
+                    dragTabID = tab.id
+                    dragSourceIndex = index
+                    proposedIndex = index
+                }
+                dragTranslation = TabReorderMath.clampedTranslation(
+                    value.translation.width,
+                    sourceIndex: dragSourceIndex,
+                    count: section.tabs.count,
+                    slotWidth: slotWidth
+                )
+                let next = TabReorderMath.proposedIndex(
+                    clampedTranslation: dragTranslation,
+                    sourceIndex: dragSourceIndex,
+                    count: section.tabs.count,
+                    slotWidth: slotWidth
+                )
+                if next != proposedIndex {
+                    withAnimation(.smooth(duration: 0.18)) { proposedIndex = next }
+                }
+            }
+            .onEnded { _ in
+                defer { dragSessionCancelled = false }
+                guard let id = dragTabID, let dest = proposedIndex else { return }
+                settlingTabID = id
+                // One transaction for the model reorder and all offset
+                // resets: sibling layout moves cancel their offset removal
+                // exactly (net zero); the dragged pill animates only its
+                // sub-slot residual.
+                withAnimation(.smooth(duration: 0.2), completionCriteria: .logicallyComplete) {
+                    if dest != dragSourceIndex {
+                        section.reorderTab(from: dragSourceIndex, to: dest)
+                    }
+                    clearDragState()
+                } completion: {
+                    settlingTabID = nil
+                }
+            }
     }
 }
 
