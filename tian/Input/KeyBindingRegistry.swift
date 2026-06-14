@@ -52,23 +52,31 @@ struct KeyBindingRegistry {
     static let shared = KeyBindingRegistry.defaults()
 
     /// Look up which action an event maps to, if any.
+    @MainActor
     func action(for event: NSEvent) -> KeyAction? {
         let modifiers = event.modifierFlags
             .intersection(.deviceIndependentFlagsMask)
             .intersection(chordModifierMask)
 
+        // Match against the physical key's character on the ASCII-capable layout
+        // (so Cmd+T works under a Korean/Japanese/… IME), falling back to the
+        // input-source character for safety.
+        let layoutChars = KeyboardLayoutTranslator.shared.character(forKeyCode: event.keyCode)
+
         // Cmd+digit special case (must come before the dict lookup so it shadows
         // any hypothetical future binding on Cmd+0..9). `.goToTab(n)` carries an
         // associated value and cannot be precomputed in a chord dict.
         if modifiers == [.command],
-           let chars = event.charactersIgnoringModifiers,
+           let chars = layoutChars ?? event.charactersIgnoringModifiers,
            let digit = Int(chars), digit >= 0, digit <= 9 {
             return digit == 0 ? .focusSidebar : .goToTab(digit)
         }
 
-        if let chars = event.charactersIgnoringModifiers?.lowercased(),
-           let action = bindingsByCharacters[CharacterChord(characters: chars, modifiers: modifiers)] {
-            return action
+        for chars in [layoutChars, event.charactersIgnoringModifiers?.lowercased()] {
+            if let chars,
+               let action = bindingsByCharacters[CharacterChord(characters: chars, modifiers: modifiers)] {
+                return action
+            }
         }
         return bindingsByKeyCode[KeyCodeChord(keyCode: event.keyCode, modifiers: modifiers)]
     }

@@ -29,6 +29,18 @@ struct KeyBindingRegistryTests {
         #expect(KeyBindingRegistry.shared.action(for: event) == .newTab)
     }
 
+    @Test func nonLatinImeResolvesByPhysicalKey() {
+        // Under a Korean (or other non-Latin) IME, the T key reports a composed
+        // character for charactersIgnoringModifiers; the binding must still
+        // resolve via the ASCII-capable layout translation of the keycode.
+        // Guard on the host layout mapping keyCode 17 -> "t" (true for US/ABC
+        // and other QWERTY-derived ASCII-capable layouts) to avoid false
+        // failures on exotic dev/CI layouts.
+        guard KeyboardLayoutTranslator.shared.character(forKeyCode: 17) == "t" else { return }
+        let event = keyEvent(keyCode: 17 /* T */, characters: "ㅅ", modifiers: [.command])
+        #expect(KeyBindingRegistry.shared.action(for: event) == .newTab)
+    }
+
     @Test func keyCodeBindingResolves() {
         let event = keyEvent(keyCode: 124 /* Right */, characters: "\u{F703}", modifiers: [.command, .shift])
         #expect(KeyBindingRegistry.shared.action(for: event) == .nextSpace)

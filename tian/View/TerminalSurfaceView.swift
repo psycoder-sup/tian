@@ -336,9 +336,15 @@ final class TerminalSurfaceView: NSView {
         // in subview order would incorrectly handle shortcuts.
         guard window?.firstResponder === self else { return false }
 
+        // Match the physical key's character on the ASCII-capable layout so these
+        // shortcuts fire under a non-Latin IME (Korean/Japanese/…), where
+        // `charactersIgnoringModifiers` would report a composed character.
+        let layoutChars = KeyboardLayoutTranslator.shared.character(forKeyCode: event.keyCode)
+            ?? event.charactersIgnoringModifiers?.lowercased()
+
         // Cmd+W always works, even when input is suppressed (exited/failed pane)
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if let chars = event.charactersIgnoringModifiers?.lowercased(),
+        if let chars = layoutChars,
            chars == "w" && flags == [.command] {
             delegate?.terminalSurfaceViewRequestClose(self)
             return true
@@ -347,7 +353,7 @@ final class TerminalSurfaceView: NSView {
         guard !isInputSuppressed else { return false }
 
         // Check split shortcuts before ghostty
-        if let chars = event.charactersIgnoringModifiers?.lowercased() {
+        if let chars = layoutChars {
             if chars == "d" && flags == [.command, .shift] {
                 delegate?.terminalSurfaceViewRequestSplit(self, direction: .horizontal)
                 return true
@@ -653,10 +659,19 @@ private extension TerminalSurfaceView {
     }
 
     func unshiftedCodepoint(from event: NSEvent) -> UInt32 {
+        guard event.type == .keyDown || event.type == .keyUp else { return 0 }
+
+        // Prefer the physical key's character on the ASCII-capable layout so
+        // Ghostty's keybinding matching stays consistent under a non-Latin IME
+        // (Korean/Japanese/…). Falls back to the input-source character for keys
+        // with no ASCII character (arrows, F-keys keep their PUA scalar).
+        if let scalar = KeyboardLayoutTranslator.shared.unicodeScalar(forKeyCode: event.keyCode) {
+            return scalar
+        }
+
         // Use characters(byApplyingModifiers: []) instead of charactersIgnoringModifiers
         // because the latter changes behavior with ctrl pressed.
-        guard event.type == .keyDown || event.type == .keyUp,
-              let chars = event.characters(byApplyingModifiers: []),
+        guard let chars = event.characters(byApplyingModifiers: []),
               let scalar = chars.unicodeScalars.first else { return 0 }
         return scalar.value
     }
