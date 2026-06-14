@@ -91,23 +91,33 @@ struct SectionView: View {
         if section.kind == .terminal {
             SectionTabBarView(
                 section: section,
-                onNewTab: {
-                    let wd = resolveWorkingDirectory()
-                    spaceModel.createTab(in: section, workingDirectory: wd)
-                },
+                onNewTab: addTab,
                 trailingToolbar: {
                     SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
                 }
             )
         } else {
+            // One SectionTabBarView for the Claude section regardless of the
+            // active tab, so its new-tab capsule keeps identity and morphs
+            // (circle ⇄ pill) as a markdown reader becomes/ceases active.
             SectionTabBarView(
                 section: section,
                 spaceModel: spaceModel,
-                onNewTab: {
-                    let wd = resolveWorkingDirectory()
-                    spaceModel.createTab(in: section, workingDirectory: wd)
-                }
+                markdownCopyDocument: markdownCopyDocument(for: activeTab),
+                onNewTab: addTab
             )
         }
+    }
+
+    private func addTab() {
+        let wd = resolveWorkingDirectory()
+        spaceModel.createTab(in: section, workingDirectory: wd)
+    }
+
+    /// The copy-all document for the new-tab capsule: the active tab's reader
+    /// document when it loaded cleanly, else `nil` (capsule stays a circle).
+    private func markdownCopyDocument(for activeTab: TabModel) -> MarkdownDocument? {
+        guard let document = activeTab.markdownDocument, document.loadError == nil else { return nil }
+        return document
     }
 }

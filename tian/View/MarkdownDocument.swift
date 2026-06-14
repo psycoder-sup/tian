@@ -18,6 +18,9 @@ private struct Sendbox<T>: @unchecked Sendable { let value: T }
 final class MarkdownDocument {
     let filePath: String
     private(set) var content = MarkdownContent("")
+    /// Verbatim file source, kept so the reader's "copy all" button can copy
+    /// the original markdown rather than the rendered text.
+    private(set) var rawText = ""
     private(set) var loadError: String?
     private(set) var hasLoaded = false
 
@@ -39,20 +42,22 @@ final class MarkdownDocument {
 
         let path = filePath
         let boxed = await Task.detached(priority: .userInitiated) {
-            () -> Sendbox<Result<MarkdownContent, Error>> in
+            () -> Sendbox<Result<(String, MarkdownContent), Error>> in
             do {
                 let text = try String(contentsOfFile: path, encoding: .utf8)
-                return Sendbox(value: .success(MarkdownContent(text)))
+                return Sendbox(value: .success((text, MarkdownContent(text))))
             } catch {
                 return Sendbox(value: .failure(error))
             }
         }.value
 
         switch boxed.value {
-        case .success(let parsed):
+        case .success(let (text, parsed)):
+            rawText = text
             content = parsed
             loadError = nil
         case .failure(let error):
+            rawText = ""
             content = MarkdownContent("")
             loadError = "Couldn't open \((path as NSString).lastPathComponent)\n\(error.localizedDescription)"
         }

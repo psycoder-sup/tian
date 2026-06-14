@@ -59,6 +59,7 @@ struct SectionToolbarView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 26, height: 26)
+        .glassHoverHighlight()
         .liquidGlassCircle()
         .disabled(isDragging)
         .opacity(isDragging ? 0.5 : 1.0)

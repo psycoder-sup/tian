@@ -18,6 +18,9 @@ struct SectionTabBarView: View {
     let section: SectionModel
     let spaceModel: SpaceModel?
     let trailingToolbar: AnyView?
+    /// When set (a markdown reader is the active tab), a "copy all" button
+    /// shares the new-tab capsule, which morphs from circle to pill to hold it.
+    let markdownCopyDocument: MarkdownDocument?
     var onNewTab: () -> Void = {}
 
     @Namespace private var tabNamespace
@@ -62,11 +65,13 @@ struct SectionTabBarView: View {
     init(
         section: SectionModel,
         spaceModel: SpaceModel? = nil,
+        markdownCopyDocument: MarkdownDocument? = nil,
         onNewTab: @escaping () -> Void = {},
         @ViewBuilder trailingToolbar: () -> some View = { EmptyView() }
     ) {
         self.section = section
         self.spaceModel = spaceModel
+        self.markdownCopyDocument = markdownCopyDocument
         self.onNewTab = onNewTab
         let built = trailingToolbar()
         if built is EmptyView {
@@ -75,6 +80,9 @@ struct SectionTabBarView: View {
             self.trailingToolbar = AnyView(built)
         }
     }
+
+    /// New-tab "+" / copy-all share one capsule, sized `buttonSize` per cell.
+    private var buttonSize: CGFloat { isCompact ? 26 : 32 }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -138,18 +146,32 @@ struct SectionTabBarView: View {
             }
             .background(WindowDragBlocker())
 
-            Button(action: onNewTab) {
-                Image(systemName: "plus")
-                    .font(.system(size: isCompact ? 12 : 14, weight: .medium))
-                    .foregroundStyle(Color.chromeForeground.opacity(0.92))
+            HStack(spacing: 4) {
+                Button(action: onNewTab) {
+                    Image(systemName: "plus")
+                        .font(.system(size: isCompact ? 12 : 14, weight: .medium))
+                        .foregroundStyle(Color.chromeForeground.opacity(0.92))
+                        // Frame + contentShape inside the label so the whole
+                        // cell is clickable, not just the glyph.
+                        .frame(width: buttonSize, height: buttonSize)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .glassHoverHighlight()
+                .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
+
+                if let markdownCopyDocument {
+                    MarkdownCopyButton(document: markdownCopyDocument, size: buttonSize, iconSize: isCompact ? 12 : 14)
+                        .glassHoverHighlight()
+                        .transition(.scale(scale: 0.4, anchor: .leading).combined(with: .opacity))
+                }
             }
-            .buttonStyle(.plain)
-            .frame(width: isCompact ? 26 : 32, height: isCompact ? 26 : 32)
-            // Before liquidGlassCircle so the blocker sits above its
-            // material platform view in AppKit hit-testing.
+            // Before liquidGlassCapsule so the blocker sits above its
+            // material platform view in AppKit hit-testing. The capsule hugs
+            // its content — a circle for "+" alone, a pill once copy joins.
             .background(WindowDragBlocker())
-            .liquidGlassCircle()
-            .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
+            .liquidGlassCapsule()
+            .animation(.smooth(duration: 0.3), value: markdownCopyDocument != nil)
 
             if let trailingToolbar {
                 trailingToolbar
@@ -244,6 +266,52 @@ struct SectionTabBarView: View {
                     settlingTabID = nil
                 }
             }
+    }
+}
+
+/// "Copy all" control for a markdown reader. A plain icon button that shares
+/// the new-tab capsule (so it carries no background of its own) and copies the
+/// document's verbatim source, flashing a checkmark to confirm. Lives here
+/// rather than with the reader because it's rendered only as tab-bar chrome.
+struct MarkdownCopyButton: View {
+    let document: MarkdownDocument
+    var size: CGFloat = 32
+    var iconSize: CGFloat = 14
+
+    @State private var didCopy = false
+    /// Outstanding task that resets `didCopy`; cancelled if copied again first.
+    @State private var copyResetTask: Task<Void, Never>?
+
+    var body: some View {
+        Button(action: copyAll) {
+            Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                .font(.system(size: iconSize, weight: .medium))
+                .foregroundStyle(didCopy ? Color.green : Color.chromeForeground.opacity(0.92))
+                .contentTransition(.symbolEffect(.replace))
+                // Frame + contentShape inside the label so the whole cell is
+                // clickable, not just the glyph.
+                .frame(width: size, height: size)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(didCopy ? "Copied" : "Copy all")
+        .accessibilityLabel("Copy all contents")
+    }
+
+    /// Copies the verbatim markdown source to the general pasteboard and shows
+    /// a brief checkmark confirmation.
+    private func copyAll() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(document.rawText, forType: .string)
+
+        withAnimation(.easeInOut(duration: 0.15)) { didCopy = true }
+        copyResetTask?.cancel()
+        copyResetTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { didCopy = false }
+        }
     }
 }
 
