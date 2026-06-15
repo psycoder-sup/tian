@@ -24,9 +24,35 @@ final class MarkdownDocument {
     private(set) var loadError: String?
     private(set) var hasLoaded = false
 
+    // MARK: - Git diff (reader's "Diff" toggle)
+
+    /// Result of diffing the file against its HEAD baseline.
+    enum DiffOutcome: Equatable {
+        /// The path isn't inside a git work tree — nothing to diff.
+        case notInRepo
+        /// Line-level segments (unchanged / added / removed) in document order.
+        /// All-`.unchanged` means "no changes against HEAD".
+        case segments([MarkdownDiffSegment])
+    }
+
+    /// `true` when the reader overlays the file's git diff on the rendered
+    /// markdown instead of showing it plain. Flipped by the toggle in the
+    /// new-tab capsule.
+    var showDiff = false
+    /// The current diff result; `nil` until the first load completes.
+    private(set) var diffOutcome: DiffOutcome?
+    private(set) var isLoadingDiff = false
+    private(set) var diffHasLoaded = false
+
     private var lastModified: Date?
     /// Guards against overlapping reloads when a parse outlasts the poll tick.
     private var isReloading = false
+    /// Set whenever the file content reloads, so the cached diff is recomputed
+    /// the next time the reader is in diff mode. `true` initially so the first
+    /// toggle-on always loads.
+    private var diffStale = true
+    /// In-flight diff fetch, cancelled before a newer one starts.
+    private var diffTask: Task<Void, Never>?
 
     init(filePath: String) { self.filePath = filePath }
 
@@ -63,6 +89,48 @@ final class MarkdownDocument {
         }
         lastModified = mtime
         hasLoaded = true
+        // The file changed on disk (we returned early when unchanged), so any
+        // cached diff is stale — recompute it next time the reader is in diff mode.
+        diffStale = true
+    }
+
+    /// Recompute the file's diff when needed: only while the reader is in diff
+    /// mode and the cached diff is missing or stale. A no-op otherwise, so the
+    /// 1 s reader poll can call this every tick without spawning git. The git
+    /// baseline fetch runs off the main thread inside `GitStatusService`; the
+    /// line diff is pure. The result is published here on the main actor.
+    /// Cancels any prior in-flight fetch.
+    func refreshDiffIfNeeded() async {
+        guard showDiff else { return }
+        guard !diffHasLoaded || diffStale else { return }
+        // Can't diff a file we couldn't read.
+        guard loadError == nil else { return }
+
+        diffTask?.cancel()
+        isLoadingDiff = !diffHasLoaded
+        let path = filePath
+        let new = rawText
+        let task = Task { [weak self] in
+            let baseline = await GitStatusService.fileBaseline(filePath: path)
+            if Task.isCancelled { return }
+            let outcome: DiffOutcome
+            switch baseline {
+            case .notInRepo:
+                outcome = .notInRepo
+            case .committed(let old):
+                outcome = .segments(MarkdownInlineDiff.segments(old: old, new: new))
+            case .untracked:
+                outcome = .segments(MarkdownInlineDiff.segments(old: "", new: new))
+            }
+            guard let self else { return }
+            self.diffOutcome = outcome
+            self.diffHasLoaded = true
+            self.diffStale = false
+            self.isLoadingDiff = false
+        }
+        diffTask = task
+        await task.value
+        if diffTask == task { diffTask = nil }
     }
 
     static func modificationDate(_ path: String) -> Date? {

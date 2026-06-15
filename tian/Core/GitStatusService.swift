@@ -336,6 +336,47 @@ enum GitStatusService {
         return trackedDiffs + untrackedDiffs
     }
 
+    // MARK: - Single-file Baseline
+
+    /// The HEAD-committed text of a single file, used by the markdown reader's
+    /// inline-diff toggle to diff the working-tree version against its baseline.
+    enum FileBaseline: Equatable {
+        /// File is tracked; payload is its committed contents at HEAD.
+        case committed(String)
+        /// In a repo, but the file has no HEAD blob (untracked, or a repo with
+        /// no commits yet) — the whole file is "added".
+        case untracked
+        /// The path is not inside any git work tree.
+        case notInRepo
+    }
+
+    /// Fetches a file's HEAD baseline. Git runs in the file's parent directory,
+    /// which lets it auto-discover the enclosing repo; the `HEAD:./<name>` spec
+    /// resolves the blob relative to that directory's prefix within the repo.
+    static func fileBaseline(filePath: String) async -> FileBaseline {
+        let directory = (filePath as NSString).deletingLastPathComponent
+        guard !directory.isEmpty else { return .notInRepo }
+        let name = (filePath as NSString).lastPathComponent
+
+        // 1. Confirm we're inside a work tree (else `git show` errors are
+        //    ambiguous with "untracked").
+        let probe = try? await runGit(
+            ["rev-parse", "--is-inside-work-tree"],
+            workingDirectory: directory
+        )
+        guard probe?.exitCode == 0, probe?.stdout == "true" else { return .notInRepo }
+
+        // 2. Read the committed blob. A non-zero exit means the file isn't in
+        //    HEAD (untracked, or no commits yet) → treat as all-added.
+        guard let show = try? await runGit(
+            ["show", "HEAD:./\(name)"],
+            workingDirectory: directory
+        ), show.exitCode == 0 else {
+            return .untracked
+        }
+        return .committed(show.stdout)
+    }
+
     // MARK: - Unified Diff Parsing Helpers
 
     /// Parses the output of `git diff --unified` into `[GitFileDiff]`.

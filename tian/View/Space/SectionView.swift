@@ -103,7 +103,7 @@ struct SectionView: View {
             SectionTabBarView(
                 section: section,
                 spaceModel: spaceModel,
-                markdownCopyDocument: markdownCopyDocument(for: activeTab),
+                markdownReaderDocument: markdownReaderDocument(for: activeTab),
                 onNewTab: addTab
             )
         }
@@ -114,9 +114,10 @@ struct SectionView: View {
         spaceModel.createTab(in: section, workingDirectory: wd)
     }
 
-    /// The copy-all document for the new-tab capsule: the active tab's reader
-    /// document when it loaded cleanly, else `nil` (capsule stays a circle).
-    private func markdownCopyDocument(for activeTab: TabModel) -> MarkdownDocument? {
+    /// The reader document driving the new-tab capsule's diff toggle and
+    /// copy-all button: the active tab's reader document when it loaded
+    /// cleanly, else `nil` (capsule stays a circle).
+    private func markdownReaderDocument(for activeTab: TabModel) -> MarkdownDocument? {
         guard let document = activeTab.markdownDocument, document.loadError == nil else { return nil }
         return document
     }

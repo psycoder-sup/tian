@@ -18,9 +18,10 @@ struct SectionTabBarView: View {
     let section: SectionModel
     let spaceModel: SpaceModel?
     let trailingToolbar: AnyView?
-    /// When set (a markdown reader is the active tab), a "copy all" button
-    /// shares the new-tab capsule, which morphs from circle to pill to hold it.
-    let markdownCopyDocument: MarkdownDocument?
+    /// When set (a markdown reader is the active tab), a git-diff toggle and a
+    /// "copy all" button share the new-tab capsule, which morphs from circle to
+    /// pill to hold them.
+    let markdownReaderDocument: MarkdownDocument?
     var onNewTab: () -> Void = {}
 
     @Namespace private var tabNamespace
@@ -65,13 +66,13 @@ struct SectionTabBarView: View {
     init(
         section: SectionModel,
         spaceModel: SpaceModel? = nil,
-        markdownCopyDocument: MarkdownDocument? = nil,
+        markdownReaderDocument: MarkdownDocument? = nil,
         onNewTab: @escaping () -> Void = {},
         @ViewBuilder trailingToolbar: () -> some View = { EmptyView() }
     ) {
         self.section = section
         self.spaceModel = spaceModel
-        self.markdownCopyDocument = markdownCopyDocument
+        self.markdownReaderDocument = markdownReaderDocument
         self.onNewTab = onNewTab
         let built = trailingToolbar()
         if built is EmptyView {
@@ -160,18 +161,22 @@ struct SectionTabBarView: View {
                 .glassHoverHighlight()
                 .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
 
-                if let markdownCopyDocument {
-                    MarkdownCopyButton(document: markdownCopyDocument, size: buttonSize, iconSize: isCompact ? 12 : 14)
+                if let markdownReaderDocument {
+                    MarkdownDiffToggleButton(document: markdownReaderDocument, size: buttonSize, iconSize: isCompact ? 12 : 14)
+                        .glassHoverHighlight()
+                        .transition(.scale(scale: 0.4, anchor: .leading).combined(with: .opacity))
+                    MarkdownCopyButton(document: markdownReaderDocument, size: buttonSize, iconSize: isCompact ? 12 : 14)
                         .glassHoverHighlight()
                         .transition(.scale(scale: 0.4, anchor: .leading).combined(with: .opacity))
                 }
             }
             // Before liquidGlassCapsule so the blocker sits above its
             // material platform view in AppKit hit-testing. The capsule hugs
-            // its content — a circle for "+" alone, a pill once copy joins.
+            // its content — a circle for "+" alone, a pill once the reader
+            // controls join.
             .background(WindowDragBlocker())
             .liquidGlassCapsule()
-            .animation(.smooth(duration: 0.3), value: markdownCopyDocument != nil)
+            .animation(.smooth(duration: 0.3), value: markdownReaderDocument != nil)
 
             if let trailingToolbar {
                 trailingToolbar
@@ -266,6 +271,37 @@ struct SectionTabBarView: View {
                     settlingTabID = nil
                 }
             }
+    }
+}
+
+/// Git-diff toggle for a markdown reader. Flips the active reader tab between
+/// rendered markdown and the file's line-by-line diff against HEAD. Shares the
+/// new-tab capsule (so it carries no background of its own) and tints when the
+/// diff face is showing. Lives here rather than with the reader because it's
+/// rendered only as tab-bar chrome.
+struct MarkdownDiffToggleButton: View {
+    let document: MarkdownDocument
+    var size: CGFloat = 32
+    var iconSize: CGFloat = 14
+
+    var body: some View {
+        Button {
+            document.showDiff.toggle()
+        } label: {
+            Image(systemName: "plus.forwardslash.minus")
+                .font(.system(size: iconSize, weight: .medium))
+                .foregroundStyle(document.showDiff
+                    ? Color.accentColor
+                    : Color.chromeForeground.opacity(0.92))
+                // Frame + contentShape inside the label so the whole cell is
+                // clickable, not just the glyph.
+                .frame(width: size, height: size)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(document.showDiff ? "Show rendered markdown" : "Show git diff")
+        .accessibilityLabel("Toggle git diff")
+        .accessibilityAddTraits(document.showDiff ? .isSelected : [])
     }
 }
 

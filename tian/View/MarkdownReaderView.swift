@@ -28,6 +28,8 @@ struct MarkdownReaderView: View {
         Group {
             if let loadError = document.loadError {
                 errorView(loadError)
+            } else if document.showDiff {
+                MarkdownDiffView(document: document)
             } else {
                 ScrollView(.vertical) {
                     Markdown(document.content)
@@ -41,6 +43,11 @@ struct MarkdownReaderView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { closeShortcut }
         .task(id: document.filePath) { await watch() }
+        .onChange(of: document.showDiff) { _, showDiff in
+            // Load the diff the moment the user toggles into diff mode; the
+            // poll keeps it fresh thereafter.
+            if showDiff { Task { await document.refreshDiffIfNeeded() } }
+        }
     }
 
     // MARK: - Cmd+W
@@ -62,10 +69,14 @@ struct MarkdownReaderView: View {
     /// `MarkdownDocument`.
     private func watch() async {
         await document.refreshIfNeeded()
+        await document.refreshDiffIfNeeded()
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             if Task.isCancelled { break }
             await document.refreshIfNeeded()
+            // No-op unless the reader is in diff mode and the diff went stale
+            // (file changed on disk), so this never spawns git on its own.
+            await document.refreshDiffIfNeeded()
         }
     }
 
@@ -89,7 +100,8 @@ struct MarkdownReaderView: View {
 
 // MARK: - Theme
 
-private extension Theme {
+// Internal (not private) so the inline-diff view can reuse the reader's look.
+extension Theme {
     /// GitHub theme typography, but with the base-text background stripped so
     /// the reader is transparent and shows the app background behind it.
     /// (Code blocks keep their own subtle background.)
@@ -97,6 +109,18 @@ private extension Theme {
         Theme.gitHub.text {
             ForegroundColor(.primary)
             FontSize(16)
+        }
+    }
+
+    /// `tianReader` variant for removed (deleted) diff segments: base text is
+    /// tinted muted-red and struck through. (Strikethrough color follows text
+    /// color in MarkdownUI, so the two are set together.) Pairs with the red
+    /// change-bar / tint that `MarkdownDiffView` draws around the segment.
+    static var tianReaderRemoved: Theme {
+        Theme.gitHub.text {
+            ForegroundColor(DiffColors.deleted)
+            FontSize(16)
+            StrikethroughStyle(.single)
         }
     }
 }
