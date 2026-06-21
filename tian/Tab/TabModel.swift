@@ -27,6 +27,24 @@ final class TabModel: Identifiable {
     /// `true` when this tab renders a markdown file instead of a terminal.
     var isMarkdownReader: Bool { markdownFilePath != nil }
 
+    /// Absolute path of the image file this tab renders, when the tab is an
+    /// image reader rather than a terminal. `nil` for ordinary tabs. Like a
+    /// markdown tab, backed by a surface-less PaneViewModel and rendered by
+    /// `ImageReaderView`.
+    var imageFilePath: String?
+
+    /// Tab-lived backing store for an image reader tab. Holds the decoded image
+    /// so switching to this tab doesn't re-read or re-decode the file. `nil`
+    /// for non-image tabs. Set together with `imageFilePath`.
+    let imageDocument: ImageDocument?
+
+    /// `true` when this tab renders an image file instead of a terminal.
+    var isImageReader: Bool { imageFilePath != nil }
+
+    /// `true` only for real terminal tabs — those that render a `SplitTreeView`
+    /// of ghostty surfaces. Reader tabs (markdown / image) are surface-less.
+    var isTerminalTab: Bool { markdownDocument == nil && imageDocument == nil }
+
     /// Called when the tab's last pane is closed. The owning SpaceModel should remove this tab.
     var onEmpty: (() -> Void)?
 
@@ -36,6 +54,7 @@ final class TabModel: Identifiable {
         self.createdAt = Date()
         self.sectionKind = sectionKind
         self.markdownDocument = nil
+        self.imageDocument = nil
         self.paneViewModel = PaneViewModel(workingDirectory: workingDirectory, sectionKind: sectionKind)
 
         // Wire cascading close: last pane → tab empty → space removes tab
@@ -45,13 +64,15 @@ final class TabModel: Identifiable {
     }
 
     /// Restore a tab with a specific ID and pre-built PaneViewModel.
-    init(id: UUID = UUID(), customName: String? = nil, paneViewModel: PaneViewModel, sectionKind: SectionKind = .terminal, markdownFilePath: String? = nil) {
+    init(id: UUID = UUID(), customName: String? = nil, paneViewModel: PaneViewModel, sectionKind: SectionKind = .terminal, markdownFilePath: String? = nil, imageFilePath: String? = nil) {
         self.id = id
         self.customName = customName
         self.createdAt = Date()
         self.sectionKind = sectionKind
         self.markdownFilePath = markdownFilePath
         self.markdownDocument = markdownFilePath.map(MarkdownDocument.init(filePath:))
+        self.imageFilePath = imageFilePath
+        self.imageDocument = imageFilePath.map(ImageDocument.init(filePath:))
         self.paneViewModel = paneViewModel
         self.paneViewModel.sectionKind = sectionKind
 
@@ -70,6 +91,7 @@ final class TabModel: Identifiable {
     var displayName: String {
         if let customName { return customName }
         if let markdownFilePath { return (markdownFilePath as NSString).lastPathComponent }
+        if let imageFilePath { return (imageFilePath as NSString).lastPathComponent }
         return title
     }
 

@@ -88,7 +88,8 @@ enum SessionSerializer {
                     sessionStates: sessionStates
                 ),
                 sectionKind: section.kind,
-                markdownFilePath: tab.markdownFilePath
+                markdownFilePath: tab.markdownFilePath,
+                imageFilePath: tab.imageFilePath
             )
         }
         return SectionState(

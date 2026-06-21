@@ -172,6 +172,24 @@ final class SpaceModel: Identifiable {
         return tab
     }
 
+    /// Opens an image file as a read-only reader tab in the Claude section.
+    /// If the file is already open, re-focuses its existing tab instead of
+    /// creating a duplicate. Backed by a surface-less PaneViewModel, so no
+    /// terminal/`claude` process is launched.
+    @discardableResult
+    func openImageReader(filePath: String) -> TabModel {
+        if let existing = claudeSection.tabs.first(where: { $0.imageFilePath == filePath }) {
+            activate(tab: existing)
+            return existing
+        }
+        let pvm = PaneViewModel.makeEmpty(sectionKind: .claude)
+        let tab = TabModel(paneViewModel: pvm, sectionKind: .claude, imageFilePath: filePath)
+        claudeSection.appendTab(tab)
+        wireTab(tab)
+        activate(tab: tab)
+        return tab
+    }
+
     func removeTab(id: UUID) { terminalSection.removeTab(id: id) }
     func activateTab(id: UUID) { terminalSection.activateTab(id: id) }
 

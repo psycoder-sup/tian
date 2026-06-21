@@ -166,9 +166,12 @@ struct SidebarContainerView: View {
                 tabState: workspace.inspectTabState,
                 spaceName: activeSpace?.name ?? workspace.name,
                 onOpenFile: { path in
-                    let ext = (path as NSString).pathExtension.lowercased()
-                    guard ext == "md" || ext == "markdown", let space = activeSpace else { return }
-                    space.openMarkdownReader(filePath: path)
+                    guard let space = activeSpace else { return }
+                    if MarkdownFileType.isMarkdown(path: path) {
+                        space.openMarkdownReader(filePath: path)
+                    } else if ImageFileType.isImage(path: path) {
+                        space.openImageReader(filePath: path)
+                    }
                 }
             )
             // Animated width: 0 when hidden, panelState.width when visible.

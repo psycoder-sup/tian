@@ -134,6 +134,10 @@ struct TabBarItemView: View {
                         Image(systemName: "text.document")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
+                    } else if tab.isImageReader {
+                        Image(systemName: "photo")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
                     InlineRenameView(
                         text: tab.displayName,

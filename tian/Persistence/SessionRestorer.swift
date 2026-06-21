@@ -298,6 +298,11 @@ enum SessionRestorer {
                 let pvm = PaneViewModel.makeEmpty(sectionKind: state.kind)
                 return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind, markdownFilePath: markdownFilePath)
             }
+            // Image reader tabs likewise restore surface-less.
+            if let imageFilePath = tab.imageFilePath {
+                let pvm = PaneViewModel.makeEmpty(sectionKind: state.kind)
+                return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind, imageFilePath: imageFilePath)
+            }
             let pvm = PaneViewModel.fromState(tab.root, focusedPaneID: tab.activePaneId, sectionKind: state.kind)
             return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind)
         }

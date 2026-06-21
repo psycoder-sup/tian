@@ -41,7 +41,7 @@ struct SectionView: View {
             ZStack(alignment: .top) {
                 // Terminal content for the active terminal tab. (Pane surfaces
                 // are model-owned and re-parented, so this is cheap to rebuild.)
-                if activeTab.markdownDocument == nil {
+                if activeTab.isTerminalTab {
                     SplitTreeView(
                         node: activeTab.paneViewModel.splitTree.root,
                         viewModel: activeTab.paneViewModel,
@@ -59,6 +59,24 @@ struct SectionView: View {
                     if let document = tab.markdownDocument {
                         let isActive = tab.id == activeTab.id
                         MarkdownReaderView(
+                            document: document,
+                            isFocused: isSectionFocused && isActive,
+                            onClose: { section.removeTab(id: tab.id) }
+                        )
+                        .padding(.top, SectionTabBarView.height(for: section.kind))
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                        .accessibilityHidden(!isActive)
+                    }
+                }
+
+                // Image readers are kept mounted and shown/hidden the same way
+                // as markdown readers, so re-activation just draws the cached
+                // (already-decoded) bitmap.
+                ForEach(section.tabs.filter(\.isImageReader)) { tab in
+                    if let document = tab.imageDocument {
+                        let isActive = tab.id == activeTab.id
+                        ImageReaderView(
                             document: document,
                             isFocused: isSectionFocused && isActive,
                             onClose: { section.removeTab(id: tab.id) }

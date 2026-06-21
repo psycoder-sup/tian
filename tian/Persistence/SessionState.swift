@@ -128,6 +128,9 @@ struct TabState: Codable, Sendable, Equatable {
     /// instead of a terminal). Optional → decodes as nil for older sessions,
     /// and `var`-with-default keeps the memberwise init omittable.
     var markdownFilePath: String? = nil
+    /// Absolute path when this tab is an image reader (renders a file instead
+    /// of a terminal). Optional/with-default for the same reasons as above.
+    var imageFilePath: String? = nil
 }
 
 // MARK: - Pane Node State
