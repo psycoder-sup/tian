@@ -59,6 +59,9 @@ struct InspectPanelFileRow: View {
                 if let ext, ImageFileType.contains(ext) {
                     return Color(red: 236/255, green: 72/255, blue: 153/255)  // pink
                 }
+                if let ext, HtmlFileType.contains(ext) {
+                    return Color(red: 251/255, green: 113/255, blue: 133/255)  // rose/orange
+                }
                 return Color.secondary
             }
         }
@@ -77,6 +80,7 @@ struct InspectPanelFileRow: View {
             case "env":         return "lock.fill"
             default:
                 if let ext, ImageFileType.contains(ext) { return "photo.fill" }
+                if let ext, HtmlFileType.contains(ext) { return "globe" }
                 return "doc.fill"
             }
         }

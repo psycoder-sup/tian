@@ -166,6 +166,10 @@ struct SidebarContainerView: View {
                 tabState: workspace.inspectTabState,
                 spaceName: activeSpace?.name ?? workspace.name,
                 onOpenFile: { path in
+                    if HtmlFileType.isHtml(path: path) {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                        return
+                    }
                     guard let space = activeSpace else { return }
                     if MarkdownFileType.isMarkdown(path: path) {
                         space.openMarkdownReader(filePath: path)
