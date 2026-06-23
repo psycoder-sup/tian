@@ -17,7 +17,7 @@ struct TianApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            SettingsView()
         }
         .commands {
             WorkspaceCommands(

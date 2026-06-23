@@ -6,7 +6,11 @@ import Foundation
 /// pane-creation call site routes through here to enforce FR-05 / FR-11.
 enum SectionSpawner {
     /// The shell command a Claude pane auto-runs once its rc files finish.
-    static let claudeAutostartCommand = "claude"
+    /// Resolved from `TianSettings` so the user can customise it (e.g.
+    /// `claude --chrome`, `headroom wrap claude`); falls back to bare `claude`
+    /// when unset.
+    @MainActor
+    static var claudeAutostartCommand: String { TianSettings.shared.effectiveClaudeCommand }
 
     /// - Parameters:
     ///   - view: the `TerminalSurfaceView` to configure. Must not yet be

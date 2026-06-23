@@ -8,9 +8,21 @@ struct SectionSpawnerTests {
         let view = TerminalSurfaceView()
         let env: [String: String] = ["TIAN_PANE_ID": "abc"]
         SectionSpawner.configure(view: view, kind: .claude, workingDirectory: "/tmp", environmentVariables: env)
-        #expect(view.initialInput == "claude\n")
+        // Claude launches via TIAN_AUTOSTART_CMD (run by the bundled .zshrc),
+        // not by injecting "claude\n" as keystrokes — so initialInput stays nil.
+        #expect(view.initialInput == nil)
+        #expect(view.environmentVariables["TIAN_AUTOSTART_CMD"] == "claude")
         #expect(view.initialWorkingDirectory == "/tmp")
         #expect(view.environmentVariables["TIAN_PANE_ID"] == "abc")
+    }
+
+    @Test func customClaudeCommandFlowsIntoAutostartEnv() {
+        let original = TianSettings.shared.claudeCommand
+        defer { TianSettings.shared.claudeCommand = original }
+
+        TianSettings.shared.claudeCommand = "claude --chrome"
+        let env = SectionSpawner.autostartEnvironment(kind: .claude, base: [:])
+        #expect(env["TIAN_AUTOSTART_CMD"] == "claude --chrome")
     }
 
     @Test func terminalSpawnerLeavesInitialInputNil() {
@@ -27,7 +39,7 @@ struct SectionSpawnerTests {
         let newID = claudeTab.paneViewModel.splitPane(direction: .horizontal)
         #expect(newID != nil)
         let newView = claudeTab.paneViewModel.surfaceView(for: newID!)
-        #expect(newView?.initialInput == "claude\n")
+        #expect(newView?.environmentVariables["TIAN_AUTOSTART_CMD"] == "claude")
     }
 
     @Test func claudeExitWithNonZeroCodeClosesPane() async throws {
