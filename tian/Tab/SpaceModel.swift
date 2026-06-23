@@ -145,11 +145,19 @@ final class SpaceModel: Identifiable {
     /// hooks (directory fallback, hierarchy context, git context,
     /// cross-section focus). Called by the key dispatcher for `.newTab` in
     /// the focused pane's section.
+    ///
+    /// - Parameter customCommand: a one-off launch command for the new pane
+    ///   (e.g. "Run Custom Claude" → `claude --chrome`). When set it overrides
+    ///   the default autostart command for this pane only. Ignored for sections
+    ///   that don't autostart (Terminal).
     @discardableResult
-    func createTab(in section: SectionModel, workingDirectory: String) -> TabModel {
+    func createTab(in section: SectionModel, workingDirectory: String, customCommand: String? = nil) -> TabModel {
         let tab = section.createTab(workingDirectory: workingDirectory)
         wireTab(tab)
         let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
+        if let customCommand {
+            tab.paneViewModel.applyCustomLaunchCommand(customCommand, toPaneID: initialPaneID)
+        }
         gitContext.paneAdded(paneID: initialPaneID, workingDirectory: workingDirectory)
         return tab
     }

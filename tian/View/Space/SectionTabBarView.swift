@@ -23,8 +23,14 @@ struct SectionTabBarView: View {
     /// pill to hold them.
     let markdownReaderDocument: MarkdownDocument?
     var onNewTab: () -> Void = {}
+    /// Opens a new Claude tab running a one-off command (right-click "+" →
+    /// presets / "Run Custom Claude"). No-op for Terminal sections.
+    var onNewTabCustom: (String) -> Void = { _ in }
 
     @Namespace private var tabNamespace
+
+    /// Drives the "Run Custom Claude" popover anchored to the "+" button.
+    @State private var showCustomPrompt = false
 
     // MARK: Live reorder drag state
 
@@ -68,12 +74,14 @@ struct SectionTabBarView: View {
         spaceModel: SpaceModel? = nil,
         markdownReaderDocument: MarkdownDocument? = nil,
         onNewTab: @escaping () -> Void = {},
+        onNewTabCustom: @escaping (String) -> Void = { _ in },
         @ViewBuilder trailingToolbar: () -> some View = { EmptyView() }
     ) {
         self.section = section
         self.spaceModel = spaceModel
         self.markdownReaderDocument = markdownReaderDocument
         self.onNewTab = onNewTab
+        self.onNewTabCustom = onNewTabCustom
         let built = trailingToolbar()
         if built is EmptyView {
             self.trailingToolbar = nil
@@ -160,6 +168,24 @@ struct SectionTabBarView: View {
                 .buttonStyle(.plain)
                 .glassHoverHighlight()
                 .accessibilityLabel("New \(section.kind == .claude ? "Claude" : "Terminal") tab")
+                // Right-click the Claude "+" to launch a one-off custom command
+                // instead of the default. Terminal sections don't autostart, so
+                // the menu is empty there and SwiftUI shows nothing.
+                .contextMenu {
+                    if section.kind == .claude {
+                        ForEach(TianSettings.claudeCommandPresets, id: \.self) { preset in
+                            Button(preset) { onNewTabCustom(preset) }
+                        }
+                        Divider()
+                        Button("Run Custom Claude…") { showCustomPrompt = true }
+                    }
+                }
+                .popover(isPresented: $showCustomPrompt, arrowEdge: .bottom) {
+                    CustomClaudeCommandPopover(
+                        initialCommand: TianSettings.shared.effectiveClaudeCommand,
+                        onRun: onNewTabCustom
+                    )
+                }
 
                 if let markdownReaderDocument {
                     MarkdownDiffToggleButton(document: markdownReaderDocument, size: buttonSize, iconSize: isCompact ? 12 : 14)

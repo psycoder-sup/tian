@@ -16,7 +16,10 @@ final class PaneViewModel {
     /// Per-pane lifecycle state (running, exited, spawn-failed).
     private(set) var paneStates: [UUID: PaneState] = [:]
 
-    /// Per-pane restore commands registered via IPC. Persisted across sessions.
+    /// Per-pane launch override: a restore command registered via IPC
+    /// (`claude --resume <id>`) or a one-off custom launch command (set by
+    /// `applyCustomLaunchCommand`). Replaces the pane's default autostart
+    /// command and is persisted across sessions.
     private(set) var restoreCommands: [UUID: String] = [:]
 
     /// Panes that have an active bell notification (glow indicator).
@@ -410,6 +413,20 @@ final class PaneViewModel {
         restoreCommands[paneID]
     }
 
+    /// Seed a one-off launch command for a freshly created (not-yet-spawned)
+    /// pane — e.g. "Run Custom Claude" from the new-tab menu.
+    ///
+    /// Stores it as the pane's launch override (so the later
+    /// `applyEnvironmentVariables()` re-seed and session persistence keep it),
+    /// then re-seeds the surface env immediately. Unlike the bulk
+    /// `applyEnvironmentVariables()` this is ungated by `hierarchyContext`, so it
+    /// applies even before the space is attached to a workspace. Must be called
+    /// before the surface view enters a window (the env is read once at spawn).
+    func applyCustomLaunchCommand(_ command: String, toPaneID paneID: UUID) {
+        restoreCommands[paneID] = command
+        reseedAutostartEnvironment(forPaneID: paneID)
+    }
+
     /// Restart the shell in an existing pane (destroy old surface, create new one).
     func restartShell(paneID: UUID) {
         guard let state = paneStates[paneID] else { return }
@@ -495,22 +512,29 @@ final class PaneViewModel {
     }
 
     /// Applies TIAN_* environment variables to all existing surface views.
-    /// Called after `hierarchyContext` is set.
+    /// Called once `hierarchyContext` is set (the full TIAN_* env is only
+    /// computable then); a no-op before that.
     func applyEnvironmentVariables() {
         guard hierarchyContext != nil else { return }
-        for (paneID, surfaceView) in surfaceViews {
-            // Re-merge the autostart var (TIAN_AUTOSTART_CMD) — this assignment
-            // runs after SectionSpawner.configure and would otherwise clobber it,
-            // since the full TIAN_* env is only computable once hierarchyContext
-            // is known. Without this, Claude panes never auto-launch `claude`.
-            // Pass the restore command so a restored Claude pane resumes its
-            // session (`claude --resume <id>`) instead of launching bare `claude`.
-            surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
-                kind: sectionKind,
-                base: buildEnvironmentVariables(forPaneID: paneID),
-                restoreCommand: restoreCommands[paneID]
-            )
+        for paneID in surfaceViews.keys {
+            reseedAutostartEnvironment(forPaneID: paneID)
         }
+    }
+
+    /// Re-seeds one pane's surface env from its current launch override
+    /// (`restoreCommands[paneID]`, else the bare default) merged onto the pane's
+    /// TIAN_* env. This runs after `SectionSpawner.configure` and would otherwise
+    /// clobber the autostart var, so it re-merges TIAN_AUTOSTART_CMD — without it
+    /// Claude panes never auto-launch. A restore/custom command makes the pane
+    /// resume (`claude --resume <id>`) or run a one-off command instead of bare
+    /// `claude`.
+    private func reseedAutostartEnvironment(forPaneID paneID: UUID) {
+        guard let surfaceView = surfaceViews[paneID] else { return }
+        surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
+            kind: sectionKind,
+            base: buildEnvironmentVariables(forPaneID: paneID),
+            restoreCommand: restoreCommands[paneID]
+        )
     }
 
     /// Resolve working directory for a pane: inherited config (OSC 7) -> tree -> space/workspace default -> $HOME.

@@ -109,7 +109,7 @@ struct SectionView: View {
         if section.kind == .terminal {
             SectionTabBarView(
                 section: section,
-                onNewTab: addTab,
+                onNewTab: { addTab() },
                 trailingToolbar: {
                     SectionToolbarView(spaceModel: spaceModel, kind: section.kind)
                 }
@@ -122,14 +122,15 @@ struct SectionView: View {
                 section: section,
                 spaceModel: spaceModel,
                 markdownReaderDocument: markdownReaderDocument(for: activeTab),
-                onNewTab: addTab
+                onNewTab: { addTab() },
+                onNewTabCustom: { addTab(customCommand: $0) }
             )
         }
     }
 
-    private func addTab() {
+    private func addTab(customCommand: String? = nil) {
         let wd = resolveWorkingDirectory()
-        spaceModel.createTab(in: section, workingDirectory: wd)
+        spaceModel.createTab(in: section, workingDirectory: wd, customCommand: customCommand)
     }
 
     /// The reader document driving the new-tab capsule's diff toggle and
