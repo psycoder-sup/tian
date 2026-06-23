@@ -20,7 +20,9 @@ struct SpaceModelSectionTests {
         let tab = space.claudeSection.tabs[0]
         let paneID = tab.paneViewModel.splitTree.focusedPaneID
         let view = tab.paneViewModel.surfaceView(for: paneID)
-        #expect(view?.initialInput == "claude\n")
+        // Seeded via TIAN_AUTOSTART_CMD (run by the bundled .zshrc), not as
+        // injected "claude\n" keystrokes.
+        #expect(view?.environmentVariables["TIAN_AUTOSTART_CMD"] == "claude")
     }
 
     @Test func tabOperationsOnOneSectionDoNotAffectOther() {

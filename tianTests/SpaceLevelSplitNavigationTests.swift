@@ -86,11 +86,12 @@ struct SpaceLevelSplitNavigationTests {
             containerSize: CGSize(width: 1000, height: 600)
         )
 
-        // From terminal pane, .left should cross the divider into Claude.
+        // New spaces dock the Terminal section at the bottom (Claude on top),
+        // so from the Terminal pane .up crosses the divider into Claude.
         let result = layout.neighbor(
             from: terminalPaneID,
             in: .terminal,
-            direction: .left
+            direction: .up
         )
         #expect(result?.paneID == claudePaneID)
         #expect(result?.sectionKind == .claude)

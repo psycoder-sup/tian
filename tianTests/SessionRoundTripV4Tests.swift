@@ -27,7 +27,8 @@ struct SessionRoundTripV4Tests {
         #expect(restored.focusedSectionKind == .terminal)
     }
 
-    // FR-24 — restored Claude panes re-inject `claude\n` initial input.
+    // FR-24 — restored Claude panes re-seed the autostart command (run via
+    // TIAN_AUTOSTART_CMD from the bundled .zshrc), not as injected keystrokes.
     @Test func restoredClaudePanesReinjectClaudeCommand() throws {
         let collection = WorkspaceCollection(workingDirectory: "/tmp")
         let snapshot = SessionSerializer.snapshot(from: collection)
@@ -37,7 +38,7 @@ struct SessionRoundTripV4Tests {
         let claudeTab = restored.workspaces[0].spaceCollection.activeSpace!.claudeSection.tabs[0]
         let paneID = claudeTab.paneViewModel.splitTree.focusedPaneID
         let view = claudeTab.paneViewModel.surfaceView(for: paneID)
-        #expect(view?.initialInput == "claude\n")
+        #expect(view?.environmentVariables["TIAN_AUTOSTART_CMD"] == "claude")
     }
 
     // Schema version bumped to 6 (v6 adds activeTab field).

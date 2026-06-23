@@ -32,9 +32,10 @@ struct RetryClaudeSpawnTests {
         #expect(tab.paneViewModel.paneStates[paneID] != .spawnFailed)
 
         // Claude "command" is still set (assigned by SectionSpawner at
-        // initial tab creation in Phase 1; also restamped during restart).
+        // initial tab creation in Phase 1; also restamped during restart) —
+        // carried via TIAN_AUTOSTART_CMD, not as injected "claude\n" keystrokes.
         let view = tab.paneViewModel.surfaceView(for: paneID)
-        #expect(view?.initialInput == "claude\n")
+        #expect(view?.environmentVariables["TIAN_AUTOSTART_CMD"] == "claude")
 
         // A second spawn failure on the same pane returns it to
         // .spawnFailed. `restartShell` replaces the surface + view, so

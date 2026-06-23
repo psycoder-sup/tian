@@ -38,7 +38,7 @@ struct EnvironmentBuilderTests {
             workspaceID: workspaceID,
             cliPath: cliPath
         )
-        #expect(env.count == 11)
+        #expect(env.count == 12)
         #expect(env.keys.contains("TIAN_SOCKET"))
         #expect(env.keys.contains("TIAN_PANE_ID"))
         #expect(env.keys.contains("TIAN_TAB_ID"))
@@ -50,6 +50,7 @@ struct EnvironmentBuilderTests {
         #expect(env.keys.contains("ZDOTDIR"))
         #expect(env.keys.contains("TIAN_ORIGINAL_ZDOTDIR"))
         #expect(env.keys.contains("PATH"))
+        #expect(env.keys.contains("DISABLE_AUTO_UPDATE"))
     }
 
     @Test func valuesMatchInput() {
