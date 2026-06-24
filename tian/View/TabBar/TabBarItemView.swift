@@ -108,57 +108,85 @@ struct TabBarItemView: View {
             .accessibilityHint("Double-tap to switch. Double-tap and hold to rename.")
     }
 
+    /// The tab's title content — busy "rainbow text" or the normal (renamable)
+    /// title. Centered by its parent layer (`frame(maxWidth:.infinity)`).
+    @ViewBuilder
+    private var titleLayer: some View {
+        if showsRainbowText {
+            Group {
+                if reduceMotion {
+                    Text(rainbowAttributedTitle(highlightIndex: -1))
+                } else {
+                    TimelineView(.periodic(from: .now, by: Self.rainbowLetterDwell)) { context in
+                        let count = max(tab.displayName.count, 1)
+                        let step = Int(context.date.timeIntervalSinceReferenceDate / Self.rainbowLetterDwell)
+                        let highlight = ((step % count) + count) % count
+                        Text(rainbowAttributedTitle(highlightIndex: highlight))
+                    }
+                }
+            }
+            .font(.system(size: 11.5, weight: .regular))
+        } else {
+            InlineRenameView(
+                text: tab.displayName,
+                isRenaming: $isRenaming,
+                onCommit: { tab.customName = $0 }
+            )
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(isActive ? .primary : .secondary)
+        }
+    }
+
+    /// Leading slot pinned to the pill's left edge: the Claude launch-variant
+    /// badge, or the reader-type icon for markdown / image tabs. These are
+    /// mutually exclusive (a tab is either a Claude terminal tab or a reader).
+    @ViewBuilder
+    private var leadingAccessory: some View {
+        if let badge = tab.claudeLaunchBadge {
+            accessoryIcon(badge.symbol)
+                .help(badge.command)
+                .accessibilityLabel("Running \(badge.command)")
+        } else if tab.isMarkdownReader {
+            accessoryIcon("text.document")
+        } else if tab.isImageReader {
+            accessoryIcon("photo")
+        }
+    }
+
+    /// Shared styling for a leading-slot icon (launch badge / reader glyph).
+    private func accessoryIcon(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.secondary)
+    }
+
     @ViewBuilder
     private var tabContent: some View {
         let tint = tab.sectionKind.tint
         let showAurora = isActive && hasBusyPane
-        let inner = HStack(spacing: 8) {
-            if showsRainbowText {
-                Group {
-                    if reduceMotion {
-                        Text(rainbowAttributedTitle(highlightIndex: -1))
-                    } else {
-                        TimelineView(.periodic(from: .now, by: Self.rainbowLetterDwell)) { context in
-                            let count = max(tab.displayName.count, 1)
-                            let step = Int(context.date.timeIntervalSinceReferenceDate / Self.rainbowLetterDwell)
-                            let highlight = ((step % count) + count) % count
-                            Text(rainbowAttributedTitle(highlightIndex: highlight))
-                        }
-                    }
-                }
-                .font(.system(size: 11.5, weight: .regular))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(spacing: 5) {
-                    if tab.isMarkdownReader {
-                        Image(systemName: "text.document")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    } else if tab.isImageReader {
-                        Image(systemName: "photo")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    InlineRenameView(
-                        text: tab.displayName,
-                        isRenaming: $isRenaming,
-                        onCommit: { tab.customName = $0 }
-                    )
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(isActive ? .primary : .secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        // Nav-bar layout: leading accessory (launch badge / reader icon) pinned
+        // left, title centered in the pill, close button pinned right. The title
+        // sits in its own centered layer with a symmetric horizontal reserve so
+        // a long (truncated) title never slides under the accessories.
+        let inner = ZStack {
+            titleLayer
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
 
-            if isActive || isHovering {
-                Button(action: onClose) {
-                    Text("\u{00D7}")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(.secondary)
-                        .opacity(isActive ? 0.9 : 0.5)
+            HStack(spacing: 0) {
+                leadingAccessory
+                Spacer(minLength: 0)
+                if isActive || isHovering {
+                    Button(action: onClose) {
+                        Text("\u{00D7}")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .opacity(isActive ? 0.9 : 0.5)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close tab \(tab.displayName)")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close tab \(tab.displayName)")
             }
         }
         .frame(maxWidth: .infinity)
