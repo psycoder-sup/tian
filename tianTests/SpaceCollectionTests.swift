@@ -209,6 +209,18 @@ struct SpaceCollectionTests {
         #expect(collection.spaces[1].name == "Space 2")
     }
 
+    @Test func createSpaceWithoutFocusKeepsActiveSpace() {
+        let collection = SpaceCollection()
+        let originalActiveID = collection.activeSpaceID
+
+        let newSpace = collection.createSpace(focusOnCreate: false)
+        #expect(collection.spaces.count == 2)
+        // The space is appended...
+        #expect(collection.spaces[1].id == newSpace.id)
+        // ...but the active selection stays put (no autofocus).
+        #expect(collection.activeSpaceID == originalActiveID)
+    }
+
     @Test func removeSpaceActivatesNearest() {
         let collection = SpaceCollection()
         collection.createSpace()
