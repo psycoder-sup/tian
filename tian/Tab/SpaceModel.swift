@@ -501,9 +501,10 @@ final class SpaceModel: Identifiable {
         []
     }
 
-    private static let cliPath: String = Bundle.main.executableURL!
-        .deletingLastPathComponent()
-        .appendingPathComponent("tian-cli")
+    // The CLI ships as `tian` inside the bundle's Resources directory (it
+    // shadows the GUI executable, `Contents/MacOS/tian`, on the pane PATH).
+    private static let cliPath: String = Bundle.main.resourceURL!
+        .appendingPathComponent("tian")
         .path
 }
 

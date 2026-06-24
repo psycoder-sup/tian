@@ -4,10 +4,11 @@ import Foundation
 struct TianCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tian",
-        abstract: "Control the tian terminal emulator from within its shell sessions.",
-        discussion: "Run commands from within a tian terminal session to manage workspaces, spaces, tabs, and panes. Requires the TIAN_SOCKET environment variable set by the tian app.",
+        abstract: "Control the tian terminal emulator.",
+        discussion: "`tian open` launches (or focuses) the app and works from any shell. The remaining commands manage workspaces, spaces, tabs, and panes of the running app and must be run from within a tian terminal session (they require the TIAN_SOCKET environment variable set by the tian app).",
         version: "0.1.0",
         subcommands: [
+            Open.self,
             Ping.self,
             WorkspaceGroup.self,
             SpaceGroup.self,

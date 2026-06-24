@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r 'select(.source == \"startup\" or .source == \"resume\" or .source == \"clear\" or .source == \"compact\") | .session_id' | xargs -r -I{} tian-cli pane set-restore-command --command 'claude --resume {}' 2>/dev/null || true"
+            "command": "jq -r 'select(.source == \"startup\" or .source == \"resume\" or .source == \"clear\" or .source == \"compact\") | .session_id' | xargs -r -I{} tian pane set-restore-command --command 'claude --resume {}' 2>/dev/null || true"
           },
           {
             "type": "command",

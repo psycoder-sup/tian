@@ -5,7 +5,7 @@
 #
 # Reads the Claude Code hook JSON payload from stdin, appends a diagnostic
 # line to ~/Library/Logs/tian/claude-hooks.log, and (if STATE is given and
-# TIAN_CLI_PATH is set) forwards the state via `tian-cli status set`.
+# TIAN_CLI_PATH is set) forwards the state via `tian status set`.
 #
 # Rotates the log file when it exceeds 5MB (matches tian's FileLogWriter).
 # Always exits 0 so hook behavior is never blocked by logging failures.

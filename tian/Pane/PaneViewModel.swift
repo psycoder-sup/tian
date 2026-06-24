@@ -220,7 +220,7 @@ final class PaneViewModel {
             guard let self else { return }
             let paneID: UUID?
             if let directPaneId = notification.userInfo?["paneId"] as? UUID {
-                // From IPC (tian-cli notify) — paneId provided directly
+                // From IPC (tian notify) — paneId provided directly
                 paneID = self.surfaces.keys.contains(directPaneId) ? directPaneId : nil
             } else if let surfaceId = notification.userInfo?["surfaceId"] as? UUID {
                 // From ghostty bell callback — resolve via surface ID

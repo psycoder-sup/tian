@@ -65,12 +65,12 @@ targets:
       - package: MarkdownUI
         product: MarkdownUI
     postCompileScripts:
-      - script: cp -f "$BUILT_PRODUCTS_DIR/tian-cli" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/MacOS/tian-cli"
-        name: Bundle tian-cli
+      - script: cp -f "$BUILT_PRODUCTS_DIR/tian-cli" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian"
+        name: Bundle tian CLI
         inputFiles:
           - $(BUILT_PRODUCTS_DIR)/tian-cli
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/MacOS/tian-cli
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian
       - script: |
           SHARE="$SRCROOT/.ghostty-src/zig-out/share"
           RESOURCES="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources"
