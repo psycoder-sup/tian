@@ -55,6 +55,8 @@ final class IPCCommandHandler {
         case "pane.list":  return handlePaneList(request)
         case "pane.close": return handlePaneClose(request)
         case "pane.focus": return handlePaneFocus(request)
+        case "pane.send":  return handlePaneSend(request)
+        case "pane.capture": return handlePaneCapture(request)
         case "pane.set-restore-command": return handleSetRestoreCommand(request)
 
         // Status (Phase 4)
@@ -357,10 +359,15 @@ final class IPCCommandHandler {
             case .spawnFailed: stateStr = "spawn-failed"
             }
 
+            let sessionState = statusManager.sessionState(for: paneID)
+            let label = statusManager.statuses[paneID]?.label
+
             return .object([
                 "id": .string(paneID.uuidString),
                 "workingDirectory": .string(wd),
                 "state": .string(stateStr),
+                "sessionState": sessionState.map { .string($0.rawValue) } ?? .null,
+                "label": label.map { .string($0) } ?? .null,
                 "focused": .bool(paneID == focusedID),
             ])
         }
@@ -416,6 +423,81 @@ final class IPCCommandHandler {
 
         paneViewModel.focusPane(paneID: targetId)
         return .success()
+    }
+
+    /// Resolves the target pane (param `paneId`, else env), realizes its terminal
+    /// surface (creating it off-screen if needed), and runs `body` with the live
+    /// surface. Returns the resolution failure response if the pane is
+    /// missing/invalid or has no terminal. `body` receives the resolved pane id
+    /// string for error messages.
+    private func withLiveSurface(
+        for request: IPCRequest,
+        _ body: (GhosttyTerminalSurface, String) -> IPCResponse
+    ) -> IPCResponse {
+        let paneIdStr = stringParam("paneId", from: request.params) ?? request.env.paneId
+        guard let paneId = UUID(uuidString: paneIdStr) else {
+            return .failure(code: 1, message: "Invalid UUID: \(paneIdStr)")
+        }
+        guard let (_, paneViewModel, _) = resolvePane(id: paneId, tabId: nil) else {
+            return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
+        }
+        guard let surface = paneViewModel.realizeSurface(for: paneId) else {
+            return .failure(code: 1, message: "Pane has no live terminal: \(paneIdStr)")
+        }
+        return body(surface, paneIdStr)
+    }
+
+    private func handlePaneSend(_ request: IPCRequest) -> IPCResponse {
+        guard let text = stringParam("text", from: request.params) else {
+            return .failure(code: 1, message: "Missing required parameter: text")
+        }
+        return withLiveSurface(for: request) { surface, _ in
+            surface.injectText(text, submit: request.params["enter"]?.boolValue ?? true)
+            return .success()
+        }
+    }
+
+    private func handlePaneCapture(_ request: IPCRequest) -> IPCResponse {
+        withLiveSurface(for: request) { surface, paneIdStr in
+            let scrollback = optionalBool("scrollback", from: request.params)
+            guard var captured = surface.readContents(fullScrollback: scrollback) else {
+                return .failure(code: 1, message: "Failed to read terminal contents for pane: \(paneIdStr)")
+            }
+
+            if request.params["strip"]?.boolValue ?? true {
+                var stripper = ANSIStripper()
+                captured = stripper.strip(captured)
+            }
+
+            // Keep the response under the 1 MB IPC read cap (IPCClient.readResponse /
+            // IPCServer.readLine abort at 1_048_576 bytes). Keep the tail — most
+            // useful for reading recent logs/progress.
+            let maxBytes = 900_000
+            var truncated = false
+            if captured.utf8.count > maxBytes {
+                captured = Self.tail(of: captured, maxBytes: maxBytes)
+                truncated = true
+            }
+
+            return .success([
+                "text": .string(captured),
+                "truncated": .bool(truncated),
+            ])
+        }
+    }
+
+    /// Returns at most the last `maxBytes` UTF-8 bytes of `string`, trimming any
+    /// partial leading multi-byte sequence so the result is valid UTF-8. Slices the
+    /// UTF-8 view in place — no intermediate byte-array allocation.
+    private static func tail(of string: String, maxBytes: Int) -> String {
+        let utf8 = string.utf8
+        guard utf8.count > maxBytes else { return string }
+        var start = utf8.index(utf8.endIndex, offsetBy: -maxBytes)
+        // Advance past any UTF-8 continuation bytes (0x80–0xBF) to a char boundary.
+        while start < utf8.endIndex, (utf8[start] & 0xC0) == 0x80 {
+            start = utf8.index(after: start)
+        }
+        return String(decoding: utf8[start...], as: UTF8.self)
     }
 
     private func handleSetRestoreCommand(_ request: IPCRequest) -> IPCResponse {
@@ -542,10 +624,13 @@ final class IPCCommandHandler {
                 repoPath: path,
                 workspaceID: workspaceID
             )
-            return .success([
+            var out: [String: IPCValue] = [
                 "space_id": .string(result.spaceID.uuidString),
                 "existed": .bool(result.existed),
-            ])
+            ]
+            if let tabID = result.tabID { out["tab_id"] = .string(tabID.uuidString) }
+            if let paneID = result.paneID { out["pane_id"] = .string(paneID.uuidString) }
+            return .success(out)
         } catch let error as WorktreeError {
             return .failure(code: 1, message: error.description)
         } catch {

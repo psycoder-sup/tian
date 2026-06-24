@@ -99,7 +99,12 @@ final class WorktreeOrchestrator {
         if let existingSpace = findExistingSpace(worktreePath: expectedPath) {
             Log.worktree.info("Worktree Space already exists for \(expectedPath.path), focusing existing Space \(existingSpace.id)")
             activateSpace(existingSpace)
-            return WorktreeCreateResult(spaceID: existingSpace.id, existed: true)
+            return WorktreeCreateResult(
+                spaceID: existingSpace.id,
+                existed: true,
+                tabID: existingSpace.activeTab?.id,
+                paneID: existingSpace.activeTab?.paneViewModel.splitTree.focusedPaneID
+            )
         }
 
         // Step 4: Pre-flight checks
@@ -391,7 +396,12 @@ final class WorktreeOrchestrator {
         }
 
         // Step 15: Return result
-        return WorktreeCreateResult(spaceID: newSpace.id, existed: false)
+        return WorktreeCreateResult(
+            spaceID: newSpace.id,
+            existed: false,
+            tabID: newSpace.activeTab?.id,
+            paneID: initialPaneID
+        )
     }
 
     // MARK: - Shell Commands

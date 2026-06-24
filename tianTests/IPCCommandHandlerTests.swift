@@ -333,4 +333,68 @@ struct IPCCommandHandlerTests {
         #expect(response.error?.code == 1)
         #expect(response.error?.message.contains("Pane not found") == true)
     }
+
+    // MARK: - Pane Send
+
+    @Test @MainActor func paneSendMissingTextReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(version: 1, command: "pane.send", params: [:], env: dummyEnv)
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Missing required parameter: text") == true)
+    }
+
+    @Test @MainActor func paneSendInvalidPaneUUIDReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(
+            version: 1,
+            command: "pane.send",
+            params: ["text": .string("echo hi"), "paneId": .string("not-a-uuid")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid UUID") == true)
+    }
+
+    @Test @MainActor func paneSendNonexistentPaneReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(
+            version: 1,
+            command: "pane.send",
+            params: ["text": .string("echo hi")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Pane not found") == true)
+    }
+
+    // MARK: - Pane Capture
+
+    @Test @MainActor func paneCaptureInvalidPaneUUIDReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(
+            version: 1,
+            command: "pane.capture",
+            params: ["paneId": .string("not-a-uuid")],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid UUID") == true)
+    }
+
+    @Test @MainActor func paneCaptureNonexistentPaneReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(version: 1, command: "pane.capture", params: [:], env: dummyEnv)
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Pane not found") == true)
+    }
 }

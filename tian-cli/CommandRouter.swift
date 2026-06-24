@@ -412,6 +412,8 @@ struct PaneGroup: ParsableCommand {
             PaneList.self,
             PaneClose.self,
             PaneFocus.self,
+            PaneSend.self,
+            PaneCapture.self,
             PaneSetRestoreCommand.self,
         ]
     )
@@ -457,13 +459,15 @@ struct PaneList: ParsableCommand {
         try handleListResponse(
             response,
             arrayKey: "panes",
-            headers: ["ID", "DIRECTORY", "STATE", "FOCUSED"],
+            headers: ["ID", "DIRECTORY", "STATE", "SESSION", "LABEL", "FOCUSED"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
                     obj["workingDirectory"]?.stringValue ?? "",
                     obj["state"]?.stringValue ?? "",
+                    obj["sessionState"]?.stringValue ?? "",
+                    obj["label"]?.stringValue ?? "",
                     obj["focused"]?.boolValue == true ? "yes" : "",
                 ]
             },
@@ -507,6 +511,89 @@ struct PaneFocus: ParsableCommand {
         if let pane { params["paneId"] = .string(pane) }
         let response = try sendRequest(command: "pane.focus", params: params)
         try handleVoidResponse(response)
+    }
+}
+
+struct PaneSend: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "send",
+        abstract: "Send text/input to a pane's terminal (as if pasted).",
+        discussion: """
+        Input is delivered via the terminal's paste path: multi-line text is framed as \
+        a single bracketed paste when the running program supports it (e.g. an \
+        interactive Claude session or a shell line editor), so it is not run line by \
+        line. By default the input is then submitted with Enter; use --no-enter to \
+        stage it without submitting. Pass '-' as the text to read it from stdin.
+        """
+    )
+
+    @Argument(help: "Text to send. Use '-' to read it from stdin.")
+    var text: String
+
+    @Option(name: .long, help: "Target pane ID (defaults to current pane).")
+    var pane: String?
+
+    @Flag(inversion: .prefixedNo, help: "Submit the input with Enter.")
+    var enter: Bool = true
+
+    func run() throws {
+        let payload: String
+        if text == "-" {
+            let data = FileHandle.standardInput.readDataToEndOfFile()
+            payload = String(decoding: data, as: UTF8.self)
+        } else {
+            payload = text
+        }
+
+        var params: [String: IPCValue] = [
+            "text": .string(payload),
+            "enter": .bool(enter),
+        ]
+        if let pane { params["paneId"] = .string(pane) }
+        let response = try sendRequest(command: "pane.send", params: params)
+        try handleVoidResponse(response)
+    }
+}
+
+struct PaneCapture: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "capture",
+        abstract: "Capture a pane's terminal output to stdout.",
+        discussion: """
+        Prints the pane's visible screen (or the full scrollback with --scrollback). \
+        Useful for reading the output/logs of another session.
+        """
+    )
+
+    @Option(name: .long, help: "Target pane ID (defaults to current pane).")
+    var pane: String?
+
+    @Flag(name: .long, help: "Include the full scrollback, not just the visible viewport.")
+    var scrollback: Bool = false
+
+    @Flag(inversion: .prefixedNo, help: "Strip ANSI escape sequences.")
+    var strip: Bool = true
+
+    func run() throws {
+        var params: [String: IPCValue] = [
+            "scrollback": .bool(scrollback),
+            "strip": .bool(strip),
+        ]
+        if let pane { params["paneId"] = .string(pane) }
+        // Large scrollback reads can exceed the default 5s timeout.
+        let response = try sendRequest(command: "pane.capture", params: params, timeout: 15)
+        if response.ok {
+            let text = response.result?["text"]?.stringValue ?? ""
+            // Print exactly once, ensuring a single trailing newline.
+            print(text, terminator: text.hasSuffix("\n") ? "" : "\n")
+            if response.result?["truncated"]?.boolValue == true {
+                FileHandle.standardError.write(Data("Note: output truncated to the most recent ~900 KB.\n".utf8))
+            }
+        } else if let error = response.error {
+            throw CLIError.fromIPCError(error)
+        } else {
+            throw CLIError.general("Unexpected response from tian")
+        }
     }
 }
 
@@ -637,6 +724,9 @@ struct WorktreeCreate: ParsableCommand {
     @Option(name: .long, help: "Target workspace UUID.")
     var workspace: String?
 
+    @Option(name: .long, help: "Output: id (space id), ids (space tab pane), or json.")
+    var format: WorktreeCreateOutput = .id
+
     func run() throws {
         var params: [String: IPCValue] = ["branchName": .string(branchName)]
         if existing { params["existing"] = .bool(true) }
@@ -645,9 +735,20 @@ struct WorktreeCreate: ParsableCommand {
         let response = try sendRequest(command: "worktree.create", params: params, timeout: 600)
         if response.ok {
             let spaceId = response.result?["space_id"]?.stringValue ?? ""
+            let tabId = response.result?["tab_id"]?.stringValue ?? ""
+            let paneId = response.result?["pane_id"]?.stringValue ?? ""
             let existed = response.result?["existed"]?.boolValue ?? false
             CommandContext.lastCreateId = spaceId
-            print(spaceId)
+            switch format {
+            case .id:
+                print(spaceId)
+            case .ids:
+                print([spaceId, tabId, paneId].joined(separator: " "))
+            case .json:
+                if let result = response.result {
+                    print(OutputFormatter.formatJSON(.object(result)))
+                }
+            }
             if existed {
                 FileHandle.standardError.write(Data("Note: Focused existing worktree space.\n".utf8))
             }
@@ -657,6 +758,12 @@ struct WorktreeCreate: ParsableCommand {
             throw CLIError.general("Unexpected response from tian")
         }
     }
+}
+
+enum WorktreeCreateOutput: String, ExpressibleByArgument, CaseIterable {
+    case id
+    case ids
+    case json
 }
 
 struct WorktreeRemove: ParsableCommand {

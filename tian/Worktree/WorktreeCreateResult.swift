@@ -6,4 +6,9 @@ struct WorktreeCreateResult: Sendable {
     let spaceID: UUID
     /// True if an existing Space was focused instead of creating a new one.
     let existed: Bool
+    /// The primary terminal tab of the Space (nil if it has no terminal tab yet).
+    let tabID: UUID?
+    /// The focused pane within the primary tab (nil if it has no terminal pane yet).
+    /// Callers can immediately target this with `tian pane send` / `pane capture`.
+    let paneID: UUID?
 }

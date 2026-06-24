@@ -294,6 +294,34 @@ final class PaneViewModel {
         surfaceViews[paneID]
     }
 
+    /// Ensures the pane's ghostty surface exists and is sized, even if its view has
+    /// never entered a window (a background tab/space that was never the visible tab).
+    /// Reuses the pane's persistent `TerminalSurfaceView` and the exact inputs
+    /// `TerminalSurfaceView.viewDidMoveToWindow` uses, so working directory, `TIAN_*`
+    /// env, and any restore command behave identically. Composes with the lazy path:
+    /// when the tab is later shown, `viewDidMoveToWindow` sees a non-nil surface and
+    /// skips creation (no double shell), then resizes to real bounds.
+    /// - Returns: the live wrapper, or nil if the pane has no terminal (empty /
+    ///   non-terminal section) or surface creation failed.
+    @discardableResult
+    func realizeSurface(for paneID: UUID) -> GhosttyTerminalSurface? {
+        guard let surface = surfaces[paneID], let view = surfaceViews[paneID] else { return nil }
+        if surface.surface == nil {
+            // createSurface sizes to real bounds, or a default off-screen geometry
+            // when the view hasn't been laid out yet (see GhosttyTerminalSurface).
+            surface.createSurface(
+                view: view,
+                workingDirectory: view.initialWorkingDirectory,
+                environmentVariables: view.environmentVariables,
+                initialInput: view.initialInput
+            )
+            // A background realize must not claim ghostty focus; real focus is set
+            // when the view becomes first responder on screen.
+            surface.setFocus(false)
+        }
+        return surface.surface != nil ? surface : nil
+    }
+
     var focusedSurfaceView: TerminalSurfaceView? {
         surfaceViews[splitTree.focusedPaneID]
     }
