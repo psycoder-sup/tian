@@ -201,6 +201,47 @@ struct WorktreeOrchestratorTests {
         #expect(workspace.spaceCollection.spaces.count == spaceCountAfterFirst)
     }
 
+    @Test func duplicateDetectionBackgroundDoesNotActivate() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        // First creation (foreground) activates the new worktree Space.
+        let first = try await orchestrator.createWorktreeSpace(
+            branchName: "dup-bg-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        #expect(!first.existed)
+
+        // Move focus to a different Space so a stray activation would be observable.
+        let otherSpaceID = workspace.spaceCollection.spaces
+            .first(where: { $0.id != first.spaceID })?.id
+        #expect(otherSpaceID != nil)
+        workspace.spaceCollection.activeSpaceID = otherSpaceID!
+
+        let spaceCountAfterFirst = workspace.spaceCollection.spaces.count
+
+        // Second creation with same branch + background — duplicate detected,
+        // must NOT steal focus from the currently active Space.
+        let second = try await orchestrator.createWorktreeSpace(
+            branchName: "dup-bg-branch",
+            repoPath: repo,
+            workspaceID: workspace.id,
+            background: true
+        )
+
+        #expect(second.existed)
+        #expect(second.spaceID == first.spaceID)
+        #expect(workspace.spaceCollection.spaces.count == spaceCountAfterFirst)
+        // Background opt-out: active Space stays put instead of jumping to the worktree.
+        #expect(workspace.spaceCollection.activeSpaceID == otherSpaceID)
+    }
+
     // MARK: - Cancel setup
 
     @Test func cancelSetupSkipsRemainingCommands() async throws {

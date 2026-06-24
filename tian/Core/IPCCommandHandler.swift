@@ -614,6 +614,7 @@ final class IPCCommandHandler {
         }
 
         let existing = optionalBool("existing", from: request.params)
+        let background = optionalBool("background", from: request.params)
         let path = stringParam("path", from: request.params)
         let workspaceID = stringParam("workspaceId", from: request.params).flatMap(UUID.init)
 
@@ -622,7 +623,8 @@ final class IPCCommandHandler {
                 branchName: branchName,
                 existingBranch: existing,
                 repoPath: path,
-                workspaceID: workspaceID
+                workspaceID: workspaceID,
+                background: background
             )
             var out: [String: IPCValue] = [
                 "space_id": .string(result.spaceID.uuidString),

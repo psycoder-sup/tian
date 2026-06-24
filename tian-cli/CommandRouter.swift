@@ -718,6 +718,9 @@ struct WorktreeCreate: ParsableCommand {
     @Flag(name: .long, help: "Check out an existing branch instead of creating a new one.")
     var existing: Bool = false
 
+    @Flag(name: .long, help: "Create the space in the background without switching to it.")
+    var background: Bool = false
+
     @Option(name: .long, help: "Override repo root path.")
     var path: String?
 
@@ -730,6 +733,7 @@ struct WorktreeCreate: ParsableCommand {
     func run() throws {
         var params: [String: IPCValue] = ["branchName": .string(branchName)]
         if existing { params["existing"] = .bool(true) }
+        if background { params["background"] = .bool(true) }
         if let path { params["path"] = .string(path) }
         if let workspace { params["workspaceId"] = .string(workspace) }
         let response = try sendRequest(command: "worktree.create", params: params, timeout: 600)
@@ -750,7 +754,10 @@ struct WorktreeCreate: ParsableCommand {
                 }
             }
             if existed {
-                FileHandle.standardError.write(Data("Note: Focused existing worktree space.\n".utf8))
+                let note = background
+                    ? "Note: Worktree space already exists (left in background).\n"
+                    : "Note: Focused existing worktree space.\n"
+                FileHandle.standardError.write(Data(note.utf8))
             }
         } else if let error = response.error {
             throw CLIError.fromIPCError(error)
