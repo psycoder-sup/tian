@@ -615,7 +615,13 @@ final class IPCCommandHandler {
 
         let existing = optionalBool("existing", from: request.params)
         let path = stringParam("path", from: request.params)
-        let workspaceID = stringParam("workspaceId", from: request.params).flatMap(UUID.init)
+        // Resolve the target workspace from an explicit param, falling back to the
+        // calling pane's env context. Without this fallback the orchestrator would
+        // use the focused (key) window — landing the worktree in the wrong workspace.
+        let workspaceID = resolveWorkspaceFromParamOrEnv(
+            stringParam("workspaceId", from: request.params),
+            env: request.env
+        ).map { (_, workspace) in workspace.id }
 
         do {
             let result = try await worktreeOrchestrator.createWorktreeSpace(
