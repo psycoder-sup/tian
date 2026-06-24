@@ -37,7 +37,7 @@ Workspace → Space → Section (Terminal | Claude) → Tab → Pane (split tree
   
   Toggle it with the icon on the trailing edge of the window. When hidden, only a thin rail remains. Git tabs are populated only if the space's working directory is inside a git repo.
 
-- **Claude status monitor** — the colored dots in the sidebar are driven by `tian-cli status set --state <state>`, designed to be called from Claude Code hooks (`PreToolUse` / `PostToolUse` / `Stop`). State updates flow over the IPC socket, so a session signaling `needs_attention` lights up the sidebar even when the workspace isn't focused.
+- **Claude status monitor** — the colored dots in the sidebar are driven by `tian status set --state <state>`, designed to be called from Claude Code hooks (`PreToolUse` / `PostToolUse` / `Stop`). State updates flow over the IPC socket, so a session signaling `needs_attention` lights up the sidebar even when the workspace isn't focused.
 
 ## Install
 
@@ -89,24 +89,30 @@ scripts/install.sh
 | Cycle section focus | `⌘⇧` `` ` `` |
 | Toggle debug overlay | `⌘⇧P` |
 
-## `tian-cli`
+## `tian` CLI
 
-Each pane runs with `TIAN_SOCKET`, `TIAN_PANE_ID`, `TIAN_TAB_ID`, `TIAN_SPACE_ID`, and `TIAN_WORKSPACE_ID` set, letting the bundled `tian-cli` binary talk to the running app over a Unix socket.
+The app bundles a single `tian` command-line tool. `tian open` launches (or focuses) the app and works from any shell:
 
 ```sh
-tian-cli ping                  # check the connection
-tian-cli workspace …           # workspace commands
-tian-cli space …               # space commands
-tian-cli tab …                 # tab commands
-tian-cli pane …                # pane commands
-tian-cli status …              # surface status
-tian-cli worktree …            # git worktree helpers
-tian-cli git …                 # git helpers
-tian-cli notify …              # send a notification
-tian-cli config …              # read/write config
+tian open                      # launch the app, or bring it to the front
 ```
 
-The CLI only works from inside a tian terminal session — it errors out cleanly if `TIAN_SOCKET` is not set. Run `tian-cli <command> --help` for subcommand details.
+Every pane runs with `TIAN_SOCKET`, `TIAN_PANE_ID`, `TIAN_TAB_ID`, `TIAN_SPACE_ID`, and `TIAN_WORKSPACE_ID` set, letting `tian` talk to the running app over a Unix socket to script the UI from inside your shell:
+
+```sh
+tian ping                      # check the connection
+tian workspace …               # workspace commands
+tian space …                   # space commands
+tian tab …                     # tab commands
+tian pane …                    # pane commands
+tian status …                  # surface status
+tian worktree …                # git worktree helpers
+tian git …                     # git helpers
+tian notify …                  # send a notification
+tian config …                  # read/write config
+```
+
+Apart from `open`, these commands only work from inside a tian terminal session — they error out cleanly if `TIAN_SOCKET` is not set. Run `tian <command> --help` for subcommand details.
 
 ## Logs
 
@@ -119,7 +125,7 @@ log stream --predicate 'subsystem == "com.tian.app"'
 ## Project layout
 
 - `tian/` — app source (Workspace, Tab, Pane, Core, View, Input, Persistence, …)
-- `tian-cli/` — `tian` CLI source (Swift, ArgumentParser)
+- `tian-cli/` — `tian` CLI source (Swift, ArgumentParser); built as the bundled `tian` command
 - `tianTests/` — unit tests
 - `scripts/` — build, ghostty, install
 - `docs/` — feature specs and design docs
