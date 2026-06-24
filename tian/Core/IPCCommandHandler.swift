@@ -615,20 +615,29 @@ final class IPCCommandHandler {
 
         let existing = optionalBool("existing", from: request.params)
         let path = stringParam("path", from: request.params)
-        // Resolve the target workspace from an explicit param, falling back to the
-        // calling pane's env context. Without this fallback the orchestrator would
-        // use the focused (key) window — landing the worktree in the wrong workspace.
-        let workspaceID = resolveWorkspaceFromParamOrEnv(
+        // Place the worktree in the explicitly-named workspace, else the calling
+        // pane's env workspace. Require one of those OR an explicit --path: with no
+        // workspace context and no repo path, a nil workspaceID would let the
+        // orchestrator silently land the worktree in the focused (key) window — the
+        // wrong-workspace placement commit 622af51 set out to fix. An explicit
+        // --path is sufficient on its own (the user named the repo to use).
+        let resolvedWorkspace = resolveWorkspaceFromParamOrEnv(
             stringParam("workspaceId", from: request.params),
             env: request.env
-        ).map { (_, workspace) in workspace.id }
+        )?.1
+        guard resolvedWorkspace != nil || path != nil else {
+            return .failure(
+                code: 1,
+                message: "No workspace context: run from a tian pane, or pass --workspace <id> or --path <repo>."
+            )
+        }
 
         do {
             let result = try await worktreeOrchestrator.createWorktreeSpace(
                 branchName: branchName,
                 existingBranch: existing,
                 repoPath: path,
-                workspaceID: workspaceID
+                workspaceID: resolvedWorkspace?.id
             )
             var out: [String: IPCValue] = [
                 "space_id": .string(result.spaceID.uuidString),
@@ -760,11 +769,12 @@ final class IPCCommandHandler {
     // MARK: - Env-based Resolution Helpers
 
     /// Resolves workspace from an explicit param UUID string, or falls back to env.
+    /// An empty param string is treated as absent so it can't shadow a valid env id.
     private func resolveWorkspaceFromParamOrEnv(
         _ paramIdStr: String?,
         env: IPCEnv
     ) -> (WorkspaceCollection, Workspace)? {
-        let idStr = paramIdStr ?? env.workspaceId
+        let idStr = paramIdStr.flatMap { $0.isEmpty ? nil : $0 } ?? env.workspaceId
         guard let id = UUID(uuidString: idStr) else { return nil }
         return resolveWorkspace(id: id)
     }

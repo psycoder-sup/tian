@@ -18,9 +18,9 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["commit", "-m", "second commit"], in: repo)
         try runGitSync(["tag", "v1.0"], in: repo)
 
-        GitStatusService.commitGraphSubprocessCounter = 0
-        let graph = await GitStatusService.commitGraph(directory: repo)
-        #expect(graph != nil)
+        // #require (not a non-fatal #expect) so a flaked nil bails here with a
+        // clear "unexpectedly nil" rather than a misleading counter mismatch below.
+        _ = try #require(await commitGraphRetrying(repo, resetCounterEachAttempt: true))
         #expect(GitStatusService.commitGraphSubprocessCounter == 3)
     }
 
@@ -320,8 +320,7 @@ struct GitStatusServiceCommitGraphTests {
             taggedShas.append(sha)
         }
 
-        GitStatusService.commitGraphSubprocessCounter = 0
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo, resetCounterEachAttempt: true)
         let g = try #require(graph)
 
         // Subprocess count must remain 3 even with 5 tags
@@ -405,19 +404,36 @@ struct GitStatusServiceCommitGraphTests {
     ///
     /// `commitGraph` returns nil when any of its three git subprocesses fails
     /// to spawn — a transient condition under heavy parallel test load (e.g.
-    /// compiling the test bundle while the full suite runs). Retrying a couple
-    /// of times absorbs that hiccup without masking a genuine nil: an empty or
-    /// non-git directory still returns nil after every attempt. This is the
-    /// standard accessor for the structural tests below; the two subprocess-count
-    /// tests call `commitGraph` directly so a retry can't skew their counter.
-    private func commitGraphRetrying(_ repo: String) async -> GitCommitGraph? {
+    /// compiling the test bundle while the full suite runs). Every caller below
+    /// first builds a real repo with commits, so a nil here is always that
+    /// transient flake, never a legitimate empty/non-git result — retrying can't
+    /// mask a real "no graph" outcome, and the extra attempts only ever run on a
+    /// flake (or on an already-failing test, where the added ~100ms is moot).
+    ///
+    /// `resetCounterEachAttempt` zeroes `commitGraphSubprocessCounter` before
+    /// every attempt, so the two subprocess-count tests can absorb the same flake
+    /// *and* still assert the exact spawn count of the successful attempt (the
+    /// counter ends holding only that final attempt's count). The retry sleep
+    /// honors cancellation: a cancelled test task returns immediately instead of
+    /// spawning more git subprocesses.
+    private func commitGraphRetrying(
+        _ repo: String,
+        resetCounterEachAttempt: Bool = false
+    ) async -> GitCommitGraph? {
         let attempts = 3
         for attempt in 1...attempts {
+            if resetCounterEachAttempt {
+                GitStatusService.commitGraphSubprocessCounter = 0
+            }
             if let graph = await GitStatusService.commitGraph(directory: repo) {
                 return graph
             }
             if attempt < attempts {
-                try? await Task.sleep(for: .milliseconds(50))
+                do {
+                    try await Task.sleep(for: .milliseconds(50))
+                } catch {
+                    return nil  // task cancelled — stop retrying promptly
+                }
             }
         }
         return nil

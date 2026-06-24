@@ -261,7 +261,7 @@ struct IPCCommandHandlerTests {
         #expect(response.error?.message.contains("Invalid UUID") == true)
     }
 
-    @Test @MainActor func worktreeCreateWithNoWindowReturnsError() async {
+    @Test @MainActor func worktreeCreateWithNoWorkspaceContextReturnsError() async {
         let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
         let request = IPCRequest(
             version: 1,
@@ -270,9 +270,33 @@ struct IPCCommandHandlerTests {
             env: dummyEnv
         )
         let response = await handler.handle(request)
-        // No windows open, so orchestrator can't resolve a workspace or repo
+        // dummyEnv's sentinel workspaceId resolves to no workspace and there's no
+        // --path, so the handler fails at the no-context guard before the orchestrator.
         #expect(response.ok == false)
         #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("No workspace context") == true)
+    }
+
+    @Test @MainActor func worktreeCreateWithExplicitPathBypassesWorkspaceGuard() async throws {
+        // An explicit --path is sufficient even with no resolvable workspace: the
+        // request must reach the orchestrator (which then fails on the non-git
+        // path) rather than short-circuit at the no-workspace guard.
+        let tempDir = NSTemporaryDirectory() + "tian-worktree-test-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: tempDir) }
+
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(
+            version: 1,
+            command: "worktree.create",
+            params: ["branchName": .string("feature/test"), "path": .string(tempDir)],
+            env: dummyEnv
+        )
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        // Reached the orchestrator (non-git path) instead of failing at the guard.
+        #expect(response.error?.message.contains("No workspace context") == false)
     }
 
     @Test @MainActor func worktreeRemoveNonexistentSpaceSucceeds() async {
