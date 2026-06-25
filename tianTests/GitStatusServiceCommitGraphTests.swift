@@ -18,9 +18,9 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["commit", "-m", "second commit"], in: repo)
         try runGitSync(["tag", "v1.0"], in: repo)
 
-        GitStatusService.commitGraphSubprocessCounter = 0
-        let graph = await GitStatusService.commitGraph(directory: repo)
-        #expect(graph != nil)
+        // #require (not a non-fatal #expect) so a flaked nil bails here with a
+        // clear "unexpectedly nil" rather than a misleading counter mismatch below.
+        _ = try #require(await commitGraphRetrying(repo, resetCounterEachAttempt: true))
         #expect(GitStatusService.commitGraphSubprocessCounter == 3)
     }
 
@@ -41,7 +41,7 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["commit", "-m", "feature commit"], in: repo)
 
         // HEAD is on 'feature' — and 'feature' is the most-ahead branch.
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let graph2 = try #require(graph)
         #expect(!graph2.lanes.isEmpty)
         #expect(graph2.lanes[0].id == "feature")
@@ -71,7 +71,7 @@ struct GitStatusServiceCommitGraphTests {
         // HEAD is now on 'branch-8'. Return to default branch.
         try runGitSync(["checkout", defaultBranch], in: repo)
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         // The most-ahead branch (last-created branch-8) absorbs the default
@@ -118,7 +118,7 @@ struct GitStatusServiceCommitGraphTests {
         let aheadSha = try getSHA(repo)
         try runGitSync(["checkout", "behind"], in: repo)
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         // Lane 0 belongs to the most-ahead branch, not to HEAD.
@@ -154,7 +154,7 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["commit", "-m", "fix commit"], in: repo)
         let fixSha = try getSHA(repo)
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         // The slash branch is the most-ahead tip and must own lane 0,
@@ -194,7 +194,7 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["add", "."], in: repo)
         try commitWithDate(repo, message: "newer commit", date: "2025-01-01T00:01:00")
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         let laneIDs = g.lanes.map(\.id)
@@ -238,7 +238,7 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["fetch", "origin", "remote-only"], in: repo)
         let remoteSha = try getSHA(repo, ref: "refs/remotes/origin/remote-only")
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         let localCommit = try #require(g.commits.first { $0.sha == localSha })
@@ -289,7 +289,7 @@ struct GitStatusServiceCommitGraphTests {
         try runGitSync(["add", "."], in: repo)
         try runGitSync(["commit", "-m", "feature commit"], in: repo)
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         let ancestor = try #require(g.commits.first { $0.sha == ancestorSha })
@@ -320,8 +320,7 @@ struct GitStatusServiceCommitGraphTests {
             taggedShas.append(sha)
         }
 
-        GitStatusService.commitGraphSubprocessCounter = 0
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo, resetCounterEachAttempt: true)
         let g = try #require(graph)
 
         // Subprocess count must remain 3 even with 5 tags
@@ -356,7 +355,7 @@ struct GitStatusServiceCommitGraphTests {
 
         try runGitSync(["checkout", "--detach", "HEAD"], in: repo)
 
-        let graph = await GitStatusService.commitGraph(directory: repo)
+        let graph = await commitGraphRetrying(repo)
         let g = try #require(graph)
 
         #expect(!g.commits.isEmpty)
@@ -399,6 +398,45 @@ struct GitStatusServiceCommitGraphTests {
 
     private func getSHA(_ repo: String, ref: String = "HEAD") throws -> String {
         try runGitSync(["rev-parse", ref], in: repo)
+    }
+
+    /// Calls `GitStatusService.commitGraph` with a small bounded retry.
+    ///
+    /// `commitGraph` returns nil when any of its three git subprocesses fails
+    /// to spawn — a transient condition under heavy parallel test load (e.g.
+    /// compiling the test bundle while the full suite runs). Every caller below
+    /// first builds a real repo with commits, so a nil here is always that
+    /// transient flake, never a legitimate empty/non-git result — retrying can't
+    /// mask a real "no graph" outcome, and the extra attempts only ever run on a
+    /// flake (or on an already-failing test, where the added ~100ms is moot).
+    ///
+    /// `resetCounterEachAttempt` zeroes `commitGraphSubprocessCounter` before
+    /// every attempt, so the two subprocess-count tests can absorb the same flake
+    /// *and* still assert the exact spawn count of the successful attempt (the
+    /// counter ends holding only that final attempt's count). The retry sleep
+    /// honors cancellation: a cancelled test task returns immediately instead of
+    /// spawning more git subprocesses.
+    private func commitGraphRetrying(
+        _ repo: String,
+        resetCounterEachAttempt: Bool = false
+    ) async -> GitCommitGraph? {
+        let attempts = 3
+        for attempt in 1...attempts {
+            if resetCounterEachAttempt {
+                GitStatusService.commitGraphSubprocessCounter = 0
+            }
+            if let graph = await GitStatusService.commitGraph(directory: repo) {
+                return graph
+            }
+            if attempt < attempts {
+                do {
+                    try await Task.sleep(for: .milliseconds(50))
+                } catch {
+                    return nil  // task cancelled — stop retrying promptly
+                }
+            }
+        }
+        return nil
     }
 
     @discardableResult
