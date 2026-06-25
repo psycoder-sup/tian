@@ -242,6 +242,42 @@ struct WorktreeOrchestratorTests {
         #expect(workspace.spaceCollection.activeSpaceID == otherSpaceID)
     }
 
+    @Test func newSpaceBackgroundDoesNotStealFocus() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        // Stay in whatever Space is active before creating the worktree.
+        let originalActiveSpaceID = workspace.spaceCollection.activeSpaceID
+
+        // Create a brand-new worktree Space in the background.
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "bg-new-branch",
+            repoPath: repo,
+            workspaceID: workspace.id,
+            background: true
+        )
+
+        #expect(!result.existed)
+        #expect(result.spaceID != originalActiveSpaceID)
+        // Background opt-out: the active Space must not jump to the new worktree.
+        #expect(workspace.spaceCollection.activeSpaceID == originalActiveSpaceID)
+
+        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
+        #expect(newSpace != nil)
+        // showTerminal(background:) must leave focus on the Claude section rather than
+        // flipping to .terminal — flipping pulls the terminal surface's first responder
+        // and steals the window key, which is the focus-steal this guards against.
+        #expect(newSpace?.focusedSectionKind == .claude)
+
+        // The worktree still exposes both its terminal pane and its Claude pane.
+        #expect(result.paneID != nil)
+        #expect(result.claudeTabID != nil)
+        #expect(result.claudePaneID != nil)
+    }
+
     // MARK: - Cancel setup
 
     @Test func cancelSetupSkipsRemainingCommands() async throws {

@@ -251,13 +251,28 @@ final class IPCCommandHandler {
             return .failure(code: 1, message: "Space not found: \(spaceIdStr ?? request.env.spaceId)")
         }
 
-        let items: [IPCValue] = space.tabs.map { tab in
-            .object([
+        // Optional section filter; default lists both the Claude and Terminal sections.
+        let kindFilter: SectionKind?
+        switch stringParam("section", from: request.params) {
+        case nil: kindFilter = nil
+        case "claude": kindFilter = .claude
+        case "terminal": kindFilter = .terminal
+        case let other?:
+            return .failure(code: 1, message: "Invalid section: \(other) (expected claude or terminal)")
+        }
+
+        let tabs = space.allTabs.filter { kindFilter == nil || $0.sectionKind == kindFilter }
+        let items: [IPCValue] = tabs.map { tab in
+            let sectionActiveTabID = tab.sectionKind == .claude
+                ? space.claudeSection.activeTabID
+                : space.terminalSection.activeTabID
+            return .object([
                 "id": .string(tab.id.uuidString),
+                "section": .string(tab.sectionKind.rawValue),
                 "name": tab.customName.map { .string($0) } ?? .null,
                 "title": .string(tab.title),
                 "paneCount": .int(tab.paneViewModel.splitTree.leafCount),
-                "active": .bool(tab.id == space.activeTabID),
+                "active": .bool(tab.id == sectionActiveTabID),
             ])
         }
 
@@ -367,6 +382,7 @@ final class IPCCommandHandler {
 
             return .object([
                 "id": .string(paneID.uuidString),
+                "section": .string(tab.sectionKind.rawValue),
                 "workingDirectory": .string(wd),
                 "state": .string(stateStr),
                 "sessionState": sessionState.map { .string($0.rawValue) } ?? .null,
@@ -650,6 +666,8 @@ final class IPCCommandHandler {
             ]
             if let tabID = result.tabID { out["tab_id"] = .string(tabID.uuidString) }
             if let paneID = result.paneID { out["pane_id"] = .string(paneID.uuidString) }
+            if let claudeTabID = result.claudeTabID { out["claude_tab_id"] = .string(claudeTabID.uuidString) }
+            if let claudePaneID = result.claudePaneID { out["claude_pane_id"] = .string(claudePaneID.uuidString) }
             return .success(out)
         } catch let error as WorktreeError {
             return .failure(code: 1, message: error.description)

@@ -347,21 +347,26 @@ struct TabList: ParsableCommand {
     @Option(name: .long, help: "Space ID (defaults to current space).")
     var space: String?
 
+    @Option(name: .long, help: "Filter by section: claude or terminal (defaults to both).")
+    var section: String?
+
     @Option(name: .long, help: "Output format.")
     var format: OutputFormat = .table
 
     func run() throws {
         var params: [String: IPCValue] = [:]
         if let space { params["spaceId"] = .string(space) }
+        if let section { params["section"] = .string(section) }
         let response = try sendRequest(command: "tab.list", params: params)
         try handleListResponse(
             response,
             arrayKey: "tabs",
-            headers: ["ID", "TITLE", "PANES", "ACTIVE"],
+            headers: ["ID", "SECTION", "TITLE", "PANES", "ACTIVE"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
+                    obj["section"]?.stringValue ?? "",
                     obj["title"]?.stringValue ?? "",
                     obj["paneCount"]?.intValue.map(String.init) ?? "",
                     obj["active"]?.boolValue == true ? "yes" : "",
@@ -471,11 +476,12 @@ struct PaneList: ParsableCommand {
         try handleListResponse(
             response,
             arrayKey: "panes",
-            headers: ["ID", "DIRECTORY", "STATE", "SESSION", "LABEL", "FOCUSED"],
+            headers: ["ID", "SECTION", "DIRECTORY", "STATE", "SESSION", "LABEL", "FOCUSED"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
+                    obj["section"]?.stringValue ?? "",
                     obj["workingDirectory"]?.stringValue ?? "",
                     obj["state"]?.stringValue ?? "",
                     obj["sessionState"]?.stringValue ?? "",

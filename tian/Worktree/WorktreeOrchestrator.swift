@@ -107,7 +107,9 @@ final class WorktreeOrchestrator {
                 spaceID: existingSpace.id,
                 existed: true,
                 tabID: existingSpace.activeTab?.id,
-                paneID: existingSpace.activeTab?.paneViewModel.splitTree.focusedPaneID
+                paneID: existingSpace.activeTab?.paneViewModel.splitTree.focusedPaneID,
+                claudeTabID: existingSpace.claudeSection.activeTab?.id,
+                claudePaneID: existingSpace.claudeSection.activeTab?.paneViewModel.splitTree.focusedPaneID
             )
         }
 
@@ -366,7 +368,7 @@ final class WorktreeOrchestrator {
         // be nil. `showTerminal()` is a no-op for visibility and spawns the
         // first Terminal tab when empty; after this the activeTab force-
         // unwraps are safe.
-        newSpace.showTerminal()
+        newSpace.showTerminal(background: background)
         let initialPaneID = newSpace.activeTab!.paneViewModel.splitTree.focusedPaneID
         let paneViewModel = newSpace.activeTab!.paneViewModel
 
@@ -407,7 +409,9 @@ final class WorktreeOrchestrator {
             spaceID: newSpace.id,
             existed: false,
             tabID: newSpace.activeTab?.id,
-            paneID: initialPaneID
+            paneID: initialPaneID,
+            claudeTabID: newSpace.claudeSection.activeTab?.id,
+            claudePaneID: newSpace.claudeSection.activeTab?.paneViewModel.splitTree.focusedPaneID
         )
     }
 

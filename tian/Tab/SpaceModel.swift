@@ -267,15 +267,24 @@ final class SpaceModel: Identifiable {
 
     // MARK: - Terminal visibility
 
-    func showTerminal() {
+    /// Reveals the Terminal section, spawning its first tab if empty.
+    ///
+    /// When `background` is true the terminal tab is still spawned (so the Space
+    /// has a usable terminal pane), but focus is left untouched: the new tab is
+    /// not focused and `focusedSectionKind` is not flipped to `.terminal`. This
+    /// keeps a background-created Space (e.g. `worktree create --background`)
+    /// from stealing focus away from the Space the user is currently in.
+    func showTerminal(background: Bool = false) {
         let wasEmpty = terminalSection.tabs.isEmpty
         if wasEmpty {
             let wd = resolvedWorkingDirectoryForSpawn()
-            createTab(in: terminalSection, workingDirectory: wd)
+            createTab(in: terminalSection, workingDirectory: wd, focusOnCreate: !background)
         }
         terminalVisible = true
-        focusedSectionKind = .terminal
-        Log.lifecycle.info("Terminal section shown (space=\(self.name), spawnedFreshTab=\(wasEmpty))")
+        if !background {
+            focusedSectionKind = .terminal
+        }
+        Log.lifecycle.info("Terminal section shown (space=\(self.name), spawnedFreshTab=\(wasEmpty), background=\(background))")
     }
 
     func hideTerminal() {
