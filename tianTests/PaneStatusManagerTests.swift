@@ -204,6 +204,50 @@ struct PaneStatusManagerTests {
         #expect(manager.sessionStates[paneID] == .busy)
     }
 
+    @Test func idleDoesNotDowngradeNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)
+        manager.setSessionState(paneID: paneID, state: .idle)
+
+        // A clean turn-end must not erase a pending prompt.
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+    }
+
+    @Test func idleDoesNotDowngradeFailed() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        // Models the Stop/StopFailure ordering race: StopFailure then a trailing Stop.
+        manager.setSessionState(paneID: paneID, state: .failed)
+        manager.setSessionState(paneID: paneID, state: .idle)
+
+        #expect(manager.sessionStates[paneID] == .failed)
+    }
+
+    @Test func busyClearsNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)
+        manager.setSessionState(paneID: paneID, state: .busy)
+
+        // Claude resuming work resolves the attention.
+        #expect(manager.sessionStates[paneID] == .busy)
+    }
+
+    @Test func failedSurfacesOverNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)
+        manager.setSessionState(paneID: paneID, state: .failed)
+
+        // A turn that dies mid-permission is dead; surface the failure.
+        #expect(manager.sessionStates[paneID] == .failed)
+    }
+
     // MARK: - clearSessionState
 
     @Test func clearSessionStateClearsOnlySessionState() {

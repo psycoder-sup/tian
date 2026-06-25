@@ -77,6 +77,17 @@
         ]
       }
     ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh StopFailure failed"
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "",
