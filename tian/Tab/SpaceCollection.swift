@@ -52,8 +52,11 @@ final class SpaceCollection {
 
     // MARK: - Space Operations
 
+    /// - Parameter focusOnCreate: when `true` (the default) the new space becomes
+    ///   the active space. Pass `false` to append it without changing the
+    ///   selection (used by worktree creation to honour the user's preference).
     @discardableResult
-    func createSpace(name: String? = nil, workingDirectory: String = "~") -> SpaceModel {
+    func createSpace(name: String? = nil, workingDirectory: String = "~", focusOnCreate: Bool = true) -> SpaceModel {
         spaceCounter += 1
         let resolvedName = name ?? "Space \(spaceCounter)"
         // Seed a Claude section (one Claude tab) and an empty Terminal section.
@@ -64,7 +67,9 @@ final class SpaceCollection {
         }
         wireSpaceClose(space)
         spaces.append(space)
-        activeSpaceID = space.id
+        if focusOnCreate {
+            activeSpaceID = space.id
+        }
         return space
     }
 

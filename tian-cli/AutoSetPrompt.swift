@@ -1,6 +1,6 @@
 import Foundation
 
-/// Prompt template for `tian-cli config auto-set`.
+/// Prompt template for `tian config auto-set`.
 ///
 /// Held as a single static constant so it is diffable, reviewable, and
 /// unit-testable without invoking `claude -p`. Output shape is enforced

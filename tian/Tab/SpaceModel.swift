@@ -158,6 +158,13 @@ final class SpaceModel: Identifiable {
         if let customCommand {
             tab.paneViewModel.applyCustomLaunchCommand(customCommand, toPaneID: initialPaneID)
         }
+        // Record the command this Claude tab launched with so its launch-variant
+        // badge (`TabModel.claudeLaunchBadge`) can distinguish it. Default tabs
+        // record the resolved default so they're badged when that default is
+        // itself a variant (e.g. user set the default to `claude --chrome`).
+        if section.kind == .claude {
+            tab.launchCommand = customCommand ?? SectionSpawner.claudeAutostartCommand
+        }
         gitContext.paneAdded(paneID: initialPaneID, workingDirectory: workingDirectory)
         return tab
     }
@@ -494,9 +501,10 @@ final class SpaceModel: Identifiable {
         []
     }
 
-    private static let cliPath: String = Bundle.main.executableURL!
-        .deletingLastPathComponent()
-        .appendingPathComponent("tian-cli")
+    // The CLI ships as `tian` inside the bundle's Resources directory (it
+    // shadows the GUI executable, `Contents/MacOS/tian`, on the pane PATH).
+    private static let cliPath: String = Bundle.main.resourceURL!
+        .appendingPathComponent("tian")
         .path
 }
 

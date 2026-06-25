@@ -25,6 +25,36 @@ struct SectionSpawnerTests {
         #expect(env["TIAN_AUTOSTART_CMD"] == "claude --chrome")
     }
 
+    @Test func launchBadgeIsNilForDefaultAndEmptyCommands() {
+        #expect(ClaudeLaunchBadge.forCommand("claude") == nil)
+        #expect(ClaudeLaunchBadge.forCommand("  claude  ") == nil)
+        #expect(ClaudeLaunchBadge.forCommand("") == nil)
+        #expect(ClaudeLaunchBadge.forCommand("   ") == nil)
+    }
+
+    @Test func launchBadgeMapsKnownAndUnknownVariants() {
+        #expect(ClaudeLaunchBadge.forCommand("claude --chrome")?.symbol == "globe")
+        #expect(ClaudeLaunchBadge.forCommand("headroom wrap claude")?.symbol == "rectangle.compress.vertical")
+        #expect(ClaudeLaunchBadge.forCommand("some-other-wrapper claude")?.symbol == "wand.and.stars")
+        // The full (trimmed) command is preserved for the tooltip / a11y label.
+        #expect(ClaudeLaunchBadge.forCommand("  claude --chrome ")?.command == "claude --chrome")
+    }
+
+    @Test func customClaudeTabRecordsLaunchCommandForBadge() {
+        let space = SpaceCollection(workingDirectory: "/tmp").activeSpace!
+        let tab = space.createTab(in: space.claudeSection, workingDirectory: "/tmp", customCommand: "claude --chrome")
+        #expect(tab.launchCommand == "claude --chrome")
+        #expect(tab.claudeLaunchBadge?.symbol == "globe")
+    }
+
+    @Test func terminalTabHasNoLaunchBadge() {
+        let space = SpaceCollection(workingDirectory: "/tmp").activeSpace!
+        space.showTerminal()
+        let tab = space.createTab(in: space.terminalSection, workingDirectory: "/tmp")
+        #expect(tab.launchCommand == nil)
+        #expect(tab.claudeLaunchBadge == nil)
+    }
+
     @Test func terminalSpawnerLeavesInitialInputNil() {
         let view = TerminalSurfaceView()
         let env: [String: String] = ["TIAN_PANE_ID": "xyz"]

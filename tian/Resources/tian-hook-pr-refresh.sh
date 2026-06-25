@@ -3,7 +3,7 @@
 #
 # Reads the Claude Code Bash PostToolUse JSON payload from stdin, looks at
 # `tool_input.command`, and if it matches `gh pr (create|merge|close|reopen|edit)`
-# invokes `tian-cli git refresh` so the PR badge updates without waiting for
+# invokes `tian git refresh` so the PR badge updates without waiting for
 # the 60s PRStatusCache TTL. `gh pr create` against an already-pushed branch
 # makes no local file change, so the FSEvents-based eviction in tian doesn't
 # fire on its own.

@@ -67,7 +67,8 @@ final class WorktreeOrchestrator {
         existingBranch: Bool = false,
         remoteRef: String? = nil,
         repoPath: String? = nil,
-        workspaceID: UUID? = nil
+        workspaceID: UUID? = nil,
+        background: Bool = false
     ) async throws -> WorktreeCreateResult {
         commandsCancelled = false
 
@@ -97,8 +98,11 @@ final class WorktreeOrchestrator {
             .standardizedFileURL
 
         if let existingSpace = findExistingSpace(worktreePath: expectedPath) {
-            Log.worktree.info("Worktree Space already exists for \(expectedPath.path), focusing existing Space \(existingSpace.id)")
-            activateSpace(existingSpace)
+            let disposition = background ? "leaving it in the background" : "focusing it"
+            Log.worktree.info("Worktree Space already exists for \(expectedPath.path); \(disposition) (Space \(existingSpace.id))")
+            if !background {
+                activateSpace(existingSpace)
+            }
             return WorktreeCreateResult(
                 spaceID: existingSpace.id,
                 existed: true,
@@ -140,7 +144,8 @@ final class WorktreeOrchestrator {
                 repoRoot: repoRoot,
                 branchName: branchName,
                 config: config,
-                targetWorkspace: targetWorkspace
+                targetWorkspace: targetWorkspace,
+                background: background
             )
         } catch {
             try? await WorktreeService.removeWorktree(
@@ -313,7 +318,8 @@ final class WorktreeOrchestrator {
         repoRoot: String,
         branchName: String,
         config: WorktreeConfig,
-        targetWorkspace: Workspace?
+        targetWorkspace: Workspace?,
+        background: Bool
     ) async throws -> WorktreeCreateResult {
         // Steps 7-8: Ensure .gitignore + resolve main worktree path
         try WorktreeService.ensureGitignore(
@@ -342,7 +348,8 @@ final class WorktreeOrchestrator {
             )
         }
         let newSpace = targetWorkspace.spaceCollection.createSpace(
-            workingDirectory: worktreePath
+            workingDirectory: worktreePath,
+            focusOnCreate: !background
         )
         let worktreeURL = URL(filePath: worktreePath)
         newSpace.name = branchName

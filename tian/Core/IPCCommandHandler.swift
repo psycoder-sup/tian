@@ -614,6 +614,7 @@ final class IPCCommandHandler {
         }
 
         let existing = optionalBool("existing", from: request.params)
+        let background = optionalBool("background", from: request.params)
         let path = stringParam("path", from: request.params)
         // Place the worktree in the explicitly-named workspace, else the calling
         // pane's env workspace. Require one of those OR an explicit --path: with no
@@ -637,7 +638,8 @@ final class IPCCommandHandler {
                 branchName: branchName,
                 existingBranch: existing,
                 repoPath: path,
-                workspaceID: resolvedWorkspace?.id
+                workspaceID: resolvedWorkspace?.id,
+                background: background
             )
             var out: [String: IPCValue] = [
                 "space_id": .string(result.spaceID.uuidString),
