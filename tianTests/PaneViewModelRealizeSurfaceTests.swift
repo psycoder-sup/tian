@@ -17,4 +17,23 @@ struct PaneViewModelRealizeSurfaceTests {
         let pvm = PaneViewModel.makeEmpty()
         #expect(pvm.realizeSurface(for: pvm.splitTree.focusedPaneID) == nil)
     }
+
+    /// A normal (foreground) split moves keyboard focus to the new pane.
+    @Test func splitPaneFocusesNewPaneByDefault() {
+        let pvm = PaneViewModel.makeEmpty()
+        let newID = pvm.splitPane(direction: .vertical)
+        #expect(newID != nil)
+        #expect(pvm.splitTree.focusedPaneID == newID)
+    }
+
+    /// A background split (`focusOnCreate: false`, used by `pane split --background`)
+    /// creates the pane but leaves keyboard focus on the originally-focused pane.
+    @Test func backgroundSplitKeepsFocusOnOriginalPane() {
+        let pvm = PaneViewModel.makeEmpty()
+        let original = pvm.splitTree.focusedPaneID
+        let newID = pvm.splitPane(direction: .vertical, focusOnCreate: false)
+        #expect(newID != nil)
+        #expect(newID != original)
+        #expect(pvm.splitTree.focusedPaneID == original)
+    }
 }

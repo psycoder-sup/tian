@@ -107,6 +107,27 @@ struct SpaceModelSectionTests {
         #expect(space.focusedSectionKind == .claude)
     }
 
+    @Test func backgroundTabIntoPopulatedSectionPreservesActiveTab() {
+        let space = makeSpaceWithBothSections()
+        let activeBefore = space.terminalSection.activeTab?.id
+        #expect(activeBefore != nil)
+        let bg = space.terminalSection.createTab(workingDirectory: "/tmp", focusOnCreate: false)
+        // Background create must not switch the section's active tab.
+        #expect(space.terminalSection.activeTab?.id == activeBefore)
+        #expect(space.terminalSection.tabs.contains { $0.id == bg.id })
+    }
+
+    @Test func backgroundTabIntoEmptySectionStillBecomesActive() {
+        let space = makeSpaceWithBothSections()
+        space.resetTerminalSection()
+        #expect(space.terminalSection.activeTab == nil)
+        let bg = space.terminalSection.createTab(workingDirectory: "/tmp", focusOnCreate: false)
+        // An empty section has nothing to preserve focus for, so the new tab
+        // must become active — otherwise activeTab stays nil and the section
+        // renders blank when shown.
+        #expect(space.terminalSection.activeTab?.id == bg.id)
+    }
+
     private func makeSpaceWithBothSections() -> SpaceModel {
         let space = SpaceCollection(workingDirectory: "/tmp").activeSpace!
         space.showTerminal()

@@ -61,11 +61,18 @@ final class SectionModel: Identifiable {
     // MARK: - Tab Operations
 
     @discardableResult
-    func createTab(workingDirectory: String) -> TabModel {
+    func createTab(workingDirectory: String, focusOnCreate: Bool = true) -> TabModel {
         let tab = TabModel(workingDirectory: workingDirectory, sectionKind: kind)
         wireTabClose(tab)
+        // Whether a valid active tab exists must be checked before appending.
+        // A background create into an otherwise-empty section must still become
+        // active — otherwise the section is left with `activeTab == nil` and
+        // nothing to display when shown.
+        let hadActiveTab = activeTab != nil
         tabs.append(tab)
-        activeTabID = tab.id
+        if focusOnCreate || !hadActiveTab {
+            activeTabID = tab.id
+        }
         return tab
     }
 

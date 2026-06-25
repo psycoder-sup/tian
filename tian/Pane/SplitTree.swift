@@ -65,6 +65,10 @@ extension SplitTree {
     ///
     /// The original pane becomes the first child; the new pane becomes the second child.
     /// Focus moves to the new pane. Returns `true` on success.
+    ///
+    /// Callers that want a background split (keep focus where it was) save the
+    /// prior `focusedPaneID` and restore it after this returns — see
+    /// `PaneViewModel.splitPane`.
     @discardableResult
     mutating func insertSplit(
         direction: SplitDirection,
