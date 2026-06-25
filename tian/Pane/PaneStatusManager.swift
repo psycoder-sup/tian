@@ -69,6 +69,12 @@ final class PaneStatusManager {
 
     func setSessionState(paneID: UUID, state: ClaudeSessionState) {
         let oldState = sessionStates[paneID]
+        // A clean turn-end must not silently downgrade a pending prompt or a
+        // recorded failure (see ClaudeSessionState.canReplace).
+        guard state.canReplace(oldState) else {
+            Log.ipc.debug("Session state for pane \(paneID): \(state.rawValue) suppressed (current \(oldState?.rawValue ?? "nil") outranks it)")
+            return
+        }
         sessionStates[paneID] = state
         owner(of: paneID)?.sessionStates[paneID] = state   // dual-write
         Log.ipc.debug("Session state changed for pane \(paneID): \(oldState?.rawValue ?? "nil") → \(state.rawValue)")

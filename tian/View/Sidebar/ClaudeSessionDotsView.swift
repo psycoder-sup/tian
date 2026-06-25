@@ -32,6 +32,10 @@ struct ClaudeSessionDotsView: View {
             Circle()
                 .fill(Color(red: 1.0, green: 0.624, blue: 0.039))
                 .frame(width: 8, height: 8)
+        case .failed:
+            Circle()
+                .fill(Color(red: 1.0, green: 0.231, blue: 0.188))
+                .frame(width: 8, height: 8)
         case .active:
             Circle()
                 .fill(Color(red: 0.204, green: 0.78, blue: 0.349))
