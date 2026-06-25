@@ -159,7 +159,8 @@ final class IPCCommandHandler {
             return .failure(code: 1, message: "Workspace not found: \(workspaceIdStr ?? request.env.workspaceId)")
         }
 
-        let space = workspace.spaceCollection.createSpace()
+        let background = optionalBool("background", from: request.params)
+        let space = workspace.spaceCollection.createSpace(focusOnCreate: !background)
         if let name = stringParam("name", from: request.params) {
             space.name = name
         }
@@ -238,7 +239,8 @@ final class IPCCommandHandler {
         }
 
         let directory = stringParam("directory", from: request.params) ?? "~"
-        let tab = space.createTab(workingDirectory: directory)
+        let background = optionalBool("background", from: request.params)
+        let tab = space.createTab(workingDirectory: directory, focusOnCreate: !background)
         return .success(["id": .string(tab.id.uuidString)])
     }
 
@@ -330,7 +332,8 @@ final class IPCCommandHandler {
             return .failure(code: 1, message: "Invalid direction: \(directionStr). Use 'horizontal' or 'vertical'.")
         }
 
-        guard let newPaneID = paneViewModel.splitPane(direction: direction, targetPaneID: paneId) else {
+        let background = optionalBool("background", from: request.params)
+        guard let newPaneID = paneViewModel.splitPane(direction: direction, targetPaneID: paneId, focusOnCreate: !background) else {
             return .failure(code: 1, message: "Failed to split pane.")
         }
 

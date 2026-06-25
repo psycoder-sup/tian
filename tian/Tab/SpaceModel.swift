@@ -136,9 +136,12 @@ final class SpaceModel: Identifiable {
 
     var activeTab: TabModel? { terminalSection.activeTab }
 
+    /// Create a tab in the Terminal section. Pass `focusOnCreate: false` to
+    /// create it in the background without switching to it (e.g.
+    /// `tian tab create --background`).
     @discardableResult
-    func createTab(workingDirectory: String = "~") -> TabModel {
-        createTab(in: terminalSection, workingDirectory: workingDirectory)
+    func createTab(workingDirectory: String = "~", focusOnCreate: Bool = true) -> TabModel {
+        createTab(in: terminalSection, workingDirectory: workingDirectory, focusOnCreate: focusOnCreate)
     }
 
     /// FR-18 — create a tab in the named section and wire SpaceModel-level
@@ -150,9 +153,13 @@ final class SpaceModel: Identifiable {
     ///   (e.g. "Run Custom Claude" → `claude --chrome`). When set it overrides
     ///   the default autostart command for this pane only. Ignored for sections
     ///   that don't autostart (Terminal).
+    /// - Parameter focusOnCreate: when `false`, the section is not switched to
+    ///   the new tab (background create), so the caller doesn't steal focus.
+    ///   A background create into an empty section still activates the new tab
+    ///   (see `SectionModel.createTab`) so the section isn't left blank.
     @discardableResult
-    func createTab(in section: SectionModel, workingDirectory: String, customCommand: String? = nil) -> TabModel {
-        let tab = section.createTab(workingDirectory: workingDirectory)
+    func createTab(in section: SectionModel, workingDirectory: String, customCommand: String? = nil, focusOnCreate: Bool = true) -> TabModel {
+        let tab = section.createTab(workingDirectory: workingDirectory, focusOnCreate: focusOnCreate)
         wireTab(tab)
         let initialPaneID = tab.paneViewModel.splitTree.focusedPaneID
         if let customCommand {

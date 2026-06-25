@@ -206,10 +206,14 @@ struct SpaceCreate: ParsableCommand {
     @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
     var workspace: String?
 
+    @Flag(name: .long, help: "Create the space in the background without switching to it.")
+    var background: Bool = false
+
     func run() throws {
         var params: [String: IPCValue] = [:]
         if let name { params["name"] = .string(name) }
         if let workspace { params["workspaceId"] = .string(workspace) }
+        if background { params["background"] = .bool(true) }
         let response = try sendRequest(command: "space.create", params: params)
         try handleCreateResponse(response)
     }
@@ -321,10 +325,14 @@ struct TabCreate: ParsableCommand {
     @Option(name: .long, help: "Working directory for the new tab.")
     var directory: String?
 
+    @Flag(name: .long, help: "Create the tab in the background without switching to it.")
+    var background: Bool = false
+
     func run() throws {
         var params: [String: IPCValue] = [:]
         if let space { params["spaceId"] = .string(space) }
         if let directory { params["directory"] = .string(directory) }
+        if background { params["background"] = .bool(true) }
         let response = try sendRequest(command: "tab.create", params: params)
         try handleCreateResponse(response)
     }
@@ -431,10 +439,14 @@ struct PaneSplit: ParsableCommand {
     @Option(name: .long, help: "Split direction: horizontal or vertical.")
     var direction: String?
 
+    @Flag(name: .long, help: "Create the pane without moving keyboard focus to it.")
+    var background: Bool = false
+
     func run() throws {
         var params: [String: IPCValue] = [:]
         if let pane { params["paneId"] = .string(pane) }
         if let direction { params["direction"] = .string(direction) }
+        if background { params["background"] = .bool(true) }
         let response = try sendRequest(command: "pane.split", params: params)
         try handleCreateResponse(response)
     }

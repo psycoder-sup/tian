@@ -343,7 +343,9 @@ final class PaneViewModel {
     // MARK: - Operations
 
     @discardableResult
-    func splitPane(direction: SplitDirection, targetPaneID: UUID? = nil) -> UUID? {
+    func splitPane(direction: SplitDirection, targetPaneID: UUID? = nil, focusOnCreate: Bool = true) -> UUID? {
+        // Remember where keyboard focus was so a background split can leave it untouched.
+        let priorFocusedPaneID = splitTree.focusedPaneID
         // If a specific target pane is requested, temporarily focus it for the split
         if let targetPaneID, targetPaneID != splitTree.focusedPaneID {
             splitTree.focusedPaneID = targetPaneID
@@ -369,7 +371,18 @@ final class PaneViewModel {
             direction: direction,
             newPaneID: newPaneID,
             newWorkingDirectory: workingDirectory
-        ) else { return nil }
+        ) else {
+            // Split failed: undo the temporary target-focus move so keyboard
+            // input isn't stranded on a pane the user didn't focus.
+            splitTree.focusedPaneID = priorFocusedPaneID
+            return nil
+        }
+
+        // Background split: keep keyboard focus on the pane the user was using
+        // rather than the freshly created one.
+        if !focusOnCreate {
+            splitTree.focusedPaneID = priorFocusedPaneID
+        }
 
         surfaces[newPaneID] = newSurface
         surfaceViews[newPaneID] = newSurfaceView
