@@ -161,6 +161,18 @@
                  type="application/octet-stream"
                  sparkle:edSignature="W5wY88rxJ7rqc//sxnCPRmFQo5RqOfAg8f9bT404l6bOWMyPyX9P6/L+B9o/uajzAJ3ksFtzVlAew36F+cuRDw==" />
     </item>
+        <item>
+      <title>v0.12.0</title>
+      <sparkle:releaseNotesLink>https://github.com/psycoder-sup/tian/releases/tag/v0.12.0</sparkle:releaseNotesLink>
+      <pubDate>Thu, 25 Jun 2026 13:31:41 +0000</pubDate>
+      <sparkle:version>315</sparkle:version>
+      <sparkle:shortVersionString>0.12.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/psycoder-sup/tian/releases/download/v0.12.0/tian-0.12.0.dmg"
+                 length="12757312"
+                 type="application/octet-stream"
+                 sparkle:edSignature="+2BJ0IM0ufKFK3feSimUXtXB44lnfJQSIZFP0de2Q1gFV5kjUiJr3FRFa+2Dy3TrLTFTN6CsTQJDAEXipyCcCQ==" />
+    </item>
     <!-- items prepended by scripts/publish.sh -->
   </channel>
 </rss>
