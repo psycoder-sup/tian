@@ -3,11 +3,10 @@
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-06-28",
   "now": [
-    "Restructuring project docs into docs/pm via /project-kit (status + ADRs + dashboard); removed legacy docs/feature|spec|superpowers."
+    "Cutting the v0.14.0 release (scripts/publish.sh minor) so the renamed /tian skill + /tian implement ship to users via auto-install."
   ],
   "next": [
-    "Merge feat/skill-rename-implement: skill renamed /tian-cli → /tian + bundled /tian implement delegation script.",
-    "Cut a release (scripts/publish.sh) so the renamed skill ships and auto-installs to ~/.claude/skills."
+    "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
   ],
   "milestones": [
     { "title": "Agent delegation (/tian implement) shipped in a release", "done": false, "target": "" }
@@ -16,9 +15,15 @@
   "shipped": [
     {
       "date": "2026-06-28",
-      "summary": "Bootstrapped the docs/pm context system with /project-kit (status + ADRs + dashboard + CLAUDE.md rules); removed legacy docs/feature|spec|superpowers.",
-      "commit": "",
-      "link": ""
+      "summary": "Renamed the skill /tian-cli → /tian and added the bundled /tian implement delegation script (with an idle-tracking false-success fix).",
+      "commit": "2e1213c",
+      "link": "https://github.com/psycoder-sup/tian/pull/36"
+    },
+    {
+      "date": "2026-06-28",
+      "summary": "Restructured project docs into the docs/pm context system via /project-kit (status + ADRs + dashboard).",
+      "commit": "12565df",
+      "link": "https://github.com/psycoder-sup/tian/pull/35"
     },
     {
       "date": "2026-06-28",
