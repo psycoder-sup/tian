@@ -211,9 +211,11 @@ final_state=""
 SECONDS=0
 
 # Phase A — wait for the session to start working (busy/active). Bounded by a
-# short start-grace: if it never leaves idle in time, the task may have been
-# trivial, so we proceed to Phase B anyway. An early needs_attention/failed
-# means it already settled, so stop waiting.
+# short start-grace: this is only a head start on detecting `started` — Phase B
+# keeps watching for busy/active too, so a session that boots slowly is still
+# caught. If the grace expires without seeing work, we proceed to Phase B
+# anyway. An early needs_attention/failed means it already settled, so stop
+# waiting.
 log "tracking session (phase A: start, grace ${START_GRACE}s)..."
 while (( SECONDS < START_GRACE && SECONDS < timeout )); do
   state="$(get_state)" || state=""
@@ -225,18 +227,21 @@ while (( SECONDS < START_GRACE && SECONDS < timeout )); do
   sleep 1
 done
 
-# Phase B — wait for the turn to settle. idle/needs_attention are the expected
-# terminal states; failed is a settled failure. An `inactive` only counts as
-# terminal once we've confirmed the session actually started working (else it
-# is just the booting/initial state). The total wait (A+B) is bounded by
-# --timeout.
+# Phase B — wait for the turn to settle. needs_attention/failed are unambiguous
+# settled states. `idle` and `inactive`, however, are also the booting/initial
+# states a freshly-seeded session reports *before* it picks up the delegated
+# prompt — so they only count as terminal once we've confirmed the session
+# actually started working (`started`, set in either phase). Without that guard
+# a stale boot-time `idle` would end the wait immediately and we'd report
+# success before any work happened. The total wait (A+B) is bounded by --timeout.
 log "tracking session (phase B: finish, total ceiling ${timeout}s)..."
 while (( SECONDS < timeout )); do
   state="$(get_state)" || state=""
   if [[ -n "$state" ]]; then last_state="$state"; fi
   case "$state" in
-    idle|needs_attention|failed) final_state="$state"; break ;;
-    inactive) if (( started )); then final_state="$state"; break; fi ;;
+    busy|active)             started=1 ;;
+    needs_attention|failed)  final_state="$state"; break ;;
+    idle|inactive)           if (( started )); then final_state="$state"; break; fi ;;
   esac
   sleep "$POLL_INTERVAL"
 done
