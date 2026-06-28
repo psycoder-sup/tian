@@ -86,6 +86,17 @@ enum WorktreeService {
         let worktreeBase = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
         let worktreePath = (worktreeBase as NSString).appendingPathComponent(branchName)
 
+        // `base` selects the start point for a brand-new branch only. It is
+        // mutually exclusive with `remoteRef` (tracks a remote ref) and
+        // `existingBranch` (checks out a branch's own tip): the arg chain below
+        // would otherwise silently drop `base` and branch from the wrong commit.
+        // The orchestrator rejects the user-reachable existing+base combo with a
+        // friendly error before reaching here; this guards remaining API misuse.
+        precondition(
+            base == nil || (remoteRef == nil && !existingBranch),
+            "createWorktree: base is mutually exclusive with remoteRef/existingBranch"
+        )
+
         var args: [String]
         if let remoteRef {
             args = ["worktree", "add", "--track", "-b", branchName, worktreePath, remoteRef]
