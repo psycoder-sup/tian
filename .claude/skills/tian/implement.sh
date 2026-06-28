@@ -9,13 +9,18 @@
 # `tian` control plane already exposes.
 #
 # Flow: create worktree Space (background by default) -> wait for its
-# auto-seeded Claude session to boot -> paste the plan into that session ->
-# poll the pane's sessionState until the turn settles (idle / needs_attention)
-# -> print machine-readable IDs + a capture tail for the caller to verify.
+# auto-seeded Claude session to boot -> paste the plan (with a mandatory
+# self-verify coda appended) into that session -> poll the pane's sessionState
+# until the turn settles (idle / needs_attention) -> print machine-readable IDs
+# + a capture tail (which carries the session's self-verify report) for the
+# caller.
 #
-# The caller (the `/tian implement` skill) is expected to INDEPENDENTLY verify
-# the delegated work (diff/build/tests) afterwards. This script never removes
-# the worktree.
+# The delegated session self-verifies its OWN work (build + test + plan-coverage
+# check) and prints a structured report as the last thing in its turn. That
+# self-check is the only mandatory verification layer right now; deeper
+# INDEPENDENT verification by the caller (re-reading the diff) or a separate
+# verifier session is a planned future layer. This script never removes the
+# worktree.
 
 set -euo pipefail
 
@@ -146,6 +151,48 @@ if [[ -z "${plan//[[:space:]]/}" ]]; then
   err "no plan provided (plan text is empty)" 2
 fi
 
+# ---- append the mandatory self-verify coda ----------------------------------
+# Every delegated plan gets this appended so the implementer verifies its OWN
+# work before settling: build + test + plan-coverage self-check, then emit a
+# delimited, greppable report as the LAST thing it prints (so it lands in the
+# capture tail the caller reads). The diff already lives in the implementer's
+# context, so self-verify is near-free there; only the compact report crosses
+# back to the caller. This is a self-check, not an independent review — a red
+# build/test must never be reported as `pass`.
+#
+# Read via `read -r -d ''` (not $(cat <<'EOF')): under macOS bash 3.2 a heredoc
+# nested in $( ) whose body contains apostrophes (repo's, caller's) breaks the
+# parser's quote matching. `read` has no command substitution, so it is safe.
+IFS= read -r -d '' SELF_VERIFY_CODA <<'CODA' || true
+---
+
+When you have finished implementing the above, you MUST self-verify before you
+stop — do not report done until you have:
+
+1. Built the project (discover the build command from this repo's conventions:
+   CLAUDE.md / README / Makefile / package.json scripts / etc.).
+2. Run the project's test suite the same way.
+3. Re-read the plan above and confirmed each item is actually implemented.
+
+Then, as the LAST thing you output this turn, print exactly this block (fill it
+in; keep the marker lines verbatim so it can be parsed):
+
+===== TIAN SELF-VERIFY =====
+build: pass | fail | skipped(<why>)
+tests: pass | fail | skipped(<why>) — <one-line summary, e.g. counts/failures>
+plan:
+  - <plan item>: done | partial | skipped
+deviations: <anything done differently from the plan, or "none">
+open_questions: <anything needing the caller's decision, or "none">
+verdict: pass | needs-attention | fail
+===== END SELF-VERIFY =====
+
+If you cannot build or test (command unknown, environment missing), do NOT
+silently skip — set that line to skipped(<reason>) and lower the verdict
+accordingly. Never report `pass` on an unverified or red build/test.
+CODA
+plan="${plan}"$'\n\n'"${SELF_VERIFY_CODA}"
+
 # ---- create the worktree Space ----------------------------------------------
 wt_args=( "$branch" )
 if [[ -n "$base" ]];      then wt_args+=( --base "$base" ); fi
@@ -191,18 +238,41 @@ if (( ! booted )); then
   err "Claude session did not boot within ${boot_timeout}s (space_id=$space_id)" 3
 fi
 
-# ---- delegate the plan -------------------------------------------------------
-log "delegating the plan to the Claude session..."
-if ! printf '%s' "$plan" | "$TIAN" pane send - --pane "$claude_pane"; then
-  err "failed to send the plan to the Claude session"
-fi
-
-# ---- track the session to a settled state -----------------------------------
-# get_state: print this pane's sessionState (empty if unknown/transient error).
+# get_state: print the Claude pane's sessionState (empty on unknown/transient
+# error). Defined before delegation so the submit step can confirm the session
+# actually started working.
 get_state() {
   "$TIAN" pane list --tab "$claude_tab" --format json 2>/dev/null \
     | jq -r --arg id "$claude_pane" '.[] | select(.id == $id) | .sessionState // empty'
 }
+
+# ---- delegate the plan -------------------------------------------------------
+# Paste the plan, then submit with a SEPARATE Return, retried until the session
+# actually starts. A single Return fired immediately after a large multi-line
+# bracketed paste races with the terminal's paste ingestion and gets swallowed —
+# the plan stays staged in the input box, unsent, and the session never starts
+# (observed live: a full-timeout wait with the plan still showing as
+# "[Pasted text]"). Splitting the paste (--no-enter) from follow-up bare Returns
+# defeats the race; a trailing newline can be absorbed as a stray line, so trim.
+log "delegating the plan to the Claude session..."
+plan="${plan%$'\n'}"
+if ! printf '%s' "$plan" | "$TIAN" pane send - --no-enter --pane "$claude_pane"; then
+  err "failed to paste the plan to the Claude session"
+fi
+submitted=0
+for _ in 1 2 3 4 5; do
+  sleep 2
+  # Empty payload => pane send issues a Return only (submit) with no typed text.
+  printf '' | "$TIAN" pane send - --pane "$claude_pane" 2>/dev/null || true
+  case "$(get_state)" in
+    busy|active|needs_attention|failed) submitted=1; break ;;
+  esac
+done
+if (( ! submitted )); then
+  log "warning: plan submitted but session not observed working; tracking anyway"
+fi
+
+# ---- track the session to a settled state -----------------------------------
 
 started=0
 last_state=""
