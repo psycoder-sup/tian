@@ -2,9 +2,7 @@
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-06-28",
-  "now": [
-    "Implemented opt-in `tian worktree remove --delete-branch` (branch feat/worktree-remove-delete-branch); build + WorktreeService/Orchestrator tests green, awaiting commit/merge."
-  ],
+  "now": [],
   "next": [
     "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
   ],
@@ -15,21 +13,21 @@
   "shipped": [
     {
       "date": "2026-06-28",
+      "summary": "Hardened /tian implement: reliable plan submission (fixed the bracketed-paste Return race) + mandatory self-verify coda.",
+      "commit": "dfad7e1",
+      "link": "https://github.com/psycoder-sup/tian/pull/40"
+    },
+    {
+      "date": "2026-06-28",
+      "summary": "Added opt-in `tian worktree remove --delete-branch` (git branch -d, or -D with --force; an unmerged branch is kept).",
+      "commit": "8981891",
+      "link": "https://github.com/psycoder-sup/tian/pull/39"
+    },
+    {
+      "date": "2026-06-28",
       "summary": "Released v0.14.0: ships the renamed /tian skill + /tian implement, auto-installed to ~/.claude/skills on app update.",
       "commit": "a3139ee",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.14.0"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Renamed the skill /tian-cli → /tian and added the bundled /tian implement delegation script.",
-      "commit": "2e1213c",
-      "link": "https://github.com/psycoder-sup/tian/pull/36"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Restructured project docs into the docs/pm context system via /project-kit (status + ADRs + dashboard).",
-      "commit": "12565df",
-      "link": "https://github.com/psycoder-sup/tian/pull/35"
     }
   ]
 }
