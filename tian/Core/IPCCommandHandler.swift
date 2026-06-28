@@ -687,13 +687,20 @@ final class IPCCommandHandler {
         }
 
         let force = optionalBool("force", from: request.params)
+        let deleteBranch = optionalBool("deleteBranch", from: request.params)
 
         do {
-            try await worktreeOrchestrator.removeWorktreeSpace(
+            let result = try await worktreeOrchestrator.removeWorktreeSpace(
                 spaceID: spaceID,
-                force: force
+                force: force,
+                deleteBranch: deleteBranch
             )
-            return .success()
+            var out: [String: IPCValue] = [
+                "branch_deleted": .bool(result.branchDeleted),
+            ]
+            if let branch = result.branchName { out["branch"] = .string(branch) }
+            if let reason = result.branchKeptReason { out["branch_kept_reason"] = .string(reason) }
+            return .success(out)
         } catch WorktreeError.uncommittedChanges(let path) {
             return .failure(code: 3, message: "Worktree at '\(path)' has uncommitted changes. Use --force to remove anyway.")
         } catch WorktreeError.closeInFlight {

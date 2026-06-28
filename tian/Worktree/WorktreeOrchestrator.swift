@@ -185,11 +185,17 @@ final class WorktreeOrchestrator {
     ///   - spaceID: The ID of the Space to remove.
     ///   - force: If true, forces removal even with uncommitted changes.
     ///   - workspaceID: Hint for which workspace to search. If nil, searches all.
+    ///   - deleteBranch: If true, deletes the branch backing the worktree after
+    ///     the worktree is removed (`git branch -d`, or `-D` with `force`). An
+    ///     unmerged branch is kept (the worktree — the primary action — already
+    ///     succeeded); see `WorktreeRemovalResult`.
+    @discardableResult
     func removeWorktreeSpace(
         spaceID: UUID,
         force: Bool = false,
-        workspaceID: UUID? = nil
-    ) async throws {
+        workspaceID: UUID? = nil,
+        deleteBranch: Bool = false
+    ) async throws -> WorktreeRemovalResult {
         // In-flight guard (FR-061): reject concurrent close requests for
         // a *different* Space. Same-Space double-close is prevented at
         // the UI layer by `SidebarSpaceRowMutationGate`.
@@ -213,13 +219,13 @@ final class WorktreeOrchestrator {
         }
 
         // Step 1: Find Space
-        guard let (space, spaceCollection) = findSpace(id: spaceID) else { return }
+        guard let (space, spaceCollection) = findSpace(id: spaceID) else { return .none }
 
         // Step 2: Check worktreePath
         guard let worktreeURL = space.worktreePath else {
             // Not a worktree Space — just close it
             spaceCollection.removeSpace(id: spaceID)
-            return
+            return .none
         }
         let worktreePath = worktreeURL.path
 
@@ -266,11 +272,11 @@ final class WorktreeOrchestrator {
             // exited non-zero (FR-050). The defer nils setupProgress.
             if commandsCancelled {
                 Log.worktree.info("Archive cancelled by user; preserving worktree at \(worktreePath)")
-                return
+                return .none
             }
             if setupProgress?.didFailRun == true {
                 Log.worktree.warning("Archive failed; preserving worktree at \(worktreePath)")
-                return
+                return .none
             }
         }
 
@@ -282,6 +288,18 @@ final class WorktreeOrchestrator {
                 spaceID: spaceID
             )
         }
+
+        // Resolve the branch checked out in the worktree *before* removal —
+        // `git symbolic-ref` reads the worktree directory, gone afterward.
+        // Only when deletion is requested, to avoid an extra git call on the
+        // common (UI) close path. A `nil` result means detached HEAD (or a
+        // transient git error): there is no branch this worktree clearly owns,
+        // so we skip deletion rather than guess from the user-renamable Space
+        // name and risk deleting an unrelated branch (e.g. a Space renamed to
+        // "main").
+        let branchToDelete: String? = deleteBranch
+            ? (try? await WorktreeService.currentBranch(worktreePath: worktreePath))
+            : nil
 
         // Step 5: Remove worktree. If this throws (e.g. uncommitted
         // changes), nil setupProgress synchronously *before* the throw
@@ -309,6 +327,45 @@ final class WorktreeOrchestrator {
             )
         } catch {
             Log.worktree.warning("Failed to prune empty parents: \(error)")
+        }
+
+        // Step 7: Delete the branch (best-effort follow-up). The worktree —
+        // the primary action — already succeeded, so a kept/failed branch is
+        // reported, never thrown. An unmerged branch is kept unless `force`
+        // upgraded the delete to `git branch -D`.
+        guard deleteBranch else { return .none }
+        guard let branch = branchToDelete else {
+            Log.worktree.info("Branch deletion requested but worktree had no branch checked out (detached HEAD); skipping branch delete")
+            // Distinct from `.none` (deletion not requested / removal preempted)
+            // so the CLI can tell the user the branch was skipped, not deleted.
+            return WorktreeRemovalResult(
+                branchName: nil, branchDeleted: false, branchKeptReason: "no branch"
+            )
+        }
+        do {
+            let outcome = try await WorktreeService.deleteBranch(
+                repoRoot: mainRepoRoot, branchName: branch, force: force
+            )
+            switch outcome {
+            case .deleted:
+                return WorktreeRemovalResult(
+                    branchName: branch, branchDeleted: true, branchKeptReason: nil
+                )
+            case .keptUnmerged:
+                Log.worktree.warning("Kept branch '\(branch)' after removing worktree: not fully merged (re-run with --force to delete)")
+                return WorktreeRemovalResult(
+                    branchName: branch, branchDeleted: false, branchKeptReason: "unmerged"
+                )
+            case .notFound:
+                return WorktreeRemovalResult(
+                    branchName: branch, branchDeleted: false, branchKeptReason: "not found"
+                )
+            }
+        } catch {
+            Log.worktree.warning("Failed to delete branch '\(branch)': \(error)")
+            return WorktreeRemovalResult(
+                branchName: branch, branchDeleted: false, branchKeptReason: "error"
+            )
         }
     }
 

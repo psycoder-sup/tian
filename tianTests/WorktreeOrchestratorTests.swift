@@ -595,6 +595,182 @@ struct WorktreeOrchestratorTests {
         #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
     }
 
+    // MARK: - Remove with --delete-branch
+
+    @Test func removeWorktreeSpace_keepsBranchByDefault() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "keep-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Default removal (no deleteBranch) must leave the branch in place.
+        let removal = try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+
+        #expect(removal.branchName == nil)
+        #expect(!removal.branchDeleted)
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "keep-branch"
+        )
+        #expect(exists)
+    }
+
+    @Test func removeWorktreeSpace_deleteBranch_removesMergedBranch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        // A fresh worktree branch has no commits beyond HEAD — it's merged,
+        // so `git branch -d` deletes it without --force.
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "del-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/del-branch")
+        let removal = try await orchestrator.removeWorktreeSpace(
+            spaceID: result.spaceID, deleteBranch: true
+        )
+
+        #expect(removal.branchName == "del-branch")
+        #expect(removal.branchDeleted)
+        #expect(removal.branchKeptReason == nil)
+        #expect(!FileManager.default.fileExists(atPath: worktreePath))
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "del-branch"
+        )
+        #expect(!exists)
+    }
+
+    @Test func removeWorktreeSpace_deleteBranch_keepsUnmergedAndStillRemovesWorktree() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "unmerged-wt",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Commit a change inside the worktree so the branch carries work not
+        // reachable from the main HEAD. The working tree stays clean, so
+        // `git worktree remove` still succeeds without --force.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/unmerged-wt")
+        let change = (worktreePath as NSString).appendingPathComponent("change.txt")
+        try "change".write(toFile: change, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: worktreePath)
+        try runGitSync(["commit", "-m", "unmerged work"], in: worktreePath)
+
+        let removal = try await orchestrator.removeWorktreeSpace(
+            spaceID: result.spaceID, deleteBranch: true
+        )
+
+        // The worktree (primary action) is removed and the Space is gone…
+        #expect(!FileManager.default.fileExists(atPath: worktreePath))
+        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // …but the unmerged branch is kept because --force was not passed.
+        #expect(removal.branchName == "unmerged-wt")
+        #expect(!removal.branchDeleted)
+        #expect(removal.branchKeptReason == "unmerged")
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "unmerged-wt"
+        )
+        #expect(exists)
+    }
+
+    @Test func removeWorktreeSpace_deleteBranch_force_removesUnmergedBranch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "force-del-wt",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Commit unmerged work inside the worktree. The tree stays clean, so
+        // `git worktree remove` needs no force; force only upgrades the branch
+        // delete from `-d` to `-D`.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/force-del-wt")
+        let change = (worktreePath as NSString).appendingPathComponent("change.txt")
+        try "change".write(toFile: change, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: worktreePath)
+        try runGitSync(["commit", "-m", "unmerged work"], in: worktreePath)
+
+        // force: true must thread through to `git branch -D`, deleting the
+        // unmerged branch the safe `-d` would have kept.
+        let removal = try await orchestrator.removeWorktreeSpace(
+            spaceID: result.spaceID, force: true, deleteBranch: true
+        )
+
+        #expect(removal.branchName == "force-del-wt")
+        #expect(removal.branchDeleted)
+        #expect(removal.branchKeptReason == nil)
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "force-del-wt"
+        )
+        #expect(!exists)
+    }
+
+    @Test func removeWorktreeSpace_deleteBranch_detachedHead_skipsBranchDelete() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "detach-wt",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        // Detach HEAD inside the worktree so it no longer owns a branch. The
+        // branch ref itself survives detaching.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/detach-wt")
+        try runGitSync(["checkout", "--detach"], in: worktreePath)
+
+        let removal = try await orchestrator.removeWorktreeSpace(
+            spaceID: result.spaceID, deleteBranch: true
+        )
+
+        // Worktree removed, but no branch is deleted — we never guess a name
+        // from the (renamable) Space, so the branch is left intact.
+        #expect(!FileManager.default.fileExists(atPath: worktreePath))
+        #expect(removal.branchName == nil)
+        #expect(!removal.branchDeleted)
+        #expect(removal.branchKeptReason == "no branch")
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "detach-wt"
+        )
+        #expect(exists)
+    }
+
     // MARK: - Archive close flow (FR-007, FR-010-013, FR-040-041, FR-050-053)
 
     /// Polls `setupProgress` on the main actor at ~5ms intervals while the

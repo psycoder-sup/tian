@@ -282,6 +282,86 @@ struct WorktreeServiceTests {
         #expect(!FileManager.default.fileExists(atPath: path))
     }
 
+    // MARK: - currentBranch / deleteBranch
+
+    @Test func currentBranchReturnsCheckedOutBranch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Relative worktreeDir places the worktree inside `repo`, so the
+        // `cleanup(repo)` defer above removes it too — no extra teardown.
+        let path = try await WorktreeService.createWorktree(
+            repoRoot: repo,
+            worktreeDir: ".worktrees",
+            branchName: "feature/current",
+            existingBranch: false
+        )
+
+        let branch = try await WorktreeService.currentBranch(worktreePath: path)
+        #expect(branch == "feature/current")
+    }
+
+    @Test func deleteBranchRemovesMergedBranch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // A branch at HEAD is fully merged — `git branch -d` accepts it.
+        try runGitSync(["branch", "merged-branch"], in: repo)
+
+        let outcome = try await WorktreeService.deleteBranch(
+            repoRoot: repo, branchName: "merged-branch", force: false
+        )
+        #expect(outcome == .deleted)
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "merged-branch"
+        )
+        #expect(!exists)
+    }
+
+    @Test func deleteBranchRefusesUnmergedWithoutForce() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // Create a branch with a commit not reachable from HEAD, then switch
+        // back so it isn't the checked-out branch.
+        try runGitSync(["checkout", "-b", "unmerged-branch"], in: repo)
+        let extra = (repo as NSString).appendingPathComponent("extra.txt")
+        try "extra".write(toFile: extra, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: repo)
+        try runGitSync(["commit", "-m", "unmerged commit"], in: repo)
+        try runGitSync(["checkout", "-"], in: repo)
+
+        let outcome = try await WorktreeService.deleteBranch(
+            repoRoot: repo, branchName: "unmerged-branch", force: false
+        )
+        #expect(outcome == .keptUnmerged)
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "unmerged-branch"
+        )
+        #expect(exists)
+    }
+
+    @Test func deleteBranchForceRemovesUnmergedBranch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try runGitSync(["checkout", "-b", "force-unmerged"], in: repo)
+        let extra = (repo as NSString).appendingPathComponent("extra.txt")
+        try "extra".write(toFile: extra, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: repo)
+        try runGitSync(["commit", "-m", "unmerged commit"], in: repo)
+        try runGitSync(["checkout", "-"], in: repo)
+
+        let outcome = try await WorktreeService.deleteBranch(
+            repoRoot: repo, branchName: "force-unmerged", force: true
+        )
+        #expect(outcome == .deleted)
+        let exists = try await WorktreeService.branchExists(
+            repoRoot: repo, branchName: "force-unmerged"
+        )
+        #expect(!exists)
+    }
+
     // MARK: - pruneEmptyParents
 
     @Test func pruneEmptyParentsRemovesNestedDirs() throws {

@@ -807,11 +807,36 @@ struct WorktreeRemove: ParsableCommand {
     @Flag(name: .long, help: "Force removal even with uncommitted changes.")
     var force: Bool = false
 
+    @Flag(name: .long, help: "Also delete the branch after removing the worktree (git branch -d; with --force, -D). An unmerged branch is kept.")
+    var deleteBranch: Bool = false
+
     func run() throws {
         var params: [String: IPCValue] = ["spaceId": .string(spaceId)]
         if force { params["force"] = .bool(true) }
+        if deleteBranch { params["deleteBranch"] = .bool(true) }
         let response = try sendRequest(command: "worktree.remove", params: params, timeout: 30)
         try handleVoidResponse(response)
+
+        guard deleteBranch else { return }
+        let branch = response.result?["branch"]?.stringValue
+        let reason = response.result?["branch_kept_reason"]?.stringValue
+        if response.result?["branch_deleted"]?.boolValue == true, let branch {
+            print("Deleted branch \(branch).")
+        } else if let branch {
+            switch reason {
+            case "unmerged":
+                print("Branch \(branch) kept (unmerged — re-run with --force to delete).")
+            case "not found":
+                print("Branch \(branch) not found (nothing to delete).")
+            default:
+                print("Branch \(branch) could not be deleted (see tian logs).")
+            }
+        } else if reason == "no branch" {
+            // Worktree removed, but it had no branch checked out (detached HEAD).
+            print("No branch deleted (worktree had no branch checked out).")
+        }
+        // Otherwise (reason nil, no branch): removal was preempted or not a
+        // worktree space — nothing branch-related to report.
     }
 }
 

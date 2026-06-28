@@ -2,7 +2,9 @@
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-06-28",
-  "now": [],
+  "now": [
+    "Implemented opt-in `tian worktree remove --delete-branch` (branch feat/worktree-remove-delete-branch); build + WorktreeService/Orchestrator tests green, awaiting commit/merge."
+  ],
   "next": [
     "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
   ],

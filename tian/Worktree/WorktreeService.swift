@@ -2,6 +2,17 @@ import Darwin
 import Foundation
 import os
 
+/// Outcome of a `git branch -d`/`-D` attempt during worktree removal.
+enum BranchDeleteOutcome: Equatable {
+    /// The branch was deleted.
+    case deleted
+    /// `git branch -d` refused because the branch isn't fully merged and
+    /// `force` was not requested. The branch is left in place.
+    case keptUnmerged
+    /// The branch did not exist (nothing to delete).
+    case notFound
+}
+
 /// Git and filesystem operations for worktree management.
 /// All methods are static and run off the main actor.
 enum WorktreeService {
@@ -159,6 +170,51 @@ enum WorktreeService {
             workingDirectory: repoRoot
         )
         return result.exitCode == 0
+    }
+
+    /// Returns the branch currently checked out in a worktree, or `nil` when
+    /// HEAD is detached. Must be called *before* the worktree is removed —
+    /// `git symbolic-ref` reads the worktree directory, which is gone after
+    /// `removeWorktree`.
+    static func currentBranch(worktreePath: String) async throws -> String? {
+        let result = try await runGit(
+            ["symbolic-ref", "--quiet", "--short", "HEAD"],
+            workingDirectory: worktreePath
+        )
+        guard result.exitCode == 0, !result.stdout.isEmpty else { return nil }
+        return result.stdout
+    }
+
+    /// Deletes a local branch. Uses `git branch -d` (safe: refuses an
+    /// unmerged branch) or `git branch -D` (force) when `force` is true.
+    /// - Returns: `.deleted` on success, `.keptUnmerged` when git refused
+    ///   because the branch isn't fully merged (only possible with
+    ///   `force == false`), or `.notFound` when the branch doesn't exist.
+    /// - Throws: `WorktreeError.gitError` on any other git failure.
+    static func deleteBranch(
+        repoRoot: String,
+        branchName: String,
+        force: Bool
+    ) async throws -> BranchDeleteOutcome {
+        let flag = force ? "-D" : "-d"
+        let result = try await runGit(
+            ["branch", flag, branchName],
+            workingDirectory: repoRoot
+        )
+        if result.exitCode == 0 {
+            Log.worktree.info("Deleted branch \(branchName) (git branch \(flag))")
+            return .deleted
+        }
+        if result.stderr.contains("not fully merged") {
+            Log.worktree.warning("Branch \(branchName) is not fully merged; keeping it (re-run with --force to delete)")
+            return .keptUnmerged
+        }
+        if result.stderr.contains("not found") {
+            return .notFound
+        }
+        Log.worktree.error("Failed to delete branch \(branchName): \(result.stderr)")
+        throw WorktreeError.gitError(command: "git branch \(flag) \(branchName)",
+                                     stderr: result.stderr)
     }
 
     /// Checks whether a git ref (branch/tag/commit) resolves to a commit.
