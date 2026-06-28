@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "status.schema.json",
+  "title": "status",
+  "description": "Live project state — the 'where are we' source of truth. Agents read this first each session, so its size is a per-session token cost: keep it lean. Budgets: now/next ≤3 items (≤2 lines each), shipped newest ~3; older entries just drop off — git log is the real history (no archive file). Whole file target ≤ ~150 lines. Keep it current: a stale status is worse than none. It is a snapshot, not a journal — git history is the fine-grained log.",
+  "type": "object",
+  "required": ["project", "oneLiner", "lastUpdated", "now", "next", "milestones", "blocked", "shipped"],
+  "additionalProperties": false,
+  "properties": {
+    "project": { "type": "string", "description": "Project name." },
+    "oneLiner": { "type": "string", "description": "One sentence: what the project is." },
+    "lastUpdated": { "type": "string", "description": "ISO date (YYYY-MM-DD) this file was last updated. Bump on every change." },
+    "now": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What is actively in flight right now — ≤3 items, ≤2 lines each. Current focus only, not a backlog or journal: when an item ships, move it to `shipped` and remove it from here (don't let completed work accumulate)."
+    },
+    "next": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What comes immediately after Now — ≤3 near-term items, ≤2 lines each. Not the whole roadmap (that's `milestones`)."
+    },
+    "milestones": {
+      "type": "array",
+      "description": "Bigger checkpoints — one-clause titles. Flip `done` to true when reached; completed milestones drop their rationale (it lives in the ADR / shipped entry).",
+      "items": {
+        "type": "object",
+        "required": ["title", "done"],
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string", "description": "Milestone name, e.g. 'M1 — first usable slice'." },
+          "done": { "type": "boolean", "description": "Whether this milestone has been reached." },
+          "target": { "type": "string", "description": "Optional target date or period, e.g. '2026-07'. Empty string if none." }
+        }
+      }
+    },
+    "blocked": {
+      "type": "array",
+      "description": "Active blockers and open questions only — remove an entry once it's resolved.",
+      "items": {
+        "type": "object",
+        "required": ["item"],
+        "additionalProperties": false,
+        "properties": {
+          "item": { "type": "string", "description": "The blocker or open question." },
+          "since": { "type": "string", "description": "Optional ISO date it became a blocker." }
+        }
+      }
+    },
+    "shipped": {
+      "type": "array",
+      "description": "Completed work, newest first — keep only the newest ~3 (just enough to orient). One line each, no run IDs / file-by-file lists (link the commit/PR/ADR instead). When it grows past ~3, drop the oldest — `git log` (and the commit links) is the full history; there is no archive file.",
+      "items": {
+        "type": "object",
+        "required": ["date", "summary"],
+        "additionalProperties": false,
+        "properties": {
+          "date": { "type": "string", "description": "ISO date (YYYY-MM-DD) shipped." },
+          "summary": { "type": "string", "description": "What shipped, in one line — link detail via `commit`/`link` rather than narrating it here." },
+          "commit": { "type": "string", "description": "Optional commit SHA. Empty string if none." },
+          "link": { "type": "string", "description": "Optional URL (PR, commit, doc). Empty string if none." }
+        }
+      }
+    }
+  }
+}

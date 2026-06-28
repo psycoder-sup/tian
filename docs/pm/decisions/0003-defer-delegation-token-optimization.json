@@ -1,0 +1,13 @@
+{
+  "number": 3,
+  "title": "Accept parent↔child context duplication in /tian implement; defer token optimization",
+  "status": "Accepted",
+  "date": "2026-06-28",
+  "owner": "SangUk Park",
+  "supersedes": null,
+  "supersededBy": null,
+  "context": "`/tian implement` passes the plan as the delegated (child) Claude session's initial prompt. But the parent session already read files to build that plan, and the child re-reads target files for context — so context-gathering is partly duplicated, spending tokens twice. Caveats: delegation buys parallelism/isolation, not token savings; the child reading the specific files it edits is necessary (not waste); and the largest duplication source is the plan-approval-first workflow itself (the parent must explore to plan, then the child reads again).",
+  "decision": "For now, use the delegation flow as implemented (plan passed as the child's initial prompt) and accept the duplication. Defer any token optimization until tokens become abnormally scarce, then do a dedicated optimization pass. Recorded so it can be revisited deliberately rather than rediscovered.",
+  "consequences": "Simpler, working delegation now; some token waste accepted as the price of parallelism/isolation and the plan-approval gate. When revisited, candidate levers: (1) write self-contained, file-specific plans (exact paths/symbols/lines) so the child skips broad re-exploration; (2) prepend a standing 'do not re-explore; read only the files named in the plan' instruction to the delegated prompt; (3) choose delegation by task shape — do small / token-sensitive work inline; (4) let the child do exploration+planning too (parent stays light), trading away the upfront approved plan.",
+  "staysTrue": "Delegation is for parallelism / isolation / context-hygiene, not token economy — if token cost is the priority for a task, do it inline instead of delegating. The child must still read the specific files it edits."
+}

@@ -1,0 +1,13 @@
+{
+  "number": 1,
+  "title": "Initial project direction",
+  "status": "Accepted",
+  "date": "2026-06-28",
+  "owner": "SangUk Park",
+  "supersedes": null,
+  "supersededBy": null,
+  "context": "tian is a native macOS (macOS 26, Apple Silicon) terminal emulator that embeds Ghostty as its terminal core (PTY, VT parsing, Metal rendering, font atlas, scrollback) and wraps it in SwiftUI. The core bet: for AI-assisted development, an agent-native terminal beats a general-purpose one. So tian is built around driving Claude Code sessions, not just running shells. (This ADR records the founding intent retroactively, at the point the docs/pm system was set up.)",
+  "decision": "Build a terminal organized as Workspace → Space → Section (Terminal | Claude) → Tab → Pane, where every Space has a dedicated Claude section whose panes auto-launch `claude`. Ship a sidebar Claude status monitor (needs_attention / active / idle / busy dots driven over IPC) and a single `tian` CLI that lets shells and agents script the UI (workspaces/spaces/tabs/panes, status, notify) and spin up git-worktree-backed Spaces. Distribute as a signed + notarized DMG with Sparkle auto-updates.",
+  "consequences": "Commits to a macOS-only, Apple-Silicon, Ghostty-embedded native app (no cross-platform). The Claude-section + IPC-scriptable model is the core differentiator and the surface most other features build on (worktree Spaces, status monitor, delegation). Defers anything that would pull tian toward being a generic cross-platform terminal.",
+  "staysTrue": "Ghostty owns the terminal core — tian does not reimplement PTY/VT/rendering. The `tian` binary stays a thin control/monitor surface; higher-level orchestration lives outside it (see ADR 0002)."
+}
