@@ -1,5 +1,5 @@
 ---
-name: tian-cli
+name: tian
 description: >-
   Drive the tian terminal emulator from the shell with the `tian` CLI: create/focus/close/list
   workspaces, spaces, tabs, and panes; spin up git-worktree-backed spaces for a branch; split panes
@@ -20,6 +20,35 @@ over IPC. Use it instead of asking the user to click around.
   If `tian ping` doesn't print `pong`, you're not inside tian; stop and tell the user.
 - The binary is `tian` (on `PATH`). Hooks/scripts can also use `$TIAN_CLI_PATH`.
 - `tian open` launches or focuses the app and is the **only** command that works outside a tian session.
+
+## Mode: implement
+
+When invoked as **`/tian implement <task>`**, delegate the task to a **fresh worktree Space's Claude
+session** using the bundled **`implement.sh`** orchestrator (it lives next to this file). Do not
+implement the task yourself — see the anti-freelance rule in Core rules.
+
+1. **Write the plan to a file.** Capture the approved plan/task as text (e.g. a temp file like
+   `.dev/tmp/plan.md`) and choose a branch name for the work.
+2. **Run the bundled script.** It creates the worktree (background by default), waits for the Space's
+   auto-seeded Claude session to boot, pastes the plan into it, and blocks until that session settles:
+   ```bash
+   bash "<skill-dir>/implement.sh" <branch> --prompt-file <plan-file>
+   # …or pipe the plan on stdin instead of --prompt-file:
+   printf '%s' "$plan" | bash "<skill-dir>/implement.sh" <branch>
+   ```
+   `<skill-dir>` is the directory that contains this `SKILL.md`. The script prints `space_id`,
+   `claude_tab_id`, `claude_pane_id`, `terminal_pane_id`, and `final_state`, then a capture tail.
+   It exits 0 once the session reaches `idle` or `needs_attention`, non-zero on any failure/timeout.
+3. **Independently verify the delegated work *before* reporting.** The delegated Claude session did the
+   coding; you must check it — don't trust the capture tail alone. Review the diff, build, and run the
+   tests for the new worktree (these are *shell commands* — running them from the worktree path or its
+   Terminal pane is fine; what's forbidden is *writing the implementation* from this session).
+4. **Never push, open a PR, or merge unless the user explicitly asks.** Report what was done and what
+   you verified; leave publishing to the user.
+
+If `final_state` is `needs_attention`, the session paused for input: read the capture, then either
+answer it (`tian pane send … --pane <claude_pane_id>`) or surface the question to the user. The script
+never removes the worktree, so the result stays available for your verification.
 
 ## The model & "current" context
 
@@ -53,6 +82,12 @@ drive the auto-Claude session, target its pane specifically (see the worktree re
 3. **Use `--format json`** for any `list` you intend to parse; the default is a human table.
 4. **Don't close/force things blindly.** `close` cascades; `--force` overrides running-process safety
    checks. Only `--force` when the user asked or you created it yourself.
+5. **Delegate coding to the new Space's Claude session — don't freelance.** Creating a worktree Space
+   (via `worktree create` or `/tian implement`) means you will delegate the work to **its** auto-seeded
+   Claude session. After creating it, **never `cd` into the worktree directory and implement from the
+   current session** — that leaves the new Space's Claude session idle and unused. The Terminal pane is
+   for **shell commands only** (build, test, git); for any coding task, delegate to the Claude session
+   (prefer `/tian implement`, or `pane send` to its `claude_pane_id`).
 
 ## Command reference
 
@@ -105,6 +140,24 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
     session** pane. Use `claude_pane_id` to drive the Space's Claude session.
 - `tian worktree remove <spaceId> [--force]` — removes the space and its git worktree; `--force` if dirty.
 
+### Delegation orchestrator (bundled script — backs `/tian implement`)
+- `bash "<skill-dir>/implement.sh" <branch> [options]` — end-to-end "delegate a task to a fresh worktree
+  Space's Claude session and wait for it to finish". It is pure orchestration over the existing CLI
+  primitives — `worktree create` → `pane capture` (boot wait) → `pane send` (delegate) → `pane list`
+  (track `sessionState`) — and adds **no** new binary subcommands or IPC. `<skill-dir>` is the directory
+  holding this `SKILL.md`. Reads the plan from `--prompt-file <f>` or **stdin**. Options:
+  - `--base <ref>` / `--existing` / `--path <repo>` / `--workspace <id>` — passed straight through to
+    `worktree create`.
+  - `--foreground` — create in the foreground (default is **background**, no focus steal).
+  - `--prompt-file <f>` — plan source (else read from stdin; a TTY with no file is an error).
+  - `--timeout <sec>` (default `1800`) — overall ceiling for the post-delegation wait.
+  - `--boot-timeout <sec>` (default `60`) — ceiling for the Claude session to boot.
+
+  Prints `space_id` / `claude_tab_id` / `claude_pane_id` / `terminal_pane_id` / `final_state`, then a
+  capture tail. Exit `0` at `idle` or `needs_attention` (the latter also prints a `NOTE:` line); non-zero
+  on any hard failure or timeout. It does **not** remove the worktree — verify the result yourself
+  afterwards (see **Mode: implement**).
+
 ### Status, notifications, misc
 - `tian status set [--label <text>] [--state active|busy|idle|needs_attention|inactive]` — sidebar status
   for the current pane (at least one of `--label`/`--state`). `tian status clear` removes the label.
@@ -122,7 +175,16 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
 tian space list; tian tab list; tian pane list --format json
 ```
 
-**Spin up an isolated worktree space and prompt its Claude session (don't steal focus)**
+**Delegate a task to a fresh worktree Space's Claude session and wait for it (the easy way)**
+```bash
+# /tian implement runs exactly this. Plan from a file (or pipe it on stdin).
+bash "<skill-dir>/implement.sh" feat/login --prompt-file plan.md
+# Blocks until the delegated session settles, then prints space_id / claude_pane_id /
+# terminal_pane_id / final_state + a capture tail. Verify the worktree's diff/build/tests
+# yourself before reporting; the worktree is left in place for that.
+```
+
+**…the same thing by hand (under the hood — this is what `implement.sh` automates)**
 ```bash
 # json gives you the Claude session's pane (claude_pane_id), not just the terminal shell.
 out=$(tian worktree create feat/login --background --format json)
@@ -135,7 +197,8 @@ tian notify 'feat/login: done' --title tian
 ```
 Use `--existing` to attach to a branch that already exists. To run shell commands in the same Space
 instead, target its Terminal pane: `read space tab pane < <(tian worktree create … --format ids)` then
-`tian pane send 'npm install && npm test' --pane "$pane"`.
+`tian pane send 'npm install && npm test' --pane "$pane"`. (Run *commands* there — don't implement the
+task yourself in that shell; that's the delegated Claude session's job. See Core rule 5.)
 
 **Split the current pane and run a dev server beside your work**
 ```bash
@@ -170,9 +233,13 @@ tian notify 'Release build complete' --title tian
   by `pane split` get fresh, correct IDs.
 - **`pane send` ≠ exec.** It pastes keystrokes into whatever is running in that pane; there's no remote
   shell. Use `--no-enter` to stage input you don't want submitted yet.
-- **A worktree's `--format ids` pane is the Terminal shell, not the Claude session.** Every Space has a
-  Claude section (auto-Claude tab) and a Terminal section; `ids`/`id` and the default targeting reach the
-  Terminal shell. To drive the auto-Claude session use `--format json` → `claude_pane_id`.
+- **A worktree's `--format ids` pane is the Terminal shell, not the Claude session — so don't freelance.**
+  Every Space has a Claude section (auto-Claude tab) and a Terminal section; `ids`/`id` and the default
+  targeting reach the Terminal **shell**. That shell is for running *commands* (build/test/git), **not**
+  for you to implement the task in — the work belongs to the Space's auto-seeded Claude session
+  (`--format json` → `claude_pane_id`). After `worktree create` / `/tian implement`, **never `cd` into
+  the worktree and code from this session**; delegate to the new Space's Claude session (prefer
+  `/tian implement`). See **Core rule 5**.
 - **The Claude session boots slowly.** After `worktree create`, its `claude_pane_id` pane needs a few
   seconds before it accepts input — poll `tian pane capture --pane <claude_pane>` until `grep -q 'Claude
   Code'`, then `pane send`. Don't launch your own `claude`; the Space already has one. Use the `SECTION`

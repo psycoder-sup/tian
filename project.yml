@@ -144,9 +144,9 @@ targets:
           mkdir -p "$SKILLS_DEST"
           rsync -a --delete "$SKILLS_SRC/" "$SKILLS_DEST/"
         inputFiles:
-          - $(SRCROOT)/.claude/skills/tian-cli/SKILL.md
+          - $(SRCROOT)/.claude/skills/tian/SKILL.md
         outputFiles:
-          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/skills/tian-cli/SKILL.md
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/skills/tian/SKILL.md
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.app
