@@ -36,6 +36,27 @@ struct WorktreeOrchestratorTests {
         }
     }
 
+    /// Runs git and returns trimmed stdout (for assertions like `rev-parse HEAD`).
+    private func gitOutput(_ args: [String], in dir: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/git")
+        process.arguments = args
+        process.currentDirectoryURL = URL(filePath: dir)
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let msg = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw OrchestratorTestError("git \(args.joined(separator: " ")) failed: \(msg)")
+        }
+        return String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     private func makeTempGitRepo() throws -> String {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("tian-orch-test-\(UUID().uuidString)")
@@ -867,6 +888,81 @@ struct WorktreeOrchestratorTests {
             workspaceID: workspace.id
         )
         #expect(result.existed == false)
+    }
+
+    // MARK: - Base ref
+
+    @Test
+    func createWorktreeSpace_withBaseRef_branchesFromBase() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        // Capture the initial commit (the base), then advance HEAD.
+        let baseSHA = try gitOutput(["rev-parse", "HEAD"], in: repo)
+        let secondFile = (repo as NSString).appendingPathComponent("second.txt")
+        try "second".write(toFile: secondFile, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: repo)
+        try runGitSync(["commit", "-m", "Second commit"], in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "feature/from-base",
+            base: baseSHA,
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+        #expect(!result.existed)
+
+        // The new worktree's HEAD must equal the base commit, not repo HEAD.
+        let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/feature/from-base")
+        let worktreeHEAD = try gitOutput(["rev-parse", "HEAD"], in: worktreePath)
+        #expect(worktreeHEAD == baseSHA)
+    }
+
+    @Test
+    func createWorktreeSpace_baseWithExisting_throws() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+        try runGitSync(["branch", "existing-branch"], in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        await #expect(throws: WorktreeError.self) {
+            try await orchestrator.createWorktreeSpace(
+                branchName: "existing-branch",
+                existingBranch: true,
+                base: "HEAD",
+                repoPath: repo,
+                workspaceID: workspace.id
+            )
+        }
+    }
+
+    @Test
+    func createWorktreeSpace_invalidBaseRef_throws() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        await #expect(throws: WorktreeError.self) {
+            try await orchestrator.createWorktreeSpace(
+                branchName: "feature/bad-base",
+                base: "no-such-ref-xyz",
+                repoPath: repo,
+                workspaceID: workspace.id
+            )
+        }
     }
 
     @Test

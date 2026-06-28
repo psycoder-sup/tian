@@ -72,22 +72,27 @@ enum WorktreeService {
     ///   - existingBranch: If true, checks out an existing branch instead of creating a new one.
     ///   - remoteRef: When provided, uses `git worktree add --track -b <branch> <path> <remoteRef>`
     ///     to create a new local branch tracking the remote ref.
+    ///   - base: When provided (new-branch path), the new branch is created from this
+    ///     ref (`git worktree add <path> -b <branch> <base>`) instead of current HEAD.
     /// - Returns: Absolute path to the created worktree directory.
     static func createWorktree(
         repoRoot: String,
         worktreeDir: String,
         branchName: String,
         existingBranch: Bool,
-        remoteRef: String? = nil
+        remoteRef: String? = nil,
+        base: String? = nil
     ) async throws -> String {
-        let base = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
-        let worktreePath = (base as NSString).appendingPathComponent(branchName)
+        let worktreeBase = resolveWorktreeBase(repoRoot: repoRoot, worktreeDir: worktreeDir)
+        let worktreePath = (worktreeBase as NSString).appendingPathComponent(branchName)
 
         var args: [String]
         if let remoteRef {
             args = ["worktree", "add", "--track", "-b", branchName, worktreePath, remoteRef]
         } else if existingBranch {
             args = ["worktree", "add", worktreePath, branchName]
+        } else if let base {
+            args = ["worktree", "add", worktreePath, "-b", branchName, base]
         } else {
             args = ["worktree", "add", worktreePath, "-b", branchName]
         }
@@ -140,6 +145,16 @@ enum WorktreeService {
     static func branchExists(repoRoot: String, branchName: String) async throws -> Bool {
         let result = try await runGit(
             ["rev-parse", "--verify", "refs/heads/\(branchName)"],
+            workingDirectory: repoRoot
+        )
+        return result.exitCode == 0
+    }
+
+    /// Checks whether a git ref (branch/tag/commit) resolves to a commit.
+    /// - Returns: `true` if `<ref>^{commit}` resolves successfully.
+    static func refExists(repoRoot: String, ref: String) async throws -> Bool {
+        let result = try await runGit(
+            ["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"],
             workingDirectory: repoRoot
         )
         return result.exitCode == 0

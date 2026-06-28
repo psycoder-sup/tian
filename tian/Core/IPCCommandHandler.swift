@@ -633,6 +633,7 @@ final class IPCCommandHandler {
         }
 
         let existing = optionalBool("existing", from: request.params)
+        let base = stringParam("base", from: request.params)
         let background = optionalBool("background", from: request.params)
         let path = stringParam("path", from: request.params)
         // Place the worktree in the explicitly-named workspace, else the calling
@@ -656,6 +657,7 @@ final class IPCCommandHandler {
             let result = try await worktreeOrchestrator.createWorktreeSpace(
                 branchName: branchName,
                 existingBranch: existing,
+                base: base,
                 repoPath: path,
                 workspaceID: resolvedWorkspace?.id,
                 background: background

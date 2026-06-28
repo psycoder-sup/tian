@@ -59,6 +59,8 @@ final class WorktreeOrchestrator {
     /// - Parameters:
     ///   - branchName: Git branch name for the worktree.
     ///   - existingBranch: If true, checks out an existing branch instead of creating a new one.
+    ///   - base: Base git ref (branch/tag/commit) to create the new branch from. If nil,
+    ///     the branch is created from current HEAD. Invalid when combined with `existingBranch`.
     ///   - repoPath: Absolute path to a directory inside the repo. If nil, derived from the active Space.
     ///   - workspaceID: Target workspace ID. If nil, uses the key window's active workspace.
     /// - Returns: Result containing the Space ID and whether an existing Space was focused.
@@ -66,11 +68,19 @@ final class WorktreeOrchestrator {
         branchName: String,
         existingBranch: Bool = false,
         remoteRef: String? = nil,
+        base: String? = nil,
         repoPath: String? = nil,
         workspaceID: UUID? = nil,
         background: Bool = false
     ) async throws -> WorktreeCreateResult {
         commandsCancelled = false
+
+        // `--base` selects the start point for a *new* branch. Checking out an
+        // existing branch uses that branch's own tip, so a base is meaningless
+        // there — reject the combination rather than silently ignoring it.
+        if existingBranch, base != nil {
+            throw WorktreeError.baseWithExisting
+        }
 
         // Step 1: Resolve workspace and git repo root
         let targetWorkspace = resolveWorkspace(workspaceID: workspaceID)
@@ -122,6 +132,15 @@ final class WorktreeOrchestrator {
                 throw WorktreeError.branchAlreadyExists(branchName: branchName)
             }
         }
+        // When a base ref is given (new-branch path), verify it resolves before
+        // `git worktree add` so the failure is a clear message instead of a raw
+        // git error.
+        if let base {
+            let resolves = try await WorktreeService.refExists(repoRoot: repoRoot, ref: base)
+            if !resolves {
+                throw WorktreeError.invalidBaseRef(ref: base)
+            }
+        }
         if WorktreeService.worktreePathExists(
             repoRoot: repoRoot,
             worktreeDir: config.worktreeDir,
@@ -136,7 +155,8 @@ final class WorktreeOrchestrator {
             worktreeDir: config.worktreeDir,
             branchName: branchName,
             existingBranch: existingBranch,
-            remoteRef: remoteRef
+            remoteRef: remoteRef,
+            base: base
         )
 
         // Steps 7-15 are wrapped so the on-disk worktree is cleaned up on failure.

@@ -96,9 +96,10 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
 - `tian pane set-restore-command --command <cmd>` — command to replay when this pane is restored.
 
 ### Worktree-backed spaces (git)
-- `tian worktree create <branch-name> [--existing] [--background] [--path <repo>] [--workspace <id>] [--format id|ids|json]`
+- `tian worktree create <branch-name> [--existing] [--base <ref>] [--background] [--path <repo>] [--workspace <id>] [--format id|ids|json]`
   Creates a **git worktree** + a Space wired to it. `--existing` checks out an existing branch instead of
-  creating one. This is git-mutating and can be slow (long timeout). Output by format:
+  creating one. `--base <ref>` creates the new branch from `<ref>` (branch/tag/commit) instead of current
+  HEAD (invalid with `--existing`). This is git-mutating and can be slow (long timeout). Output by format:
   - `id` → the space UUID. `ids` → `<space> <terminalTab> <terminalPane>` (the Terminal-section shell).
   - `json` → all of the above **plus** `claude_tab_id` / `claude_pane_id` — the auto-seeded **Claude
     session** pane. Use `claude_pane_id` to drive the Space's Claude session.
