@@ -20,6 +20,11 @@ enum WorktreeError: Error, CustomStringConvertible {
     case setupTimeout(command: String)
     /// A worktree close is already in flight; the caller must wait.
     case closeInFlight
+    /// `--base` was combined with `--existing` (contradictory: existing
+    /// checks out a branch's own tip and ignores any base).
+    case baseWithExisting
+    /// The `--base` ref does not resolve to a commit.
+    case invalidBaseRef(ref: String)
 
     var description: String {
         switch self {
@@ -41,6 +46,10 @@ enum WorktreeError: Error, CustomStringConvertible {
             "Setup command timed out: \(command)"
         case .closeInFlight:
             "Another worktree close is in progress. Try again in a moment."
+        case .baseWithExisting:
+            "--base cannot be combined with --existing. --existing checks out a branch's own tip; --base only sets the start point for a new branch."
+        case .invalidBaseRef(let ref):
+            "Base ref '\(ref)' does not resolve to a commit. Provide an existing branch, tag, or commit."
         }
     }
 }

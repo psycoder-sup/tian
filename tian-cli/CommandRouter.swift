@@ -736,6 +736,9 @@ struct WorktreeCreate: ParsableCommand {
     @Flag(name: .long, help: "Check out an existing branch instead of creating a new one.")
     var existing: Bool = false
 
+    @Option(name: .long, help: "Base git ref (branch/tag/commit) to create the branch from. Defaults to current HEAD.")
+    var base: String?
+
     @Flag(name: .long, help: "Create the space in the background without switching to it.")
     var background: Bool = false
 
@@ -751,6 +754,7 @@ struct WorktreeCreate: ParsableCommand {
     func run() throws {
         var params: [String: IPCValue] = ["branchName": .string(branchName)]
         if existing { params["existing"] = .bool(true) }
+        if let base { params["base"] = .string(base) }
         if background { params["background"] = .bool(true) }
         if let path { params["path"] = .string(path) }
         if let workspace { params["workspaceId"] = .string(workspace) }

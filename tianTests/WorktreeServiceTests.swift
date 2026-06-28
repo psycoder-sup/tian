@@ -202,6 +202,64 @@ struct WorktreeServiceTests {
         }
     }
 
+    @Test func createWorktreeWithBaseRef() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // The initial commit becomes the base; capture its SHA.
+        let baseSHA = try await WorktreeServiceTestsRunner.run(
+            ["rev-parse", "HEAD"], in: repo
+        ).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Advance HEAD with a second commit so HEAD != base.
+        let secondFile = (repo as NSString).appendingPathComponent("second.txt")
+        try "second".write(toFile: secondFile, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: repo)
+        try runGitSync(["commit", "-m", "Second commit"], in: repo)
+
+        let headSHA = try await WorktreeServiceTestsRunner.run(
+            ["rev-parse", "HEAD"], in: repo
+        ).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(baseSHA != headSHA)
+
+        // Create a new branch from the older base commit, not current HEAD.
+        let path = try await WorktreeService.createWorktree(
+            repoRoot: repo,
+            worktreeDir: ".worktrees",
+            branchName: "feature/from-base",
+            existingBranch: false,
+            base: baseSHA
+        )
+
+        var isDir: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: path, isDirectory: &isDir))
+        #expect(isDir.boolValue)
+
+        // The worktree's HEAD must equal the base commit, not the repo HEAD.
+        let worktreeHEAD = try await WorktreeServiceTestsRunner.run(
+            ["rev-parse", "HEAD"], in: path
+        ).stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(worktreeHEAD == baseSHA)
+
+        // Cleanup
+        _ = try? await WorktreeServiceTestsRunner.run(
+            ["worktree", "remove", "--force", path], in: repo
+        )
+    }
+
+    @Test func refExistsResolvesAndRejects() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let head = try await WorktreeService.refExists(repoRoot: repo, ref: "HEAD")
+        #expect(head)
+
+        let missing = try await WorktreeService.refExists(
+            repoRoot: repo, ref: "no-such-ref-xyz"
+        )
+        #expect(!missing)
+    }
+
     // MARK: - removeWorktree
 
     @Test func removeWorktree() async throws {
