@@ -138,7 +138,9 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
   - `id` → the space UUID. `ids` → `<space> <terminalTab> <terminalPane>` (the Terminal-section shell).
   - `json` → all of the above **plus** `claude_tab_id` / `claude_pane_id` — the auto-seeded **Claude
     session** pane. Use `claude_pane_id` to drive the Space's Claude session.
-- `tian worktree remove <spaceId> [--force]` — removes the space and its git worktree; `--force` if dirty.
+- `tian worktree remove <spaceId> [--force] [--delete-branch]` — removes the space and its git worktree;
+  `--force` if dirty. `--delete-branch` also deletes the backing branch (`git branch -d`, or `-D` with
+  `--force`); an unmerged branch is kept (the worktree is still removed) and the CLI reports it.
 
 ### Delegation orchestrator (bundled script — backs `/tian implement`)
 - `bash "<skill-dir>/implement.sh" <branch> [options]` — end-to-end "delegate a task to a fresh worktree
