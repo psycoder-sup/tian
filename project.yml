@@ -136,6 +136,17 @@ targets:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/zsh/.zshenv
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/tian-zsh-integration.zsh
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/tian-bash-integration.bash
+      - name: Bundle Claude Skills
+        script: |
+          SKILLS_SRC="$SRCROOT/.claude/skills"
+          SKILLS_DEST="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/skills"
+          rm -rf "$SKILLS_DEST"
+          mkdir -p "$SKILLS_DEST"
+          rsync -a --delete "$SKILLS_SRC/" "$SKILLS_DEST/"
+        inputFiles:
+          - $(SRCROOT)/.claude/skills/tian-cli/SKILL.md
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/skills/tian-cli/SKILL.md
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tian.app

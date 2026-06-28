@@ -47,6 +47,8 @@ class TianAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenter
         }
         self.ipcServer = server
         server.start()
+
+        SkillInstaller.syncIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
