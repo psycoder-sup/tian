@@ -30,7 +30,8 @@ implement the task yourself — see the anti-freelance rule in Core rules.
 1. **Write the plan to a file.** Capture the approved plan/task as text (e.g. a temp file like
    `.dev/tmp/plan.md`) and choose a branch name for the work.
 2. **Run the bundled script.** It creates the worktree (background by default), waits for the Space's
-   auto-seeded Claude session to boot, pastes the plan into it, and blocks until that session settles:
+   auto-seeded Claude session to boot, pastes the plan — plus a **mandatory self-verify coda** the script
+   appends automatically — into it, and blocks until that session settles:
    ```bash
    bash "<skill-dir>/implement.sh" <branch> --prompt-file <plan-file>
    # …or pipe the plan on stdin instead of --prompt-file:
@@ -39,10 +40,13 @@ implement the task yourself — see the anti-freelance rule in Core rules.
    `<skill-dir>` is the directory that contains this `SKILL.md`. The script prints `space_id`,
    `claude_tab_id`, `claude_pane_id`, `terminal_pane_id`, and `final_state`, then a capture tail.
    It exits 0 once the session reaches `idle` or `needs_attention`, non-zero on any failure/timeout.
-3. **Independently verify the delegated work *before* reporting.** The delegated Claude session did the
-   coding; you must check it — don't trust the capture tail alone. Review the diff, build, and run the
-   tests for the new worktree (these are *shell commands* — running them from the worktree path or its
-   Terminal pane is fine; what's forbidden is *writing the implementation* from this session).
+3. **Read the session's self-verify report before reporting.** The appended coda makes the delegated
+   session build, test, and self-check against the plan, then print a `===== TIAN SELF-VERIFY =====` block
+   as the last thing it outputs — so it lands in the capture tail. Read that block: **never report success
+   on a `fail`/`needs-attention` verdict or a red build/test.** (Self-verify is the only *required*
+   verification right now. Deeper *independent* verification — this session re-reading the diff, or a
+   separate verifier session — is a planned later layer; writing the implementation from this session
+   stays forbidden either way.)
 4. **Never push, open a PR, or merge unless the user explicitly asks.** Report what was done and what
    you verified; leave publishing to the user.
 
@@ -156,9 +160,11 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
   - `--boot-timeout <sec>` (default `60`) — ceiling for the Claude session to boot.
 
   Prints `space_id` / `claude_tab_id` / `claude_pane_id` / `terminal_pane_id` / `final_state`, then a
-  capture tail. Exit `0` at `idle` or `needs_attention` (the latter also prints a `NOTE:` line); non-zero
-  on any hard failure or timeout. It does **not** remove the worktree — verify the result yourself
-  afterwards (see **Mode: implement**).
+  capture tail. The script appends a **mandatory self-verify coda** to the delegated plan, so the session
+  builds/tests/plan-checks its own work and prints a `TIAN SELF-VERIFY` block into that capture tail.
+  Exit `0` at `idle` or `needs_attention` (the latter also prints a `NOTE:` line); non-zero on any hard
+  failure or timeout. It does **not** remove the worktree — read the self-verify block before reporting
+  (see **Mode: implement**).
 
 ### Status, notifications, misc
 - `tian status set [--label <text>] [--state active|busy|idle|needs_attention|inactive]` — sidebar status
