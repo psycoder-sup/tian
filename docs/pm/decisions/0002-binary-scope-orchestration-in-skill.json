@@ -1,0 +1,13 @@
+{
+  "number": 2,
+  "title": "tian binary = control/monitor primitives; orchestration lives in the skill",
+  "status": "Accepted",
+  "date": "2026-06-28",
+  "owner": "SangUk Park",
+  "supersedes": null,
+  "supersededBy": null,
+  "context": "Sessions using the tian skill sometimes created a worktree Space but then coded from the current session (cd into the worktree dir), leaving the new Space's auto-seeded Claude session unused. We wanted a reliable way to delegate the planned work to that session. The open question was where the delegation orchestration (create worktree → wait for the Claude session to boot → send the plan → track sessionState to idle) should live: a new `tian` binary subcommand (+ IPC), or the skill.",
+  "decision": "Keep the `tian` binary scoped to controlling and monitoring tian — primitives only (worktree/space/tab/pane, `pane list` sessionState, send/capture, status, notify). Compose those primitives into higher-level workflows in the SKILL, as a bundled script (`.claude/skills/tian/implement.sh`, backing `/tian implement`). No new binary subcommand and no new IPC for orchestration. Also rename the skill `/tian-cli` → `/tian`.",
+  "consequences": "Delegation becomes one deterministic command (`/tian implement`) that is hard to sidestep into freelancing, and it ships/versions with the skill (no Swift/IPC churn). The binary stays small and stable. Trade-off: the workflow is not in `tian help` and is not Swift-unit-tested (verified via shellcheck / bash -n + an end-to-end smoke). Skills auto-install to ~/.claude/skills on app update, so the script propagates with releases. The stale global ~/.claude/skills/tian-cli is removed manually (no installer prune).",
+  "staysTrue": "Worktree Spaces are for delegating to their own Claude session — never cd into a worktree and implement from the current session (the anti-freelance rule, now in the skill). Extend the binary only for a genuinely new primitive, not a composition of existing ones."
+}

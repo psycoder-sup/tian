@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project status</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --line: #2a2f3a;
+    --fg: #e6e9ef; --muted: #9aa3b2; --faint: #6b7480;
+    --accent: #6ea8fe; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+    --pill: #283042;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 22px 80px; }
+
+  header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header.top h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+  .oneliner { color: var(--muted); margin: 6px 0 0; font-size: 15px; }
+  .meta-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap;
+    color: var(--faint); font-size: 12.5px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .live.on .dot { background: var(--green); box-shadow: 0 0 0 3px rgba(74,222,128,.15); }
+  .live.poll .dot { background: var(--amber); }
+
+  nav.tabs { display: flex; gap: 4px; margin: 22px 0 18px; border-bottom: 1px solid var(--line); }
+  nav.tabs button {
+    background: none; border: 0; color: var(--muted); padding: 9px 14px; font-size: 14px;
+    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  nav.tabs button:hover { color: var(--fg); }
+  nav.tabs button.active { color: var(--fg); border-bottom-color: var(--accent); }
+
+  .panel { display: none; }
+  .panel.active { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
+
+  section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 16px; }
+  section.card > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--faint); margin: 0 0 12px; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li { padding: 7px 0; border-bottom: 1px solid var(--line); }
+  ul.list li:last-child { border-bottom: 0; }
+  .empty { color: var(--faint); font-style: italic; }
+
+  /* milestones */
+  .progress { height: 8px; background: var(--panel-2); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .progress > span { display: block; height: 100%; background: var(--green); transition: width .4s ease; }
+  .ms { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .ms .box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--faint);
+    flex: 0 0 auto; display: grid; place-items: center; font-size: 11px; }
+  .ms.done .box { background: var(--green); border-color: var(--green); color: #06210f; }
+  .ms.done .title { color: var(--muted); text-decoration: line-through; }
+  .ms .target { margin-left: auto; color: var(--faint); font-size: 12px; }
+
+  /* shipped timeline */
+  .ship { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .ship:last-child { border-bottom: 0; }
+  .ship .date { color: var(--faint); font-variant-numeric: tabular-nums; flex: 0 0 92px; font-size: 13px; }
+  .ship .sum { flex: 1; }
+  .ship code { background: var(--pill); padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--muted); }
+
+  .since { color: var(--faint); font-size: 12.5px; margin-left: 8px; }
+
+  /* decisions */
+  table.adr { width: 100%; border-collapse: collapse; }
+  table.adr th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  table.adr td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.adr tr.head-row { cursor: pointer; }
+  table.adr tr.head-row:hover td { background: var(--panel-2); }
+  .num { font-variant-numeric: tabular-nums; color: var(--muted); width: 44px; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--pill); color: var(--muted); white-space: nowrap; }
+  .badge.accepted { background: rgba(74,222,128,.15); color: var(--green); }
+  .badge.proposed { background: rgba(251,191,36,.15); color: var(--amber); }
+  .badge.superseded { background: rgba(248,113,113,.13); color: var(--red); }
+  .supers { font-size: 11.5px; color: var(--faint); margin-top: 4px; }
+  .detail td { background: var(--panel-2); }
+  .detail h4 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); }
+  .detail h4:first-child { margin-top: 0; }
+  .prose { white-space: pre-wrap; color: var(--fg); }
+  .chev { color: var(--faint); transition: transform .15s ease; display: inline-block; }
+  tr.open .chev { transform: rotate(90deg); }
+
+  .kv { margin: 0 0 14px; }
+  .kv:last-child { margin-bottom: 0; }
+  .kv h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0 0 5px; }
+  .kv .prose { color: var(--fg); }
+  ol.steps { margin: 0; padding-left: 20px; }
+  ol.steps li { padding: 3px 0; }
+  .fr { border: 1px solid var(--line); border-radius: 9px; padding: 11px 13px; margin-bottom: 10px; }
+  .fr.core { border-color: var(--accent); }
+  .fr h4 { margin: 0 0 6px; font-size: 14px; }
+  .fr .tag { font-size: 10.5px; color: var(--accent); border: 1px solid var(--accent); border-radius: 12px; padding: 1px 7px; margin-left: 8px; }
+
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    padding: 7px 14px; border-radius: 20px; font-size: 12.5px; opacity: 0; transition: all .25s ease; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .errbar { background: rgba(248,113,113,.12); border: 1px solid var(--red); color: #fca5a5;
+    padding: 10px 14px; border-radius: 9px; margin-bottom: 16px; font-size: 13.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 id="proj">Project status</h1>
+  </header>
+  <p class="oneliner" id="oneliner"></p>
+  <div class="meta-row">
+    <span id="updated"></span>
+    <span class="live" id="live"><span class="dot"></span><span id="live-label">connecting…</span></span>
+  </div>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div id="err"></div>
+  <div id="panels"></div>
+</div>
+<div class="toast" id="toast">updated</div>
+
+<script>
+"use strict";
+
+const state = { status: null, summary: null, prd: null, decisions: [], openAdr: null, tab: "status" };
+
+const $ = (id) => document.getElementById(id);
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null) continue;
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null) continue;
+    n.appendChild(typeof kid === "string" ? document.createTextNode(kid) : kid);
+  }
+  return n;
+}
+const arr = (x) => (Array.isArray(x) ? x : []);
+
+async function getJSON(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(url + " -> " + r.status);
+  return r.json();
+}
+
+async function load() {
+  let manifest;
+  try {
+    manifest = await getJSON("/api/index");
+  } catch (e) {
+    showError("Can't reach the server. Run: python3 docs/pm/dashboard/serve.py");
+    return;
+  }
+  showError("");
+  const docs = manifest.docs || {};
+  try {
+    state.status = docs.status ? await getJSON("/status.json") : null;
+    state.summary = docs.summary ? await getJSON("/project-summary.json") : null;
+    state.prd = docs.prd ? await getJSON("/prd.json") : null;
+    state.decisions = [];
+    for (const d of arr(manifest.decisions)) {
+      try { state.decisions.push(await getJSON("/" + d.file)); } catch (_) { /* skip bad file */ }
+    }
+    state.decisions.sort((a, b) => (a.number || 0) - (b.number || 0));
+  } catch (e) {
+    showError("Failed to load a JSON file: " + e.message);
+  }
+  render();
+}
+
+function showError(msg) {
+  $("err").replaceChildren(msg ? el("div", { class: "errbar" }, msg) : "");
+}
+
+/* ---------- rendering ---------- */
+
+function render() {
+  const s = state.status || {};
+  $("proj").textContent = s.project || "Project status";
+  $("oneliner").textContent = s.oneLiner || "";
+  $("updated").textContent = s.lastUpdated ? "Last updated " + s.lastUpdated : "";
+  document.title = (s.project || "Project") + " — status";
+
+  renderTabs();
+  const panels = $("panels");
+  panels.replaceChildren();
+  panels.appendChild(panel("status", renderStatus()));
+  panels.appendChild(panel("decisions", renderDecisions()));
+  if (state.summary) panels.appendChild(panel("summary", renderSummary()));
+  if (state.prd) panels.appendChild(panel("prd", renderPRD()));
+  showTab(state.tab);
+}
+
+function renderTabs() {
+  const tabs = [["status", "Status"], ["decisions", "Decisions (" + state.decisions.length + ")"]];
+  if (state.summary) tabs.push(["summary", "Summary"]);
+  if (state.prd) tabs.push(["prd", "PRD"]);
+  const nav = $("tabs");
+  nav.replaceChildren();
+  for (const [id, label] of tabs) {
+    nav.appendChild(el("button", { "data-tab": id, onclick: () => showTab(id) }, label));
+  }
+}
+
+function panel(id, ...kids) {
+  return el("div", { class: "panel", "data-panel": id }, ...kids);
+}
+
+function showTab(id) {
+  const exists = document.querySelector('[data-panel="' + id + '"]');
+  if (!exists) id = "status";
+  state.tab = id;
+  document.querySelectorAll("[data-panel]").forEach((p) => p.classList.toggle("active", p.dataset.panel === id));
+  document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
+}
+
+function listCard(title, items, emptyMsg) {
+  const body = items.length
+    ? el("ul", { class: "list" }, items.map((t) => el("li", {}, String(t))))
+    : el("p", { class: "empty" }, emptyMsg);
+  return el("section", { class: "card" }, el("h2", {}, title), body);
+}
+
+function renderStatus() {
+  const s = state.status;
+  if (!s) return el("section", { class: "card" }, el("p", { class: "empty" }, "No status.json found."));
+  const out = [];
+
+  out.push(el("div", { class: "cols" },
+    listCard("Now", arr(s.now), "Nothing in flight."),
+    listCard("Next", arr(s.next), "Nothing queued.")
+  ));
+
+  // milestones
+  const ms = arr(s.milestones);
+  const done = ms.filter((m) => m.done).length;
+  const pct = ms.length ? Math.round((done / ms.length) * 100) : 0;
+  const msBody = [];
+  if (ms.length) {
+    msBody.push(el("div", { class: "progress" }, el("span", { style: "width:" + pct + "%" })));
+    for (const m of ms) {
+      msBody.push(el("div", { class: "ms" + (m.done ? " done" : "") },
+        el("span", { class: "box" }, m.done ? "✓" : ""),
+        el("span", { class: "title" }, m.title || ""),
+        m.target ? el("span", { class: "target" }, m.target) : null
+      ));
+    }
+  } else {
+    msBody.push(el("p", { class: "empty" }, "No milestones yet."));
+  }
+  out.push(el("section", { class: "card" },
+    el("h2", {}, "Milestones" + (ms.length ? " — " + done + "/" + ms.length : "")), ...msBody));
+
+  // blocked
+  const blocked = arr(s.blocked);
+  const blkBody = blocked.length
+    ? el("ul", { class: "list" }, blocked.map((b) =>
+        el("li", {}, b.item || "", b.since ? el("span", { class: "since" }, "since " + b.since) : null)))
+    : el("p", { class: "empty" }, "Nothing blocked.");
+  out.push(el("section", { class: "card" }, el("h2", {}, "Blocked / open"), blkBody));
+
+  // shipped
+  const shipped = arr(s.shipped).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const shBody = shipped.length
+    ? shipped.map((x) => el("div", { class: "ship" },
+        el("span", { class: "date" }, x.date || ""),
+        el("span", { class: "sum" }, x.summary || "",
+          x.commit ? el("span", {}, " ", x.link ? el("a", { href: x.link, target: "_blank" }, el("code", {}, x.commit)) : el("code", {}, x.commit)) : null)))
+    : [el("p", { class: "empty" }, "Nothing shipped yet.")];
+  out.push(el("section", { class: "card" }, el("h2", {}, "Shipped"), ...shBody));
+
+  return out;
+}
+
+function statusBadge(st) {
+  const k = String(st || "").toLowerCase();
+  return el("span", { class: "badge " + k }, st || "—");
+}
+
+function renderDecisions() {
+  if (!state.decisions.length)
+    return el("section", { class: "card" }, el("p", { class: "empty" }, "No decision records yet."));
+
+  const rows = [];
+  for (const d of state.decisions) {
+    const isOpen = state.openAdr === d.number;
+    const supers = [];
+    if (d.supersededBy != null) supers.push("superseded by #" + d.supersededBy);
+    if (d.supersedes != null) supers.push("supersedes #" + d.supersedes);
+
+    rows.push(el("tr", { class: "head-row" + (isOpen ? " open" : ""), onclick: () => {
+      state.openAdr = isOpen ? null : d.number; render();
+    } },
+      el("td", { class: "num" }, el("span", { class: "chev" }, "▸"), " ", d.number != null ? String(d.number).padStart(4, "0") : "—"),
+      el("td", {}, el("div", {}, d.title || ""), supers.length ? el("div", { class: "supers" }, supers.join(" · ")) : null),
+      el("td", {}, statusBadge(d.status)),
+      el("td", {}, d.date || ""),
+      el("td", {}, d.owner || "")
+    ));
+
+    if (isOpen) {
+      rows.push(el("tr", { class: "detail" },
+        el("td", { colspan: "5" },
+          field("Context", d.context),
+          field("Decision", d.decision),
+          field("Consequences", d.consequences),
+          d.staysTrue ? field("What stays true", d.staysTrue) : null
+        )));
+    }
+  }
+
+  const table = el("table", { class: "adr" },
+    el("thead", {}, el("tr", {},
+      el("th", {}, "#"), el("th", {}, "Decision"), el("th", {}, "Status"), el("th", {}, "Date"), el("th", {}, "Owner"))),
+    el("tbody", {}, rows));
+  return el("section", { class: "card" }, el("h2", {}, "Decision records"), table);
+}
+
+function field(label, value) {
+  return el("div", {}, el("h4", {}, label), el("div", { class: "prose" }, value || "—"));
+}
+
+function kv(label, value) {
+  return el("div", { class: "kv" }, el("h3", {}, label), el("div", { class: "prose" }, value || "—"));
+}
+
+function renderSummary() {
+  const s = state.summary;
+  const out = [el("section", { class: "card" },
+    s.tagline ? kv("Tagline", s.tagline) : null,
+    kv("One-liner", s.oneLiner),
+    kv("The core bet", s.coreBet),
+    s.coreInsight ? kv("Core insight", s.coreInsight) : null,
+    kv("Who it's for", s.audience))];
+
+  const loop = arr(s.coreLoop);
+  out.push(el("section", { class: "card" }, el("h2", {}, "Core loop"),
+    loop.length ? el("ol", { class: "steps" }, loop.map((x) => el("li", {}, x))) : el("p", { class: "empty" }, "—")));
+
+  out.push(el("section", { class: "card" },
+    kv("Build sequencing", s.buildSequencing),
+    kv("Validation — near-term", (s.validation || {}).nearTerm),
+    kv("Validation — ultimate", (s.validation || {}).ultimate)));
+
+  const oq = arr(s.openQuestions);
+  out.push(listCard("Open questions", oq, "None."));
+  return out;
+}
+
+function renderPRD() {
+  const p = state.prd;
+  const out = [];
+  out.push(el("section", { class: "card" },
+    el("h2", {}, "PRD — " + (p.slice || "") + (p.status ? "  ·  " + p.status : "")),
+    kv("Context", p.context),
+    kv("v1 goal", (p.goals || {}).v1Goal),
+    kv("Target user", p.targetUser),
+    kv("Success metrics", p.successMetrics)));
+
+  out.push(listCard("Non-goals", arr((p.goals || {}).nonGoals), "None stated."));
+
+  const flow = arr(p.coreFlow);
+  out.push(el("section", { class: "card" }, el("h2", {}, "Core flow"),
+    flow.length ? el("ol", { class: "steps" }, flow.map((x) => el("li", {}, x))) : el("p", { class: "empty" }, "—")));
+
+  const frs = arr(p.functionalRequirements);
+  const frCard = el("section", { class: "card" }, el("h2", {}, "Functional requirements"));
+  if (frs.length) {
+    for (const f of frs) {
+      frCard.appendChild(el("div", { class: "fr" + (f.core ? " core" : "") },
+        el("h4", {}, (f.id ? f.id + " — " : "") + (f.name || ""), f.core ? el("span", { class: "tag" }, "core") : null),
+        el("ul", { class: "list" }, arr(f.items).map((i) => el("li", {}, i)))));
+    }
+  } else {
+    frCard.appendChild(el("p", { class: "empty" }, "None yet."));
+  }
+  out.push(frCard);
+
+  out.push(listCard("Non-functional", arr(p.nonFunctional), "None stated."));
+
+  const ms = arr(p.milestones);
+  out.push(el("section", { class: "card" }, el("h2", {}, "Build milestones"),
+    ms.length
+      ? el("ul", { class: "list" }, ms.map((m) => el("li", {}, (m.id ? m.id + " — " : "") + (m.slice || "") + (m.delivers ? ": " + m.delivers : ""))))
+      : el("p", { class: "empty" }, "None.")));
+
+  out.push(listCard("Open questions & risks", arr(p.openQuestions), "None."));
+  return out;
+}
+
+/* ---------- live updates ---------- */
+
+let pollTimer = null;
+function setLive(mode) {
+  const e = $("live");
+  e.classList.toggle("on", mode === "live");
+  e.classList.toggle("poll", mode === "poll");
+  $("live-label").textContent = mode === "live" ? "live" : mode === "poll" ? "polling" : "offline";
+}
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 1400);
+}
+function startPolling() {
+  if (pollTimer) return;
+  setLive("poll");
+  pollTimer = setInterval(load, 3000);
+}
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function connect() {
+  let es;
+  try { es = new EventSource("/events"); } catch (_) { startPolling(); return; }
+  es.onopen = () => { stopPolling(); setLive("live"); };
+  es.onmessage = (ev) => { if (ev.data === "reload") { load().then(() => toast("updated")); } };
+  es.onerror = () => { setLive("offline"); startPolling(); };
+}
+
+load().then(connect);
+</script>
+</body>
+</html>

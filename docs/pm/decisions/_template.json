@@ -1,0 +1,13 @@
+{
+  "number": 0,
+  "title": "[Title: the decision in one line]",
+  "status": "Proposed",
+  "date": "[YYYY-MM-DD]",
+  "owner": "[name]",
+  "supersedes": null,
+  "supersededBy": null,
+  "context": "[The situation and the forces in tension. What prompted this decision? Keep it specific and falsifiable — what's actually true, not vibes. If this reverses or revises an earlier call, name it.]",
+  "decision": "[The choice, stated plainly. What we will do — and, where it sharpens the decision, what we will NOT do.]",
+  "consequences": "[What follows: the trade-offs accepted, what this enables, what it forecloses. If it supersedes an earlier ADR, set the `supersedes` field to that number and set `supersededBy` on the old record.]",
+  "staysTrue": "[The things this decision does NOT change — guardrails and prior commitments that still hold. Prevents over-reading the change. Optional but useful.]"
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision.schema.json",
+  "title": "decision",
+  "description": "One decision record (ADR). One file per direction change, named decisions/NNNN-slug.json, numbered and fixed once accepted. Add a record only when direction changes — a choice a future session shouldn't silently reverse. Routine progress needs no ADR.",
+  "type": "object",
+  "required": ["number", "title", "status", "date", "owner", "context", "decision", "consequences"],
+  "additionalProperties": false,
+  "properties": {
+    "number": { "type": "integer", "description": "ADR number; matches the NNNN prefix in the filename." },
+    "title": { "type": "string", "description": "The decision in one line." },
+    "status": { "type": "string", "enum": ["Proposed", "Accepted", "Superseded"], "description": "Lifecycle status." },
+    "date": { "type": "string", "description": "ISO date (YYYY-MM-DD) of the decision." },
+    "owner": { "type": "string", "description": "Who made / owns the decision." },
+    "supersedes": { "type": ["integer", "null"], "description": "ADR number this decision supersedes, or null. When set, also set `supersededBy` on that older record and flip its status to 'Superseded'." },
+    "supersededBy": { "type": ["integer", "null"], "description": "ADR number that superseded this one, or null. Set on the OLD record when a newer one replaces it." },
+    "context": { "type": "string", "description": "The situation and the forces in tension. What prompted this decision. Keep it specific and falsifiable. If it reverses an earlier call, name it." },
+    "decision": { "type": "string", "description": "The choice, stated plainly. What we will do — and, where it sharpens the decision, what we will NOT do." },
+    "consequences": { "type": "string", "description": "What follows: trade-offs accepted, what this enables, what it forecloses." },
+    "staysTrue": { "type": "string", "description": "The things this decision does NOT change — guardrails and prior commitments that still hold. Optional but useful." }
+  }
+}

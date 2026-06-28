@@ -1,0 +1,30 @@
+{
+  "project": "tian",
+  "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
+  "lastUpdated": "2026-06-28",
+  "now": [
+    "Restructuring project docs into docs/pm via /project-kit (status + ADRs + dashboard); removed legacy docs/feature|spec|superpowers."
+  ],
+  "next": [
+    "Merge feat/skill-rename-implement: skill renamed /tian-cli → /tian + bundled /tian implement delegation script.",
+    "Cut a release (scripts/publish.sh) so the renamed skill ships and auto-installs to ~/.claude/skills."
+  ],
+  "milestones": [
+    { "title": "Agent delegation (/tian implement) shipped in a release", "done": false, "target": "" }
+  ],
+  "blocked": [],
+  "shipped": [
+    {
+      "date": "2026-06-28",
+      "summary": "Bootstrapped the docs/pm context system with /project-kit (status + ADRs + dashboard + CLAUDE.md rules); removed legacy docs/feature|spec|superpowers.",
+      "commit": "",
+      "link": ""
+    },
+    {
+      "date": "2026-06-28",
+      "summary": "Released v0.13.0: `tian worktree create --base <ref>` and auto-install of bundled skills to ~/.claude/skills on app update.",
+      "commit": "e5f106f",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.13.0"
+    }
+  ]
+}
