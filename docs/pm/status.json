@@ -2,20 +2,24 @@
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-06-28",
-  "now": [
-    "Cutting the v0.14.0 release (scripts/publish.sh minor) so the renamed /tian skill + /tian implement ship to users via auto-install."
-  ],
+  "now": [],
   "next": [
     "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
   ],
   "milestones": [
-    { "title": "Agent delegation (/tian implement) shipped in a release", "done": false, "target": "" }
+    { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" }
   ],
   "blocked": [],
   "shipped": [
     {
       "date": "2026-06-28",
-      "summary": "Renamed the skill /tian-cli → /tian and added the bundled /tian implement delegation script (with an idle-tracking false-success fix).",
+      "summary": "Released v0.14.0: ships the renamed /tian skill + /tian implement, auto-installed to ~/.claude/skills on app update.",
+      "commit": "a3139ee",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.14.0"
+    },
+    {
+      "date": "2026-06-28",
+      "summary": "Renamed the skill /tian-cli → /tian and added the bundled /tian implement delegation script.",
       "commit": "2e1213c",
       "link": "https://github.com/psycoder-sup/tian/pull/36"
     },
@@ -24,12 +28,6 @@
       "summary": "Restructured project docs into the docs/pm context system via /project-kit (status + ADRs + dashboard).",
       "commit": "12565df",
       "link": "https://github.com/psycoder-sup/tian/pull/35"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Released v0.13.0: `tian worktree create --base <ref>` and auto-install of bundled skills to ~/.claude/skills on app update.",
-      "commit": "e5f106f",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.13.0"
     }
   ]
 }
