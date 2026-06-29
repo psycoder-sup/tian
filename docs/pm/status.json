@@ -13,6 +13,12 @@
   "shipped": [
     {
       "date": "2026-06-29",
+      "summary": "Sidebar shows the orchestrator → implementer hierarchy: worktree Spaces nest under the Space that spawned them (two-level cap, same-workspace), tied by a continuous connector rail with a house (⌂) marker.",
+      "commit": "271e3c8",
+      "link": "https://github.com/psycoder-sup/tian/pull/43"
+    },
+    {
+      "date": "2026-06-29",
       "summary": "Released v0.15.0 (notarized): ships `tian worktree remove --delete-branch` and the /tian implement plan-submission fix + self-verify coda.",
       "commit": "f1814ac",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.15.0"
@@ -22,12 +28,6 @@
       "summary": "Hardened /tian implement: reliable plan submission (fixed the bracketed-paste Return race) + mandatory self-verify coda.",
       "commit": "dfad7e1",
       "link": "https://github.com/psycoder-sup/tian/pull/40"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Added opt-in `tian worktree remove --delete-branch` (git branch -d, or -D with --force; an unmerged branch is kept).",
-      "commit": "8981891",
-      "link": "https://github.com/psycoder-sup/tian/pull/39"
     }
   ]
 }
