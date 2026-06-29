@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-06-28",
+  "lastUpdated": "2026-06-29",
   "now": [],
   "next": [
     "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
@@ -11,6 +11,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-06-29",
+      "summary": "Released v0.15.0 (notarized): ships `tian worktree remove --delete-branch` and the /tian implement plan-submission fix + self-verify coda.",
+      "commit": "f1814ac",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.15.0"
+    },
     {
       "date": "2026-06-28",
       "summary": "Hardened /tian implement: reliable plan submission (fixed the bracketed-paste Return race) + mandatory self-verify coda.",
@@ -22,12 +28,6 @@
       "summary": "Added opt-in `tian worktree remove --delete-branch` (git branch -d, or -D with --force; an unmerged branch is kept).",
       "commit": "8981891",
       "link": "https://github.com/psycoder-sup/tian/pull/39"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Released v0.14.0: ships the renamed /tian skill + /tian implement, auto-installed to ~/.claude/skills on app update.",
-      "commit": "a3139ee",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.14.0"
     }
   ]
 }
