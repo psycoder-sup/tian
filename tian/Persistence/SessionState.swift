@@ -79,6 +79,10 @@ struct SpaceState: Codable, Sendable, Equatable {
     let dockPosition: DockPosition
     let splitRatio: Double
     let focusedSectionKind: SectionKind
+    /// Orchestrator → implementer link (sidebar nesting). Optional + defaulted
+    /// so older session JSON (missing the key) decodes as nil — no migration
+    /// or version bump needed. See `SpaceModel.parentSpaceID`.
+    let parentSpaceID: UUID?
 
     init(
         id: UUID,
@@ -90,7 +94,8 @@ struct SpaceState: Codable, Sendable, Equatable {
         terminalVisible: Bool,
         dockPosition: DockPosition,
         splitRatio: Double,
-        focusedSectionKind: SectionKind
+        focusedSectionKind: SectionKind,
+        parentSpaceID: UUID? = nil
     ) {
         self.id = id
         self.name = name
@@ -102,6 +107,7 @@ struct SpaceState: Codable, Sendable, Equatable {
         self.dockPosition = dockPosition
         self.splitRatio = splitRatio
         self.focusedSectionKind = focusedSectionKind
+        self.parentSpaceID = parentSpaceID
     }
 }
 

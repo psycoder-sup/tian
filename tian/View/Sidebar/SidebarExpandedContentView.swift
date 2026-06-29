@@ -13,8 +13,10 @@ struct SidebarExpandedContentView: View {
         for workspace in workspaceCollection.workspaces {
             items.append(.workspaceHeader(workspace))
             if disclosedWorkspaces.contains(workspace.id) {
-                for space in workspace.spaceCollection.spaces {
-                    items.append(.spaceRow(workspace, space))
+                // Use the same hierarchical ordering as the render so arrow-key
+                // selection indices stay in lockstep with the drawn rows.
+                for entry in workspace.spaceCollection.hierarchicalOrder() {
+                    items.append(.spaceRow(workspace, entry.space))
                 }
             }
         }
@@ -39,21 +41,25 @@ struct SidebarExpandedContentView: View {
                     )
 
                     if disclosedWorkspaces.contains(workspace.id) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(workspace.spaceCollection.spaces) { space in
+                        // Zero inter-row spacing so the per-row connector rail
+                        // segments abut into one continuous vertical line.
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(workspace.spaceCollection.hierarchicalOrder(), id: \.space.id) { entry in
                                 SidebarSpaceRowView(
-                                    space: space,
+                                    space: entry.space,
                                     isActive: workspace.id == workspaceCollection.activeWorkspaceID
-                                        && space.id == workspace.spaceCollection.activeSpaceID,
-                                    isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, space)),
-                                    setupProgress: worktreeOrchestrator.setupProgress?.spaceID == space.id
+                                        && entry.space.id == workspace.spaceCollection.activeSpaceID,
+                                    isChild: entry.isChild,
+                                    isOrchestrator: entry.isOrchestrator,
+                                    isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, entry.space)),
+                                    setupProgress: worktreeOrchestrator.setupProgress?.spaceID == entry.space.id
                                         ? worktreeOrchestrator.setupProgress
                                         : nil,
-                                    onSelect: { selectSpace(workspace: workspace, spaceID: space.id) },
+                                    onSelect: { selectSpace(workspace: workspace, spaceID: entry.space.id) },
                                     onSetDirectory: { url in
-                                        space.defaultWorkingDirectory = url
+                                        entry.space.defaultWorkingDirectory = url
                                     },
-                                    onClose: { closeSpace(space, in: workspace) }
+                                    onClose: { closeSpace(entry.space, in: workspace) }
                                 )
                             }
                         }

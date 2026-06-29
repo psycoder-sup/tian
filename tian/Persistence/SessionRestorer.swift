@@ -97,6 +97,11 @@ enum SessionRestorer {
                 throw RestoreError.emptySpaces(workspaceName: workspace.name)
             }
 
+            // IDs of every Space in this workspace, for validating parent links.
+            // Validation never drops individual Spaces (empty workspaces throw),
+            // so the original ID set matches the restored set.
+            let workspaceSpaceIDs = Set(workspace.spaces.map { $0.id })
+
             let validatedSpaces = try workspace.spaces.map { space -> SpaceState in
                 // FR-25 — Claude section must have ≥1 tab; Terminal may be empty.
                 guard !space.claudeSection.tabs.isEmpty else {
@@ -128,6 +133,18 @@ enum SessionRestorer {
                     validatedWorktreePath = space.worktreePath
                 }
 
+                // Drop a dangling parent link (orchestrator closed, or a stray
+                // self/cross-workspace reference) so the sidebar never renders a
+                // phantom child. Mirrors how a stale worktreePath is nulled above.
+                let validatedParentSpaceID: UUID?
+                if let parent = space.parentSpaceID,
+                   parent == space.id || !workspaceSpaceIDs.contains(parent) {
+                    Log.persistence.warning("Parent Space \(parent) not present in workspace for Space '\(space.name)'. Dropping nesting.")
+                    validatedParentSpaceID = nil
+                } else {
+                    validatedParentSpaceID = space.parentSpaceID
+                }
+
                 return SpaceState(
                     id: space.id,
                     name: space.name,
@@ -138,7 +155,8 @@ enum SessionRestorer {
                     terminalVisible: space.terminalVisible,
                     dockPosition: space.dockPosition,
                     splitRatio: space.splitRatio,
-                    focusedSectionKind: space.focusedSectionKind
+                    focusedSectionKind: space.focusedSectionKind,
+                    parentSpaceID: validatedParentSpaceID
                 )
             }
             metrics.spaceCount += validatedSpaces.count
@@ -191,7 +209,7 @@ enum SessionRestorer {
             let spaces = ws.spaces.map { sp -> SpaceModel in
                 let claudeSection = buildSection(from: sp.claudeSection)
                 let terminalSection = buildSection(from: sp.terminalSection)
-                return SpaceModel(
+                let space = SpaceModel(
                     id: sp.id,
                     name: sp.name,
                     claudeSection: claudeSection,
@@ -203,6 +221,8 @@ enum SessionRestorer {
                     defaultWorkingDirectory: sp.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
                     worktreePath: sp.worktreePath
                 )
+                space.parentSpaceID = sp.parentSpaceID
+                return space
             }
 
             let wdURL = ws.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) }

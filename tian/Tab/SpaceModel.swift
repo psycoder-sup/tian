@@ -35,6 +35,14 @@ final class SpaceModel: Identifiable {
 
     let gitContext: SpaceGitContext
 
+    /// The Space that spawned this one (orchestrator → implementer link).
+    /// Set automatically at worktree-create time from the calling pane's
+    /// Space; `nil` for top-level Spaces. Capped at two levels — an
+    /// implementer's children attach to the top orchestrator, not the
+    /// implementer (see `WorktreeOrchestrator.continueCreation`). Drives the
+    /// sidebar's nested hierarchy render only; no status roll-up.
+    var parentSpaceID: UUID? = nil
+
     /// The owning workspace's default directory.
     var workspaceDefaultDirectory: URL?
 

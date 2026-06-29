@@ -131,6 +131,57 @@ final class SpaceCollection {
         spaces.insert(space, at: destinationIndex)
     }
 
+    // MARK: - Hierarchy (orchestrator → implementer nesting)
+
+    /// One entry in `hierarchicalOrder()` — a Space plus its render flags.
+    struct HierarchicalEntry {
+        let space: SpaceModel
+        /// `true` when this Space is nested under an orchestrator (indented row).
+        let isChild: Bool
+        /// `true` when this Space has ≥1 child nested under it (shows the `⌂` marker).
+        let isOrchestrator: Bool
+    }
+
+    /// Display order for the sidebar: each top-level Space immediately followed
+    /// by its children (Spaces whose `parentSpaceID` points at it), regardless of
+    /// raw array position. This keeps implementers visually attached to their
+    /// orchestrator even after a drag-reorder mutates the raw `spaces` array.
+    ///
+    /// A Space is top-level when `parentSpaceID` is nil *or* points to a Space not
+    /// in this collection (an orphan whose orchestrator was closed) — so a dangling
+    /// link degrades to a flat top-level row rather than vanishing. As a final
+    /// safety net any Space not reached by the two-level walk (e.g. a deeper
+    /// descendant beyond the cap) is appended top-level, so no Space is ever dropped.
+    func hierarchicalOrder() -> [HierarchicalEntry] {
+        let idSet = Set(spaces.map { $0.id })
+        func isTopLevel(_ space: SpaceModel) -> Bool {
+            guard let parent = space.parentSpaceID else { return true }
+            return !idSet.contains(parent)
+        }
+
+        var result: [HierarchicalEntry] = []
+        var emitted = Set<UUID>()
+        for space in spaces where isTopLevel(space) {
+            let children = spaces.filter { $0.parentSpaceID == space.id }
+            result.append(HierarchicalEntry(space: space, isChild: false, isOrchestrator: !children.isEmpty))
+            emitted.insert(space.id)
+            for child in children {
+                result.append(HierarchicalEntry(space: child, isChild: true, isOrchestrator: false))
+                emitted.insert(child.id)
+            }
+        }
+        // Safety net: never drop a Space (e.g. a grandchild past the two-level cap).
+        for space in spaces where !emitted.contains(space.id) {
+            result.append(HierarchicalEntry(space: space, isChild: false, isOrchestrator: false))
+        }
+        return result
+    }
+
+    /// Number of Spaces nested directly under `spaceID`.
+    func childCount(of spaceID: UUID) -> Int {
+        spaces.filter { $0.parentSpaceID == spaceID }.count
+    }
+
     // MARK: - Working Directory
 
     /// Resolves the working directory from the active pane, falling back through

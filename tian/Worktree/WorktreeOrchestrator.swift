@@ -63,6 +63,10 @@ final class WorktreeOrchestrator {
     ///     the branch is created from current HEAD. Invalid when combined with `existingBranch`.
     ///   - repoPath: Absolute path to a directory inside the repo. If nil, derived from the active Space.
     ///   - workspaceID: Target workspace ID. If nil, uses the key window's active workspace.
+    ///   - creatorSpaceID: The Space that requested this worktree (the calling pane's
+    ///     Space). Recorded as the new Space's `parentSpaceID` so the sidebar nests it
+    ///     under its orchestrator. Ignored when the creator lives in a different
+    ///     workspace (sidebar is per-window). Capped at two levels in `continueCreation`.
     /// - Returns: Result containing the Space ID and whether an existing Space was focused.
     func createWorktreeSpace(
         branchName: String,
@@ -71,7 +75,8 @@ final class WorktreeOrchestrator {
         base: String? = nil,
         repoPath: String? = nil,
         workspaceID: UUID? = nil,
-        background: Bool = false
+        background: Bool = false,
+        creatorSpaceID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
         commandsCancelled = false
 
@@ -167,7 +172,8 @@ final class WorktreeOrchestrator {
                 branchName: branchName,
                 config: config,
                 targetWorkspace: targetWorkspace,
-                background: background
+                background: background,
+                creatorSpaceID: creatorSpaceID
             )
         } catch {
             try? await WorktreeService.removeWorktree(
@@ -398,7 +404,8 @@ final class WorktreeOrchestrator {
         branchName: String,
         config: WorktreeConfig,
         targetWorkspace: Workspace?,
-        background: Bool
+        background: Bool,
+        creatorSpaceID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
         // Steps 7-8: Ensure .gitignore + resolve main worktree path
         try WorktreeService.ensureGitignore(
@@ -434,7 +441,18 @@ final class WorktreeOrchestrator {
         newSpace.name = branchName
         newSpace.defaultWorkingDirectory = worktreeURL
         newSpace.worktreePath = worktreeURL
-        Log.worktree.info("Created worktree Space '\(branchName)' (id: \(newSpace.id))")
+
+        // Record the orchestrator → implementer link so the sidebar nests this
+        // Space under its creator. Resolve the creator *within targetWorkspace*
+        // only — the sidebar is per-window, so a cross-workspace creator leaves
+        // parentSpaceID nil (top-level). Two-level cap: if the creator is itself
+        // an implementer (has a parentSpaceID), attach to its parent (the top
+        // orchestrator) rather than the creator, so we never nest 3 deep.
+        if let creatorSpaceID,
+           let creator = targetWorkspace.spaceCollection.spaces.first(where: { $0.id == creatorSpaceID }) {
+            newSpace.parentSpaceID = creator.parentSpaceID ?? creator.id
+        }
+        Log.worktree.info("Created worktree Space '\(branchName)' (id: \(newSpace.id), parent: \(newSpace.parentSpaceID?.uuidString ?? "none"))")
 
         // Step 11: (removed) Setup no longer runs in the interactive pane, so
         // waiting for shell readiness here is unnecessary. Layout `.pane` commands

@@ -52,7 +52,8 @@ enum SessionSerializer {
                         terminalVisible: space.terminalVisible,
                         dockPosition: space.dockPosition,
                         splitRatio: space.splitRatio,
-                        focusedSectionKind: space.focusedSectionKind
+                        focusedSectionKind: space.focusedSectionKind,
+                        parentSpaceID: space.parentSpaceID
                     )
                 },
                 windowFrame: windowFrame,

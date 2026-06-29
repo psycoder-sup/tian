@@ -3,6 +3,12 @@ import SwiftUI
 struct SidebarSpaceRowView: View {
     let space: SpaceModel
     let isActive: Bool
+    /// `true` when this Space is nested under an orchestrator — draws the leading
+    /// connector rule + `↳` glyph and indents the row.
+    var isChild: Bool = false
+    /// `true` when this Space has ≥1 implementer nested under it — shows the `⌂`
+    /// orchestrator marker next to the name.
+    var isOrchestrator: Bool = false
     let isKeyboardSelected: Bool
     let setupProgress: SetupProgress?
     let onSelect: () -> Void
@@ -122,9 +128,60 @@ struct SidebarSpaceRowView: View {
         }
     }
 
+    /// Connector rail colour, shared by the orchestrator stub and child rails.
+    private static let railColor = Color.white.opacity(0.16)
+    /// X of the vertical rail within each row's leading gutter — inside the
+    /// row's horizontal padding, clear of text. Parent and children share it so
+    /// their segments line up into one rail.
+    private static let railX: CGFloat = 7
+
     var body: some View {
         let sessions = PaneStatusManager.shared.sessionStates(in: space)
 
+        rowContent(sessions: sessions)
+            // Children indent so their content clears the rail + elbow tick.
+            .padding(.leading, isChild ? 22 : 0)
+            // One continuous rail: the orchestrator contributes a bottom-half
+            // stub from its centre, each child a full-height segment + elbow.
+            // `spacing: 0` at the call site makes the segments abut.
+            .overlay(alignment: .leading) { connectorRail }
+    }
+
+    /// The leading connector segment for this row. A child draws a full-height
+    /// vertical rail plus a centred horizontal elbow; an orchestrator draws a
+    /// bottom-half stub that meets the first child's segment directly below.
+    /// Standalone rows draw nothing. Decorative — hidden from accessibility.
+    @ViewBuilder
+    private var connectorRail: some View {
+        if isChild {
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(Self.railColor)
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .padding(.leading, Self.railX)
+                Rectangle()
+                    .fill(Self.railColor)
+                    .frame(width: 12, height: 1)
+                    .padding(.leading, Self.railX)
+            }
+            .accessibilityHidden(true)
+        } else if isOrchestrator {
+            VStack(spacing: 0) {
+                Color.clear
+                Rectangle().fill(Self.railColor).frame(width: 1)
+            }
+            .frame(width: 1)
+            .frame(maxHeight: .infinity)
+            .padding(.leading, Self.railX)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// The Space row's content (name, tab count, status). Wrapped by `body`,
+    /// which prepends `childConnector` when this row is a nested implementer.
+    @ViewBuilder
+    private func rowContent(sessions: [(paneID: UUID, state: ClaudeSessionState)]) -> some View {
         Group {
             if let progress = setupProgress {
                 setupProgressRow(progress: progress)
@@ -138,6 +195,13 @@ struct SidebarSpaceRowView: View {
                         )
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(isActive ? Color(white: 0.9) : Color(red: 0.557, green: 0.557, blue: 0.576))
+
+                        if isOrchestrator {
+                            Image(systemName: "house")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Color(white: 0.5))
+                                .accessibilityLabel("orchestrator")
+                        }
 
                         Spacer()
 
