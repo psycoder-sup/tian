@@ -39,20 +39,39 @@ implement the task yourself — see the anti-freelance rule in Core rules.
    ```
    `<skill-dir>` is the directory that contains this `SKILL.md`. The script prints `space_id`,
    `claude_tab_id`, `claude_pane_id`, `terminal_pane_id`, and `final_state`, then a capture tail.
-   It exits 0 once the session reaches `idle` or `needs_attention`, non-zero on any failure/timeout.
+   It exits 0 once the session reaches `idle` or `needs_attention`, non-zero on a hard failure/stall.
+   A `final_state=running` (exit 0) means the ceiling elapsed while the session was **still working** —
+   that is **not** a failure: re-attach with the printed `tian pane capture --pane <claude_pane_id>` and
+   keep watching, don't take the task over. Likewise, await the background run's completion notification
+   (and the child's own `tian status`/`tian notify` signal on self-verify) rather than hand-polling the
+   pane in a loop.
 3. **Read the session's self-verify report before reporting.** The appended coda makes the delegated
    session build, test, and self-check against the plan, then print a `===== TIAN SELF-VERIFY =====` block
    as the last thing it outputs — so it lands in the capture tail. Read that block: **never report success
-   on a `fail`/`needs-attention` verdict or a red build/test.** (Self-verify is the only *required*
-   verification right now. Deeper *independent* verification — this session re-reading the diff, or a
-   separate verifier session — is a planned later layer; writing the implementation from this session
-   stays forbidden either way.)
-4. **Never push, open a PR, or merge unless the user explicitly asks.** Report what was done and what
-   you verified; leave publishing to the user.
+   on a `fail`/`needs-attention` verdict or a red build/test.** Verify **from the report** (it also lists
+   the commits the session made) — don't `cd` into the worktree and re-read the diff yourself; that just
+   duplicates context the child already holds. (Self-verify is the only *required* verification right now.
+   Deeper *independent* verification — a separate verifier session — is a planned later layer; writing or
+   editing the implementation from this session stays forbidden either way.)
+4. **The delegated session owns its commits; you own publishing.** The coda has it commit its own work
+   in the worktree. **Never push, open a PR, or merge unless the user explicitly asks** — and never
+   commit the child's work *for* it. Report what was done and verified; leave publishing to the user.
+5. **Iterate through the live child — keep it alive.** Verification almost always surfaces follow-ups
+   (test failures, GUI feedback, review fixes). Route every one of them to the **live** child via
+   `tian pane send … --pane <claude_pane_id>` — it still has the full context loaded. **Do not** fix them
+   yourself by editing/committing in the worktree (that re-absorbs the implementer role and races the
+   child). Keep the child's Space/pane alive until verification **and** iteration are done; only then
+   close it / `worktree remove`. If the child has already exited, re-delegate rather than freelancing.
 
 If `final_state` is `needs_attention`, the session paused for input: read the capture, then either
 answer it (`tian pane send … --pane <claude_pane_id>`) or surface the question to the user. The script
 never removes the worktree, so the result stays available for your verification.
+
+**Run log.** Every delegation appends one JSONL record (branch, `final_state`, elapsed, parsed
+self-verify `verdict`/`build`/`tests`/`commits`) to `~/.claude/tian/implement-runs.jsonl` (override with
+`$TIAN_IMPLEMENT_LOG`). Review the harness over time — outcome mix, verdict rate, how often runs hit the
+ceiling as `running`, and whether the implementer committed its own work — with
+`python3 "<skill-dir>/implement-log.py"` (flags: `--recent N`, `--branch SUBSTR`, `--since YYYY-MM-DD`).
 
 ## The model & "current" context
 
@@ -86,12 +105,15 @@ drive the auto-Claude session, target its pane specifically (see the worktree re
 3. **Use `--format json`** for any `list` you intend to parse; the default is a human table.
 4. **Don't close/force things blindly.** `close` cascades; `--force` overrides running-process safety
    checks. Only `--force` when the user asked or you created it yourself.
-5. **Delegate coding to the new Space's Claude session — don't freelance.** Creating a worktree Space
-   (via `worktree create` or `/tian implement`) means you will delegate the work to **its** auto-seeded
-   Claude session. After creating it, **never `cd` into the worktree directory and implement from the
-   current session** — that leaves the new Space's Claude session idle and unused. The Terminal pane is
-   for **shell commands only** (build, test, git); for any coding task, delegate to the Claude session
-   (prefer `/tian implement`, or `pane send` to its `claude_pane_id`).
+5. **Delegate coding to the new Space's Claude session — don't freelance, ever.** Creating a worktree
+   Space (via `worktree create` or `/tian implement`) means you delegate the work to **its** auto-seeded
+   Claude session. **Never `cd` into the worktree directory and edit or commit from the current session**
+   — not for the initial task, and **not for follow-ups during the verify→iterate loop** (fixes, GUI
+   feedback, review findings). Editing the worktree yourself leaves the child idle, duplicates its
+   context, and races its commits. The Terminal pane is for **shell commands only** (build, test, git
+   *status/log*); for anything that changes code, `pane send` the work to the live child's
+   `claude_pane_id` (or `/tian implement` for a fresh task). Keep the child alive until iteration is done;
+   if it has exited, re-delegate rather than reaching in.
 
 ## Command reference
 

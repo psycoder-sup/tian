@@ -56,13 +56,17 @@ Options:
                            Default is background (does not steal focus).
   --prompt-file <f>        Read the plan from file <f> (else read from STDIN).
   --timeout <sec>          Overall ceiling for the post-delegation wait
-                           (default 1800).
+                           (default 5400).
   --boot-timeout <sec>     Ceiling for the Claude session to boot (default 60).
   -h, --help               Show this help.
 
 Output (stdout): machine-readable IDs + final_state, then a capture tail.
-Exit: 0 if the session settled at idle or needs_attention (the latter also
-prints a NOTE); non-zero on any hard failure or timeout.
+final_state is one of: idle | needs_attention | failed | inactive | running.
+A `running` result means the ceiling elapsed while the session was still
+actively working — it is NOT a failure; re-attach with the printed
+`tian pane capture` command to keep watching.
+Exit: 0 if the session settled at idle/needs_attention OR is still running
+(re-attachable); non-zero on a hard failure or a genuine stall.
 EOF
 }
 
@@ -82,7 +86,7 @@ path=""
 workspace=""
 foreground=0
 prompt_file=""
-timeout=1800
+timeout=5400
 boot_timeout=60
 
 while [[ $# -gt 0 ]]; do
@@ -132,6 +136,27 @@ if [[ "$("$TIAN" ping 2>/dev/null || true)" != "pong" ]]; then
   err "not inside a tian session (tian ping did not return pong)"
 fi
 
+# ---- run-log setup -----------------------------------------------------------
+# One JSONL record per delegation is appended at every post-tracking exit, so the
+# /tian workflow is auditable from a durable log instead of transcript parsing.
+# Logging is best-effort and MUST NEVER break a delegation (all writes ||true).
+#
+# TIAN_WORKFLOW_VERSION stamps every record so a run can be tied to the exact
+# harness that produced it. BUMP IT whenever implement.sh, the self-verify coda,
+# or implement-logrec.sh changes behavior. Changelog:
+#   1.0.0 — 90-min ceiling; `running` (busy-at-ceiling) is not a failure; child
+#           commits its own work + emits status/notify; durable run log with
+#           git-derived commits and a self-verify completion record.
+#   1.0.1 — watcher parses the self-verify verdict/build/tests even when the pane
+#           capture indents the block (leading whitespace).
+TIAN_WORKFLOW_VERSION="1.0.1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+LOGREC="$SCRIPT_DIR/implement-logrec.sh"
+RUN_START_EPOCH="$(date +%s 2>/dev/null || echo 0)"
+TIAN_IMPLEMENT_LOG="${TIAN_IMPLEMENT_LOG:-$HOME/.claude/tian/implement-runs.jsonl}"
+repo_root="$(git -C "${path:-.}" rev-parse --show-toplevel 2>/dev/null || echo "${path:-$PWD}")"
+worktree_path=""   # resolved after worktree create; used for git-derived commits
+
 # ---- resolve the plan text ---------------------------------------------------
 plan=""
 if [[ -n "$prompt_file" ]]; then
@@ -173,15 +198,19 @@ stop — do not report done until you have:
    CLAUDE.md / README / Makefile / package.json scripts / etc.).
 2. Run the project's test suite the same way.
 3. Re-read the plan above and confirmed each item is actually implemented.
+4. Committed your own work in atomic, well-described commits. This worktree is
+   yours — you own its commits. Do NOT push, open a PR, merge, or touch main;
+   the orchestrator publishes when the user asks.
 
-Then, as the LAST thing you output this turn, print exactly this block (fill it
-in; keep the marker lines verbatim so it can be parsed):
+Then print exactly this block (fill it in; keep the marker lines verbatim so it
+can be parsed):
 
 ===== TIAN SELF-VERIFY =====
 build: pass | fail | skipped(<why>)
 tests: pass | fail | skipped(<why>) — <one-line summary, e.g. counts/failures>
 plan:
   - <plan item>: done | partial | skipped
+commits: <short hashes + subjects you committed, or "none (why)">
 deviations: <anything done differently from the plan, or "none">
 open_questions: <anything needing the caller's decision, or "none">
 verdict: pass | needs-attention | fail
@@ -191,7 +220,31 @@ If you cannot build or test (command unknown, environment missing), do NOT
 silently skip — set that line to skipped(<reason>) and lower the verdict
 accordingly. Never report `pass` on an unverified or red build/test.
 CODA
-plan="${plan}"$'\n\n'"${SELF_VERIFY_CODA}"
+
+# The trailing signal section is built UNQUOTED so the real script path, branch,
+# version, and timeout are interpolated now, while $PWD / $TIAN_* (the child's
+# own env) and the <verdict>/<build>/<tests> placeholders stay literal for the
+# delegated session to fill. Worded without apostrophes (macOS bash 3.2 heredoc
+# safety). The self-verify record is what closes the `running` -> done gap: it is
+# written by the implementer AFTER it finishes, so it carries the final verdict
+# even when the watcher already exited reporting `running`.
+IFS= read -r -d '' SIGNAL_SECTION <<EOF2 || true
+
+Finally, as the LAST thing you do this turn, run these three commands so the
+orchestrator and the user get a durable, recorded signal even if the watcher has
+already detached. You are inside a tian pane: \$PWD is this worktree and the
+TIAN_* env vars are set. Fill in <verdict>/<build>/<tests> from your SELF-VERIFY
+block. If the verdict is needs-attention or fail, use --state needs_attention
+(not idle) in the first two commands so the sidebar flags it.
+
+  tian status set --label "self-verify: <verdict>" --state idle
+  tian notify "self-verify: <verdict>" --title "tian implement"
+  bash "$LOGREC" --source self-verify --workflow-version "$TIAN_WORKFLOW_VERSION" \\
+    --final-state idle --branch "$branch" --worktree "\$PWD" --timeout $timeout \\
+    --space "\$TIAN_SPACE_ID" --pane "\$TIAN_PANE_ID" --tab "\$TIAN_TAB_ID" \\
+    --verdict "<verdict>" --build "<build>" --tests "<tests>"
+EOF2
+plan="${plan}"$'\n\n'"${SELF_VERIFY_CODA}${SIGNAL_SECTION}"
 
 # ---- create the worktree Space ----------------------------------------------
 wt_args=( "$branch" )
@@ -215,6 +268,15 @@ space_id="$(printf '%s' "$out" | jq -r '.space_id // empty')" || space_id=""
 claude_tab="$(printf '%s' "$out" | jq -r '.claude_tab_id // empty')" || claude_tab=""
 claude_pane="$(printf '%s' "$out" | jq -r '.claude_pane_id // empty')" || claude_pane=""
 terminal_pane="$(printf '%s' "$out" | jq -r '.pane_id // empty')" || terminal_pane=""
+
+# Worktree filesystem path — prefer the create payload, else resolve from git by
+# branch. Used by the run log to derive the actual commits (authoritative).
+worktree_path="$(printf '%s' "$out" | jq -r '.worktree // .path // empty')" || worktree_path=""
+if [[ -z "$worktree_path" ]]; then
+  worktree_path="$(git -C "$repo_root" worktree list --porcelain 2>/dev/null \
+    | awk -v b="refs/heads/$branch" '/^worktree /{p=$2} $0=="branch "b{print p; exit}')" \
+    || worktree_path=""
+fi
 
 if [[ -z "$claude_pane" ]]; then
   err "worktree create returned no claude_pane_id (cannot delegate)"
@@ -328,14 +390,54 @@ emit_block() {
   printf 'final_state=%s\n' "$fs"
 }
 
+# log_run <final_state> <exit_code> — append the watcher's record for this
+# delegation via the shared writer. Best-effort: never affects the outcome.
+# build/tests/verdict are parsed from the capture tail when present (a `running`
+# outcome has none yet — the implementer's own self-verify record fills those in
+# later); commits/dirty are derived from git by the writer (authoritative).
+log_run() {
+  local fs="$1" ec="$2" elapsed sv_verdict sv_build sv_tests
+  elapsed=$(( $(date +%s 2>/dev/null || echo "$RUN_START_EPOCH") - RUN_START_EPOCH ))
+  sv_verdict="$(printf '%s\n' "$capture" | sed -n 's/^[[:space:]]*verdict:[[:space:]]*//p' | tail -1)"
+  sv_build="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*build:[[:space:]]*//p'   | tail -1)"
+  sv_tests="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*tests:[[:space:]]*//p'   | tail -1)"
+  bash "$LOGREC" \
+    --source watcher --workflow-version "$TIAN_WORKFLOW_VERSION" \
+    --final-state "$fs" --exit-code "$ec" --elapsed "$elapsed" --timeout "$timeout" \
+    --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
+    --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
+    --verdict "${sv_verdict:-unknown}" --build "${sv_build:-}" --tests "${sv_tests:-}" \
+    --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
+}
+
 if [[ -z "$final_state" ]]; then
-  # Timed out before the session settled.
-  emit_block "timeout"
-  printf 'NOTE: timed out after %ss (last observed state: %s)\n' \
-    "$timeout" "${last_state:-unknown}"
-  printf -- '--- capture ---\n'
-  printf '%s\n' "$capture"
-  exit 4
+  # Ceiling elapsed before the session settled. Distinguish a healthy
+  # still-working session from a genuine stall: a child still in busy/active is
+  # NOT a failure (a real milestone routinely outlasts the ceiling) — report it
+  # as `running` and exit 0 so the caller re-attaches instead of taking over.
+  # Only a non-progressing session (idle/inactive/unknown that never settled,
+  # i.e. truly stuck) keeps the hard `timeout` / exit 4 path.
+  case "$last_state" in
+    busy|active)
+      emit_block "running"
+      printf 'NOTE: still working after %ss (state: %s) — NOT a failure.\n' \
+        "$timeout" "$last_state"
+      printf 'Re-attach to keep watching: tian pane capture --pane %s\n' "$claude_pane"
+      printf -- '--- capture ---\n'
+      printf '%s\n' "$capture"
+      log_run "running" 0
+      exit 0
+      ;;
+    *)
+      emit_block "timeout"
+      printf 'NOTE: timed out after %ss (last observed state: %s)\n' \
+        "$timeout" "${last_state:-unknown}"
+      printf -- '--- capture ---\n'
+      printf '%s\n' "$capture"
+      log_run "timeout" 4
+      exit 4
+      ;;
+  esac
 fi
 
 emit_block "$final_state"
@@ -357,6 +459,6 @@ printf -- '--- capture ---\n'
 printf '%s\n' "$capture"
 
 case "$final_state" in
-  idle|needs_attention) exit 0 ;;
-  *)                    exit 5 ;;
+  idle|needs_attention) log_run "$final_state" 0; exit 0 ;;
+  *)                    log_run "$final_state" 5; exit 5 ;;
 esac
