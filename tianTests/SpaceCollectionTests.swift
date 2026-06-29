@@ -298,6 +298,56 @@ struct SpaceCollectionTests {
         #expect(collection.spaces.count == 1)
         #expect(!collection.shouldQuit)
     }
+
+    // MARK: - Hierarchical ordering
+
+    /// `hierarchicalOrder()` groups each parent's children immediately after it,
+    /// regardless of raw array position, and flags the parent as orchestrator.
+    @Test func hierarchicalOrderGroupsChildrenUnderParent() {
+        let parent = SpaceModel(name: "orchestrator", workingDirectory: "/tmp")
+        let childA = SpaceModel(name: "impl-a", workingDirectory: "/tmp")
+        let childB = SpaceModel(name: "impl-b", workingDirectory: "/tmp")
+        let unrelated = SpaceModel(name: "other", workingDirectory: "/tmp")
+        childA.parentSpaceID = parent.id
+        childB.parentSpaceID = parent.id
+
+        // Raw order interleaves an unrelated top-level Space between the children.
+        let collection = SpaceCollection(
+            spaces: [parent, childA, unrelated, childB],
+            activeSpaceID: parent.id,
+            workspaceDefaultDirectory: nil
+        )
+
+        let order = collection.hierarchicalOrder()
+        #expect(order.map { $0.space.id } == [parent.id, childA.id, childB.id, unrelated.id])
+        #expect(order[0].isChild == false)
+        #expect(order[0].isOrchestrator == true)
+        #expect(order[1].isChild == true)
+        #expect(order[2].isChild == true)
+        #expect(order[3].isChild == false)
+        #expect(order[3].isOrchestrator == false)
+        #expect(collection.childCount(of: parent.id) == 2)
+    }
+
+    /// An orphan (its `parentSpaceID` points to a Space not in the collection,
+    /// e.g. the orchestrator was closed) renders flat at top level — never dropped.
+    @Test func hierarchicalOrderTreatsOrphanAsTopLevel() {
+        let orphan = SpaceModel(name: "orphan", workingDirectory: "/tmp")
+        orphan.parentSpaceID = UUID() // parent not present in this collection
+
+        let collection = SpaceCollection(
+            spaces: [orphan],
+            activeSpaceID: orphan.id,
+            workspaceDefaultDirectory: nil
+        )
+
+        let order = collection.hierarchicalOrder()
+        #expect(order.count == 1)
+        #expect(order[0].space.id == orphan.id)
+        #expect(order[0].isChild == false)
+        #expect(order[0].isOrchestrator == false)
+        #expect(collection.childCount(of: orphan.id) == 0)
+    }
 }
 
 // MARK: - Stress Tests

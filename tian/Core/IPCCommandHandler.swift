@@ -653,6 +653,11 @@ final class IPCCommandHandler {
             )
         }
 
+        // The calling pane's Space is the creator (orchestrator). Used to nest
+        // the new worktree Space under it in the sidebar. Absent/malformed env
+        // (e.g. invoked outside a tian pane) leaves it nil → top-level Space.
+        let creatorSpaceID = UUID(uuidString: request.env.spaceId)
+
         do {
             let result = try await worktreeOrchestrator.createWorktreeSpace(
                 branchName: branchName,
@@ -660,7 +665,8 @@ final class IPCCommandHandler {
                 base: base,
                 repoPath: path,
                 workspaceID: resolvedWorkspace?.id,
-                background: background
+                background: background,
+                creatorSpaceID: creatorSpaceID
             )
             var out: [String: IPCValue] = [
                 "space_id": .string(result.spaceID.uuidString),

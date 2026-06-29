@@ -1438,6 +1438,67 @@ struct WorktreeOrchestratorTests {
         }
         #expect(!orch.isCloseInFlight, "isCloseInFlight should be false after a throwing removal")
     }
+
+    // MARK: - Orchestrator → implementer parent link
+
+    /// A worktree Space records the creating Space as its `parentSpaceID` so the
+    /// sidebar can nest it under its orchestrator.
+    @Test func worktreeSpaceRecordsCreatorAsParent() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        // The workspace's default Space plays the orchestrator.
+        let creator = workspace.spaceCollection.activeSpace!
+
+        let result = try await orchestrator.createWorktreeSpace(
+            branchName: "impl-a",
+            repoPath: repo,
+            workspaceID: workspace.id,
+            background: true,
+            creatorSpaceID: creator.id
+        )
+
+        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
+        #expect(newSpace?.parentSpaceID == creator.id)
+    }
+
+    /// Two-level cap: when an implementer (a Space that already has a parent)
+    /// spawns another worktree, the new Space attaches to the top orchestrator,
+    /// not the implementer — never a third level.
+    @Test func worktreeSpaceCapsNestingAtTwoLevels() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+        try writeConfig("worktree_dir = \".worktrees\"", in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+        let top = workspace.spaceCollection.activeSpace!
+
+        let firstResult = try await orchestrator.createWorktreeSpace(
+            branchName: "impl-1",
+            repoPath: repo,
+            workspaceID: workspace.id,
+            background: true,
+            creatorSpaceID: top.id
+        )
+        let firstImpl = workspace.spaceCollection.spaces.first(where: { $0.id == firstResult.spaceID })!
+        #expect(firstImpl.parentSpaceID == top.id)
+
+        // The implementer spawns another worktree → caps to the top orchestrator.
+        let secondResult = try await orchestrator.createWorktreeSpace(
+            branchName: "impl-2",
+            repoPath: repo,
+            workspaceID: workspace.id,
+            background: true,
+            creatorSpaceID: firstImpl.id
+        )
+        let secondImpl = workspace.spaceCollection.spaces.first(where: { $0.id == secondResult.spaceID })!
+        #expect(secondImpl.parentSpaceID == top.id)
+    }
 }
 
 private struct OrchestratorTestError: Error, CustomStringConvertible {
