@@ -3,11 +3,14 @@
 
 implement.sh and the delegated session both append JSONL records (via
 implement-logrec.sh) to ~/.claude/tian/implement-runs.jsonl (override with
-$TIAN_IMPLEMENT_LOG). A delegation can produce two records: the watcher's
-(source=watcher — the outcome implement.sh observed, possibly `running` with no
-verdict) and the implementer's own (source=self-verify — the final verdict,
-written after it finishes). For per-delegation stats we collapse to one record,
-preferring self-verify.
+$TIAN_IMPLEMENT_LOG). A delegation can produce two or three records: the spawn record (source=spawn,
+final_state=delegated — written by `implement.sh --no-wait` async fan-out), the
+watcher's (source=watcher — the outcome implement.sh observed, possibly `running`
+with no verdict), and the implementer's own (source=self-verify — the final
+verdict, written after it finishes). For per-delegation stats we collapse to one
+record, preferring self-verify. Records may also carry child_session_id /
+parent_session_id (transcript linkage) and no_wait (async fan-out marker); these
+are optional, so older records without them still parse.
 
 Usage:
     implement-log.py [--log FILE] [--recent N] [--branch SUBSTR]
@@ -55,11 +58,16 @@ def rank(r):
     return (1 if r.get("source") == "self-verify" else 0, r.get("ts", ""))
 
 
+def delegation_key(r):
+    """Group key tying a delegation's spawn/watcher/self-verify records together."""
+    return r.get("space_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
+
+
 def dedup(rows):
     """One record per delegation (keyed by space_id, else branch+pane)."""
     groups = {}
     for r in rows:
-        key = r.get("space_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
+        key = delegation_key(r)
         if key not in groups or rank(r) > rank(groups[key]):
             groups[key] = r
     return sorted(groups.values(), key=lambda r: r.get("ts", ""))
@@ -105,6 +113,11 @@ def main():
     committed_n = sum(1 for r in delegations if committed(r))
     ceiling_n = states.get("running", 0) + states.get("timeout", 0)
     clean_n = states.get("idle", 0)
+    # no_wait lives on the spawn record, which dedup discards in favor of
+    # self-verify — so count async delegations from the raw rows by group key.
+    async_keys = {delegation_key(r) for r in rows if r.get("no_wait")}
+    async_n = sum(1 for r in delegations if delegation_key(r) in async_keys)
+    linked_n = sum(1 for r in delegations if (r.get("child_session_id") or "").strip())
 
     print(f"\ndelegations: {n}   (from {len(rows)} raw records)")
     print(f"  workflow_version: " + ", ".join(f"{k}={v}" for k, v in versions.most_common()))
@@ -113,6 +126,8 @@ def main():
     print(f"  child committed own work: {committed_n}/{n} ({pct(committed_n, n)})")
     print(f"  hit ceiling (running/timeout): {ceiling_n}/{n} ({pct(ceiling_n, n)})")
     print(f"  clean settle (idle): {clean_n}/{n} ({pct(clean_n, n)})")
+    print(f"  async fan-out (--no-wait): {async_n}/{n} ({pct(async_n, n)})")
+    print(f"  child transcript linked (session id recorded): {linked_n}/{n} ({pct(linked_n, n)})")
     print(f"  elapsed median: {median//60}m{median % 60:02d}s   "
           f"(min {elapsed[0]//60}m / max {elapsed[-1]//60}m)")
 

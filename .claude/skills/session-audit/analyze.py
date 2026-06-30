@@ -17,6 +17,8 @@ It prints a human-readable report to stdout. The numbers are exact; the
 import sys, os, json, re, glob, datetime
 
 PROJECTS_DEFAULT = os.path.expanduser("~/.claude/projects")
+RUNLOG_DEFAULT = os.path.expanduser(
+    os.environ.get("TIAN_IMPLEMENT_LOG", "~/.claude/tian/implement-runs.jsonl"))
 BUCKET_MIN = 10  # timeline granularity
 
 
@@ -178,34 +180,191 @@ def spawned_branches(rows):
     return out
 
 
-def find_children(parent_rows, parent_m, projects):
+def load_runlog(path):
+    """Load the /tian implement run log (JSONL) via load(); empty if absent."""
+    if not path or not os.path.exists(path):
+        return []
+    try:
+        return load(path)
+    except Exception:
+        return []
+
+
+def mangle_worktree(wt):
+    """Worktree path -> Claude project-dir name: every '/' and '.' becomes '-'."""
+    return re.sub(r"[/.]", "-", wt or "")
+
+
+def newest_transcript(projdir):
+    """Newest *.jsonl under a Claude project dir (by mtime), or None."""
+    files = glob.glob(os.path.join(projdir, "*.jsonl"))
+    if not files:
+        return None
+    try:
+        return max(files, key=lambda p: os.path.getmtime(p))
+    except Exception:
+        return files[0]
+
+
+def resolve_from_runlog(runlog, spawned, projects):
+    """{transcript_file: branch} for spawned branches resolvable from the run log.
+
+    For each spawned branch, pick ONE best record (one carrying a child_session_id
+    wins, else the latest by ts) and resolve the child transcript authoritatively —
+    by child_session_id (exact file), else by worktree + newest transcript. Keying
+    by branch (not by file) avoids resolving the same delegation's spawn / watcher /
+    self-verify records to multiple files and double-counting one slice. This removes
+    the branch/cwd guessing for implement.sh children (incl. --no-wait fan-out)."""
+    best = {}  # branch -> best record
+    for rec in runlog:
+        br = rec.get("branch")
+        if not br or br not in spawned:
+            continue
+        cur = best.get(br)
+        has_csid = bool((rec.get("child_session_id") or "").strip())
+        if cur is None:
+            best[br] = rec
+            continue
+        cur_has = bool((cur.get("child_session_id") or "").strip())
+        if (has_csid and not cur_has) or \
+           (has_csid == cur_has and rec.get("ts", "") >= cur.get("ts", "")):
+            best[br] = rec
+
+    out = {}
+    for br, rec in best.items():
+        f = None
+        csid = (rec.get("child_session_id") or "").strip()
+        if csid:
+            cand = glob.glob(os.path.join(projects, "*", csid + ".jsonl"))
+            if cand:
+                f = cand[0]
+        if not f:
+            wt = (rec.get("worktree") or "").strip()
+            if wt:
+                f = newest_transcript(os.path.join(projects, mangle_worktree(wt)))
+        if f and os.path.exists(f):
+            out[f] = br
+    return out
+
+
+def find_children(parent_rows, parent_m, projects, runlog):
     blob = tool_blob(parent_rows)
     spawned = spawned_branches(parent_rows)
     p_first, p_last = parent_m["first"], parent_m["last"]
+
+    # 1) Authoritative: children resolved straight from the run log (no guessing).
+    runlog_files = resolve_from_runlog(runlog, spawned, projects)
+
     cands = []
-    for f in glob.glob(os.path.join(projects, "*", "*.jsonl")):
-        cwd = quick_cwd(f)
-        if not cwd or "/.worktrees/" not in cwd:
-            continue
-        # A child is a worktree session the parent either delegated via
-        # implement.sh (matched by branch) or literally worked in (cwd in blob).
-        # Branch match is restricted to *spawned* branches so merely *mentioning*
-        # another worktree doesn't pull it in.
-        branch = worktree_branch(cwd)
-        if cwd not in blob and not (branch and branch in spawned):
+    seen = set()
+    linked_branches = set()  # branches that actually produced a kept run-log child
+    for f, br in runlog_files.items():
+        if f in seen:
             continue
         rows = load(f)
         m = metrics(rows)
         if not m["first"]:
             continue
-        # time overlap with parent
+        # Same time-overlap guard the heuristic path applies: the run log is a
+        # single global JSONL keyed by branch, so a reused branch name can resolve
+        # to a transcript from an unrelated/earlier run. Require overlap with this
+        # parent before trusting the link.
+        if p_first and p_last and m["first"] and m["last"]:
+            if not (m["first"] <= p_last and m["last"] >= p_first):
+                continue
+        cwd = first_cwd(rows) or quick_cwd(f) or ""
+        cands.append((f, cwd, rows, m))
+        seen.add(f)
+        linked_branches.add(br)
+
+    # 2) Heuristic supplement — only for worktrees the run log did NOT already
+    # link (e.g. children delegated purely via `pane send`, runs predating the run
+    # log, or a run-log child rejected by the overlap guard above). Branches that
+    # actually linked in pass 1 are skipped so we prefer the authoritative link.
+    for f in glob.glob(os.path.join(projects, "*", "*.jsonl")):
+        if f in seen:
+            continue
+        cwd = quick_cwd(f)
+        if not cwd or "/.worktrees/" not in cwd:
+            continue
+        branch = worktree_branch(cwd)
+        if cwd not in blob and not (branch and branch in spawned):
+            continue
+        if branch and branch in linked_branches:
+            continue
+        rows = load(f)
+        m = metrics(rows)
+        if not m["first"]:
+            continue
         if p_first and p_last and m["first"] and m["last"]:
             if not (m["first"] <= p_last and m["last"] >= p_first):
                 continue
         cands.append((f, cwd, rows, m))
+        seen.add(f)
+
     # de-dup by file, newest-overlap first
     cands.sort(key=lambda c: c[3]["first"] or datetime.datetime.max)
-    return cands
+    return cands, runlog_files
+
+
+def filter_zombies(cands):
+    """Drop sessions that aren't real children, returning (kept, dropped_count):
+      - 0-turn sessions (or out==0 with turns<=1) — never did anything; and
+      - sessions whose cwd is a NESTED sub-path of another child's worktree
+        (e.g. a `.../feat/x/apps/macos` session under `.../feat/x`), which the
+        path-mangle / nested-worktree heuristics can otherwise pull in twice."""
+    dropped = 0
+    interim = []
+    for f, cwd, rows, m in cands:
+        if m["turns"] == 0 or (m["out"] == 0 and m["turns"] <= 1):
+            dropped += 1
+            continue
+        interim.append((f, cwd, rows, m))
+
+    cwds = [c[1] for c in interim if c[1]]
+    kept = []
+    for f, cwd, rows, m in interim:
+        nested = bool(cwd) and any(
+            other != cwd and cwd.startswith(other.rstrip("/") + "/") for other in cwds)
+        if nested:
+            dropped += 1
+            continue
+        kept.append((f, cwd, rows, m))
+    return kept, dropped
+
+
+def child_branch(f, cwd, runlog_files):
+    """The branch for a linked child — run-log link wins, else infer from cwd."""
+    return runlog_files.get(f) or worktree_branch(cwd or "")
+
+
+def reconcile(branch, runlog):
+    """Reconcile a child's run-log records into a one-line state.
+
+    Returns one of:
+      ("STALL", "<source> <state>")  — the LATEST record is a non-terminal
+          watcher (running/timeout) or spawn (delegated) outcome with no later
+          self-verify: a genuine stall / incomplete async delegation to chase.
+      ("SUPERSEDED", verdict)        — a self-verify record exists; its verdict
+          supersedes any interim watcher/spawn outcome.
+      ("OK", final_state)            — a terminal record, no self-verify.
+    None when the run log has nothing for the branch."""
+    if not branch:
+        return None
+    recs = [r for r in runlog if r.get("branch") == branch and r.get("ts")]
+    if not recs:
+        return None
+    recs.sort(key=lambda r: r.get("ts", ""))
+    latest = recs[-1]
+    sv = [r for r in recs if r.get("source") == "self-verify"]
+    sv_latest_ts = sv[-1].get("ts", "") if sv else ""
+    if (latest.get("source") in ("watcher", "spawn")
+            and latest.get("final_state") in ("running", "timeout", "delegated")
+            and (not sv or sv_latest_ts < latest.get("ts", ""))):
+        return ("STALL", f"{latest.get('source')} {latest.get('final_state')}")
+    if sv:
+        return ("SUPERSEDED", sv[-1].get("verdict") or "unknown")
+    return ("OK", latest.get("final_state") or "?")
 
 
 # ---------- role-hygiene heuristics ----------
@@ -288,12 +447,18 @@ def print_metrics_block(label, m):
 def main():
     args = [a for a in sys.argv[1:]]
     projects = PROJECTS_DEFAULT
+    runlog_path = RUNLOG_DEFAULT
     if "--projects" in args:
         idx = args.index("--projects")
         projects = os.path.expanduser(args[idx + 1])
         del args[idx:idx + 2]
+    if "--log" in args:
+        idx = args.index("--log")
+        runlog_path = os.path.expanduser(args[idx + 1])
+        del args[idx:idx + 2]
     if not args:
-        print("usage: analyze.py <session-id-or-prefix> [--projects DIR]", file=sys.stderr)
+        print("usage: analyze.py <session-id-or-prefix> [--projects DIR] [--log RUNLOG]",
+              file=sys.stderr)
         sys.exit(2)
     sid = args[0]
 
@@ -323,14 +488,27 @@ def main():
     print("TOKENS")
     print_metrics_block("PARENT (orchestrator)", pm)
 
-    children = find_children(prows, pm, projects)
+    runlog = load_runlog(runlog_path)
+    children, runlog_files = find_children(prows, pm, projects, runlog)
+    children, zdropped = filter_zombies(children)
+    linked_n = sum(1 for f, _c, _r, _m in children if f in runlog_files)
+    print(f"\n  child linkage: {len(children)} kept "
+          f"({linked_n} via run log, {len(children) - linked_n} via heuristic)"
+          + (f"; filtered {zdropped} zombie/nested session(s)" if zdropped else ""))
+    if runlog:
+        print(f"  run log: {runlog_path} ({len(runlog)} records)")
+    else:
+        print(f"  run log: none at {runlog_path} (heuristic linkage only)")
+
     child_ms = []
     for f, cwd, rows, m in children:
         chy = child_hygiene(rows)
-        child_ms.append((f, cwd, m, chy))
+        branch = child_branch(f, cwd, runlog_files)
+        child_ms.append((f, cwd, m, chy, branch))
         print()
         print_metrics_block(f"CHILD  {os.path.basename(f)[:-6]}", m)
         print(f"      cwd: {cwd}")
+        print(f"      branch: {branch or '?'}   linked: {'run-log' if f in runlog_files else 'heuristic'}")
         print(f"      hygiene: {chy}")
 
     # ---- combined + inversions ----
@@ -344,7 +522,7 @@ def main():
     print(f"  parent 'tian pane send' (route to child): {phy['pane_send']}")
     print(f"  parent implement.sh spawns:            {phy['implement_spawns']}")
     print(f"  parent FAILED delegate/watch tasks:    {phy['failed_delegate_tasks']}   (>0 = watcher likely timed out; verify child wasn't actually fine)")
-    for f, cwd, m, chy in child_ms:
+    for f, cwd, m, chy, branch in child_ms:
         miss = []
         if chy["status_signals"] == 0 and chy["notify_signals"] == 0:
             miss.append("no done-signal (no tian status/notify)")
@@ -353,6 +531,16 @@ def main():
         print(f"  child {os.path.basename(f)[:8]}: builds={chy['builds']} commits={chy['commits']} "
               f"signals={chy['status_signals']+chy['notify_signals']} "
               + (("FLAGS: " + "; ".join(miss)) if miss else "clean"))
+        rec = reconcile(branch, runlog)
+        if rec:
+            kind, detail = rec
+            if kind == "STALL":
+                print(f"      reconcile: GENUINE STALL — latest run-log record is "
+                      f"'{detail}' with no later self-verify (chase this child)")
+            elif kind == "SUPERSEDED":
+                print(f"      reconcile: self-verify supersedes watcher — verdict={detail}")
+            else:
+                print(f"      reconcile: run-log final_state={detail} (no self-verify record)")
 
     if child_ms:
         cm = child_ms[0][2]
@@ -364,12 +552,12 @@ def main():
         print(f"  resident ctx:  parent {fmt_tok(int(pm['resident']))} vs child {fmt_tok(int(cm['resident']))}   -> {ri}")
 
     # ---- parallelism timeline ----
-    all_starts = [pm["first"]] + [m["first"] for _, _, m, _ in child_ms]
+    all_starts = [pm["first"]] + [m["first"] for _, _, m, _, _ in child_ms]
     all_starts = [s for s in all_starts if s]
     if all_starts:
         base = min(all_starts)
         pb = buckets(prows, base)
-        cbs = [(os.path.basename(f)[:8], buckets(load(f), base)) for f, _, _, _ in child_ms]
+        cbs = [(os.path.basename(f)[:8], buckets(load(f), base)) for f, _, _, _, _ in child_ms]
         all_b = set(pb)
         for _, cb in cbs:
             all_b |= set(cb)
