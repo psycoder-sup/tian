@@ -15,6 +15,15 @@
 # + a capture tail (which carries the session's self-verify report) for the
 # caller.
 #
+# --no-wait turns this into an async FAN-OUT primitive: it runs the same flow
+# through worktree-create / boot-wait / paste / submit, then returns immediately
+# with final_state=delegated (skipping the tracking loop) and writes one
+# `source=spawn` run-log record. The orchestrator fires N of these (one branch
+# per independent slice, one writer per branch) and then awaits every child's
+# durable done-signal with the companion implement-wait.sh, which polls the run
+# log — never `tian pane capture`. The blocking path (no flag) is unchanged and
+# remains the default for a single slice.
+#
 # The delegated session self-verifies its OWN work (build + test + plan-coverage
 # check) and prints a structured report as the last thing in its turn. That
 # self-check is the only mandatory verification layer right now; deeper
@@ -54,6 +63,9 @@ Options:
   --workspace <id>         Workspace (window) to host the new Space.
   --foreground             Create the worktree in the foreground (steal focus).
                            Default is background (does not steal focus).
+  --no-wait                Async fan-out: paste + submit the plan, then return
+                           immediately with final_state=delegated (skip the
+                           tracking loop). Await the child via implement-wait.sh.
   --prompt-file <f>        Read the plan from file <f> (else read from STDIN).
   --timeout <sec>          Overall ceiling for the post-delegation wait
                            (default 5400).
@@ -61,12 +73,16 @@ Options:
   -h, --help               Show this help.
 
 Output (stdout): machine-readable IDs + final_state, then a capture tail.
-final_state is one of: idle | needs_attention | failed | inactive | running.
+final_state is one of: idle | needs_attention | failed | inactive | running |
+delegated. `delegated` is the --no-wait result: the plan was submitted and the
+script returned without tracking — await the child's done-signal with
+implement-wait.sh instead.
 A `running` result means the ceiling elapsed while the session was still
 actively working — it is NOT a failure; re-attach with the printed
 `tian pane capture` command to keep watching.
-Exit: 0 if the session settled at idle/needs_attention OR is still running
-(re-attachable); non-zero on a hard failure or a genuine stall.
+Exit: 0 if the session settled at idle/needs_attention, is still running
+(re-attachable), or was delegated (--no-wait); non-zero on a hard failure or a
+genuine stall.
 EOF
 }
 
@@ -85,6 +101,7 @@ existing=0
 path=""
 workspace=""
 foreground=0
+no_wait=0
 prompt_file=""
 timeout=5400
 boot_timeout=60
@@ -99,6 +116,7 @@ while [[ $# -gt 0 ]]; do
     --boot-timeout) need_val "$@"; boot_timeout="$2"; shift 2 ;;
     --existing)     existing=1; shift ;;
     --foreground)   foreground=1; shift ;;
+    --no-wait)      no_wait=1; shift ;;
     -h|--help)      usage; exit 0 ;;
     --)             shift; break ;;
     -*)             usage; err "unknown option: $1" 2 ;;
@@ -149,13 +167,35 @@ fi
 #           git-derived commits and a self-verify completion record.
 #   1.0.1 — watcher parses the self-verify verdict/build/tests even when the pane
 #           capture indents the block (leading whitespace).
-TIAN_WORKFLOW_VERSION="1.0.1"
+#   1.1.0 — --no-wait async delegation + implement-wait.sh await-by-log; self-verify
+#           report adds files: line; run log records child/parent session ids +
+#           no_wait; analyze.py links children via the run log and filters zombies.
+TIAN_WORKFLOW_VERSION="1.1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 LOGREC="$SCRIPT_DIR/implement-logrec.sh"
 RUN_START_EPOCH="$(date +%s 2>/dev/null || echo 0)"
 TIAN_IMPLEMENT_LOG="${TIAN_IMPLEMENT_LOG:-$HOME/.claude/tian/implement-runs.jsonl}"
 repo_root="$(git -C "${path:-.}" rev-parse --show-toplevel 2>/dev/null || echo "${path:-$PWD}")"
 worktree_path=""   # resolved after worktree create; used for git-derived commits
+
+# Best-effort orchestrator (parent) session id — Claude Code may expose it as an
+# env var. We can't confirm the exact name at runtime, so just read the likely
+# one; empty is fine (the field is recorded empty and analyze.py falls back).
+parent_session_id="${CLAUDE_SESSION_ID:-}"
+
+# resolve_child_session_id <worktree-path> — print the child's newest Claude
+# transcript id (best-effort, empty if unresolved). Claude Code stores per-project
+# transcripts under ~/.claude/projects/<mangled path>/<id>.jsonl, where the mangle
+# replaces every "/" and "." in the absolute path with "-". The freshest *.jsonl in
+# that dir is the child's own session.
+resolve_child_session_id() {
+  local wt="$1" proj_dir newest
+  [[ -n "$wt" ]] || return 0
+  proj_dir="$HOME/.claude/projects/$(printf '%s' "$wt" | sed 's#[/.]#-#g')"
+  [[ -d "$proj_dir" ]] || return 0
+  newest="$(ls -1t "$proj_dir"/*.jsonl 2>/dev/null | head -n1)" || newest=""
+  [[ -n "$newest" ]] && basename "$newest" .jsonl
+}
 
 # ---- resolve the plan text ---------------------------------------------------
 plan=""
@@ -203,13 +243,16 @@ stop — do not report done until you have:
    the orchestrator publishes when the user asks.
 
 Then print exactly this block (fill it in; keep the marker lines verbatim so it
-can be parsed):
+can be parsed). The files: list makes the report a COMPLETE handoff — list every
+changed file with a one-line why so the orchestrator never has to read the diff:
 
 ===== TIAN SELF-VERIFY =====
 build: pass | fail | skipped(<why>)
 tests: pass | fail | skipped(<why>) — <one-line summary, e.g. counts/failures>
 plan:
   - <plan item>: done | partial | skipped
+files:
+  - <path>: <one-line why this file changed>
 commits: <short hashes + subjects you committed, or "none (why)">
 deviations: <anything done differently from the plan, or "none">
 open_questions: <anything needing the caller's decision, or "none">
@@ -242,6 +285,7 @@ block. If the verdict is needs-attention or fail, use --state needs_attention
   bash "$LOGREC" --source self-verify --workflow-version "$TIAN_WORKFLOW_VERSION" \\
     --final-state idle --branch "$branch" --worktree "\$PWD" --timeout $timeout \\
     --space "\$TIAN_SPACE_ID" --pane "\$TIAN_PANE_ID" --tab "\$TIAN_TAB_ID" \\
+    --parent-session "$parent_session_id" \\
     --verdict "<verdict>" --build "<build>" --tests "<tests>"
 EOF2
 plan="${plan}"$'\n\n'"${SELF_VERIFY_CODA}${SIGNAL_SECTION}"
@@ -308,6 +352,18 @@ get_state() {
     | jq -r --arg id "$claude_pane" '.[] | select(.id == $id) | .sessionState // empty'
 }
 
+# emit_block <final_state> — the machine-readable IDs the caller parses. Defined
+# here (before delegation) so both the --no-wait early exit and the normal report
+# path can emit it.
+emit_block() {
+  local fs="$1"
+  printf 'space_id=%s\n' "$space_id"
+  printf 'claude_tab_id=%s\n' "$claude_tab"
+  printf 'claude_pane_id=%s\n' "$claude_pane"
+  printf 'terminal_pane_id=%s\n' "$terminal_pane"
+  printf 'final_state=%s\n' "$fs"
+}
+
 # ---- delegate the plan -------------------------------------------------------
 # Paste the plan, then submit with a SEPARATE Return, retried until the session
 # actually starts. A single Return fired immediately after a large multi-line
@@ -332,6 +388,31 @@ for _ in 1 2 3 4 5; do
 done
 if (( ! submitted )); then
   log "warning: plan submitted but session not observed working; tracking anyway"
+fi
+
+# ---- async fan-out: --no-wait returns right after submit ---------------------
+# Skip the Phase A/B tracking loop entirely: the orchestrator fans out N of these
+# (one writer per branch) and awaits each child's durable done-signal via
+# implement-wait.sh, which polls the run log. Emit the IDs with
+# final_state=delegated, write ONE source=spawn record (carrying child/parent
+# session ids + no_wait so analyze.py can link this child without guessing), and
+# exit 0. The child still self-verifies and writes its own source=self-verify
+# record when it finishes — that record is what the await blocks on.
+if (( no_wait )); then
+  child_session_id="$(resolve_child_session_id "$worktree_path")" || child_session_id=""
+  log "delegated (no-wait); await via implement-wait.sh --branch $branch"
+  emit_block "delegated"
+  printf 'NOTE: delegated (no-wait) — not tracked here.\n'
+  printf 'Await the done-signal: implement-wait.sh --branch %s\n' "$branch"
+  bash "$LOGREC" \
+    --source spawn --workflow-version "$TIAN_WORKFLOW_VERSION" \
+    --final-state delegated --timeout "$timeout" \
+    --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
+    --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
+    --child-session "$child_session_id" --parent-session "$parent_session_id" \
+    --no-wait true \
+    --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
+  exit 0
 fi
 
 # ---- track the session to a settled state -----------------------------------
@@ -381,31 +462,25 @@ done
 # ---- report ------------------------------------------------------------------
 capture="$("$TIAN" pane capture --pane "$claude_pane" 2>/dev/null | tail -n "$CAPTURE_TAIL" || true)"
 
-emit_block() {
-  local fs="$1"
-  printf 'space_id=%s\n' "$space_id"
-  printf 'claude_tab_id=%s\n' "$claude_tab"
-  printf 'claude_pane_id=%s\n' "$claude_pane"
-  printf 'terminal_pane_id=%s\n' "$terminal_pane"
-  printf 'final_state=%s\n' "$fs"
-}
-
 # log_run <final_state> <exit_code> — append the watcher's record for this
 # delegation via the shared writer. Best-effort: never affects the outcome.
 # build/tests/verdict are parsed from the capture tail when present (a `running`
 # outcome has none yet — the implementer's own self-verify record fills those in
 # later); commits/dirty are derived from git by the writer (authoritative).
+# child_session_id/parent_session_id link this delegation to its transcripts.
 log_run() {
-  local fs="$1" ec="$2" elapsed sv_verdict sv_build sv_tests
+  local fs="$1" ec="$2" elapsed sv_verdict sv_build sv_tests child_session_id
   elapsed=$(( $(date +%s 2>/dev/null || echo "$RUN_START_EPOCH") - RUN_START_EPOCH ))
   sv_verdict="$(printf '%s\n' "$capture" | sed -n 's/^[[:space:]]*verdict:[[:space:]]*//p' | tail -1)"
   sv_build="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*build:[[:space:]]*//p'   | tail -1)"
   sv_tests="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*tests:[[:space:]]*//p'   | tail -1)"
+  child_session_id="$(resolve_child_session_id "$worktree_path")" || child_session_id=""
   bash "$LOGREC" \
     --source watcher --workflow-version "$TIAN_WORKFLOW_VERSION" \
     --final-state "$fs" --exit-code "$ec" --elapsed "$elapsed" --timeout "$timeout" \
     --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
     --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
+    --child-session "$child_session_id" --parent-session "$parent_session_id" \
     --verdict "${sv_verdict:-unknown}" --build "${sv_build:-}" --tests "${sv_tests:-}" \
     --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
 }
