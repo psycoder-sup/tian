@@ -27,6 +27,13 @@ When invoked as **`/tian implement <task>`**, delegate the task to a **fresh wor
 session** using the bundled **`implement.sh`** orchestrator (it lives next to this file). Do not
 implement the task yourself — see the anti-freelance rule in Core rules.
 
+> **STOP — orchestrator hard limits.** From THIS session, for any delegated worktree you MUST NOT:
+> `cd` into it; `Edit`/`Write` any file in it; `git commit` in it; run `git show`/`diff`/`log` on it
+> to reconstruct what the child did; or loop on `tian pane capture` to poll its progress.
+> Your ONLY inputs are the script's **IDs block** and the child's **`TIAN SELF-VERIFY`** report
+> (read it from the run log or the capture tail). Everything else is the child's job — route every
+> follow-up to the live child with `tian pane send`. This is repeated below on purpose: lead with it.
+
 1. **Write the plan to a file.** Capture the approved plan/task as text (e.g. a temp file like
    `.dev/tmp/plan.md`) and choose a branch name for the work.
 2. **Run the bundled script.** It creates the worktree (background by default), waits for the Space's
@@ -68,10 +75,49 @@ answer it (`tian pane send … --pane <claude_pane_id>`) or surface the question
 never removes the worktree, so the result stays available for your verification.
 
 **Run log.** Every delegation appends one JSONL record (branch, `final_state`, elapsed, parsed
-self-verify `verdict`/`build`/`tests`/`commits`) to `~/.claude/tian/implement-runs.jsonl` (override with
-`$TIAN_IMPLEMENT_LOG`). Review the harness over time — outcome mix, verdict rate, how often runs hit the
-ceiling as `running`, and whether the implementer committed its own work — with
-`python3 "<skill-dir>/implement-log.py"` (flags: `--recent N`, `--branch SUBSTR`, `--since YYYY-MM-DD`).
+self-verify `verdict`/`build`/`tests`/`commits`, plus `child_session_id`/`parent_session_id`/`no_wait`)
+to `~/.claude/tian/implement-runs.jsonl` (override with `$TIAN_IMPLEMENT_LOG`). Review the harness over
+time — outcome mix, verdict rate, how often runs hit the ceiling as `running`, async fan-out share, and
+whether the implementer committed its own work — with `python3 "<skill-dir>/implement-log.py"`
+(flags: `--recent N`, `--branch SUBSTR`, `--since YYYY-MM-DD`).
+
+### Parallel fan-out (independent slices)
+
+A bare `implement.sh <branch>` **blocks** until its one child settles — correct for a single slice, but
+it serializes work. When a milestone splits into **N genuinely independent slices** (disjoint files, no
+ordering between them), fan them out instead:
+
+1. Pick N branch names and write each slice's plan to its own file.
+2. Fire each delegation with **`--no-wait`** — it creates the worktree, pastes + submits the plan, then
+   returns immediately with `final_state=delegated` (no tracking loop):
+   ```bash
+   bash "<skill-dir>/implement.sh" feat/a --no-wait --prompt-file plan-a.md
+   bash "<skill-dir>/implement.sh" feat/b --no-wait --prompt-file plan-b.md
+   bash "<skill-dir>/implement.sh" feat/c --no-wait --prompt-file plan-c.md
+   ```
+3. **Await every child's durable done-signal** with `implement-wait.sh`, which blocks until each branch
+   has a `source=self-verify` record in the run log, then prints a compact per-branch summary. It polls
+   the **run log only** — never `tian pane capture`:
+   ```bash
+   bash "<skill-dir>/implement-wait.sh" --branch feat/a --branch feat/b --branch feat/c
+   # add --since "$(date +%s)" before fan-out so a prior run's record can't satisfy the wait
+   ```
+4. Then read each child's **`TIAN SELF-VERIFY`** report (from the run log or each pane's capture tail) and
+   verify from the report — same rules as the blocking path.
+
+**Rule: one writer per branch; the orchestrator never edits or commits any worktree.** Each slice has
+exactly one child that owns its files and its commits. Fan-out parallelizes *children*, not the
+orchestrator's role — you still only read reports and route follow-ups via `tian pane send`.
+
+### Long-session hygiene
+
+Run **one orchestrator session per milestone**, and **compact/clear context between milestones**. The
+orchestrator should hold only the plan and the children's self-verify reports — never worktree file
+contents or diffs. Re-reading a child's files or running `git show`/`diff`/`log` on its worktree balloons
+resident context (orchestrators have been observed at 200K+ tokens/turn for hundreds of turns doing
+exactly this) and duplicates context the child already holds. If you need worktree state, ask the live
+child via `tian pane send`; if a turn's context has drifted into the worktree, clear it and resume from
+the plan + the run log.
 
 ## The model & "current" context
 
@@ -177,16 +223,25 @@ IDs below are UUIDs. `[...]` = optional. Defaults to the current context unless 
   - `--base <ref>` / `--existing` / `--path <repo>` / `--workspace <id>` — passed straight through to
     `worktree create`.
   - `--foreground` — create in the foreground (default is **background**, no focus steal).
+  - `--no-wait` — **async fan-out**: paste + submit the plan, then return immediately with
+    `final_state=delegated` (skip the tracking loop). Await the child's done-signal with
+    `implement-wait.sh` instead. Use for N independent slices (see **Parallel fan-out** in Mode: implement).
   - `--prompt-file <f>` — plan source (else read from stdin; a TTY with no file is an error).
-  - `--timeout <sec>` (default `1800`) — overall ceiling for the post-delegation wait.
+  - `--timeout <sec>` (default `5400`) — overall ceiling for the post-delegation wait.
   - `--boot-timeout <sec>` (default `60`) — ceiling for the Claude session to boot.
 
   Prints `space_id` / `claude_tab_id` / `claude_pane_id` / `terminal_pane_id` / `final_state`, then a
   capture tail. The script appends a **mandatory self-verify coda** to the delegated plan, so the session
   builds/tests/plan-checks its own work and prints a `TIAN SELF-VERIFY` block into that capture tail.
-  Exit `0` at `idle` or `needs_attention` (the latter also prints a `NOTE:` line); non-zero on any hard
-  failure or timeout. It does **not** remove the worktree — read the self-verify block before reporting
-  (see **Mode: implement**).
+  Exit `0` at `idle`, `needs_attention` (the latter also prints a `NOTE:` line), or `delegated`
+  (`--no-wait`); non-zero on any hard failure or timeout. It does **not** remove the worktree — read the
+  self-verify block before reporting (see **Mode: implement**).
+- `bash "<skill-dir>/implement-wait.sh" --branch <b> [--branch <b2> ...] [--since <epoch>] [--timeout <sec>] [--log <path>] [--poll <sec>]`
+  — the await primitive for `--no-wait` fan-out. Blocks until each named branch has a `source=self-verify`
+  record in the run log (the child's durable done-signal), then prints `branch  verdict  build  tests
+  (N commits)` per branch. Polls the **run log only** — never `tian pane capture`. `--since <epoch>`
+  ignores records older than a cutoff (pass `$(date +%s)` captured *before* fan-out so a prior run can't
+  satisfy the wait). Exit `0` when all branches are satisfied; `4` on timeout (still prints what arrived).
 
 ### Status, notifications, misc
 - `tian status set [--label <text>] [--state active|busy|idle|needs_attention|inactive]` — sidebar status
