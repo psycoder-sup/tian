@@ -58,11 +58,16 @@ def rank(r):
     return (1 if r.get("source") == "self-verify" else 0, r.get("ts", ""))
 
 
+def delegation_key(r):
+    """Group key tying a delegation's spawn/watcher/self-verify records together."""
+    return r.get("space_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
+
+
 def dedup(rows):
     """One record per delegation (keyed by space_id, else branch+pane)."""
     groups = {}
     for r in rows:
-        key = r.get("space_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
+        key = delegation_key(r)
         if key not in groups or rank(r) > rank(groups[key]):
             groups[key] = r
     return sorted(groups.values(), key=lambda r: r.get("ts", ""))
@@ -108,7 +113,10 @@ def main():
     committed_n = sum(1 for r in delegations if committed(r))
     ceiling_n = states.get("running", 0) + states.get("timeout", 0)
     clean_n = states.get("idle", 0)
-    async_n = sum(1 for r in delegations if r.get("no_wait"))
+    # no_wait lives on the spawn record, which dedup discards in favor of
+    # self-verify — so count async delegations from the raw rows by group key.
+    async_keys = {delegation_key(r) for r in rows if r.get("no_wait")}
+    async_n = sum(1 for r in delegations if delegation_key(r) in async_keys)
     linked_n = sum(1 for r in delegations if (r.get("child_session_id") or "").strip())
 
     print(f"\ndelegations: {n}   (from {len(rows)} raw records)")

@@ -183,19 +183,11 @@ worktree_path=""   # resolved after worktree create; used for git-derived commit
 # one; empty is fine (the field is recorded empty and analyze.py falls back).
 parent_session_id="${CLAUDE_SESSION_ID:-}"
 
-# resolve_child_session_id <worktree-path> — print the child's newest Claude
-# transcript id (best-effort, empty if unresolved). Claude Code stores per-project
-# transcripts under ~/.claude/projects/<mangled path>/<id>.jsonl, where the mangle
-# replaces every "/" and "." in the absolute path with "-". The freshest *.jsonl in
-# that dir is the child's own session.
-resolve_child_session_id() {
-  local wt="$1" proj_dir newest
-  [[ -n "$wt" ]] || return 0
-  proj_dir="$HOME/.claude/projects/$(printf '%s' "$wt" | sed 's#[/.]#-#g')"
-  [[ -d "$proj_dir" ]] || return 0
-  newest="$(ls -1t "$proj_dir"/*.jsonl 2>/dev/null | head -n1)" || newest=""
-  [[ -n "$newest" ]] && basename "$newest" .jsonl
-}
+# child_session_id is NOT resolved here: implement-logrec.sh owns that logic (it
+# resolves the newest Claude transcript under the worktree's project dir whenever
+# --child-session is empty but --worktree is set). Every logrec call below passes
+# --worktree, so the writer fills child_session_id — one source of truth instead
+# of duplicating the path-mangle + newest-transcript heuristic in this script too.
 
 # ---- resolve the plan text ---------------------------------------------------
 plan=""
@@ -399,7 +391,6 @@ fi
 # exit 0. The child still self-verifies and writes its own source=self-verify
 # record when it finishes — that record is what the await blocks on.
 if (( no_wait )); then
-  child_session_id="$(resolve_child_session_id "$worktree_path")" || child_session_id=""
   log "delegated (no-wait); await via implement-wait.sh --branch $branch"
   emit_block "delegated"
   printf 'NOTE: delegated (no-wait) — not tracked here.\n'
@@ -409,7 +400,7 @@ if (( no_wait )); then
     --final-state delegated --timeout "$timeout" \
     --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
     --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
-    --child-session "$child_session_id" --parent-session "$parent_session_id" \
+    --parent-session "$parent_session_id" \
     --no-wait true \
     --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
   exit 0
@@ -469,18 +460,17 @@ capture="$("$TIAN" pane capture --pane "$claude_pane" 2>/dev/null | tail -n "$CA
 # later); commits/dirty are derived from git by the writer (authoritative).
 # child_session_id/parent_session_id link this delegation to its transcripts.
 log_run() {
-  local fs="$1" ec="$2" elapsed sv_verdict sv_build sv_tests child_session_id
+  local fs="$1" ec="$2" elapsed sv_verdict sv_build sv_tests
   elapsed=$(( $(date +%s 2>/dev/null || echo "$RUN_START_EPOCH") - RUN_START_EPOCH ))
   sv_verdict="$(printf '%s\n' "$capture" | sed -n 's/^[[:space:]]*verdict:[[:space:]]*//p' | tail -1)"
   sv_build="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*build:[[:space:]]*//p'   | tail -1)"
   sv_tests="$(printf '%s\n'   "$capture" | sed -n 's/^[[:space:]]*tests:[[:space:]]*//p'   | tail -1)"
-  child_session_id="$(resolve_child_session_id "$worktree_path")" || child_session_id=""
   bash "$LOGREC" \
     --source watcher --workflow-version "$TIAN_WORKFLOW_VERSION" \
     --final-state "$fs" --exit-code "$ec" --elapsed "$elapsed" --timeout "$timeout" \
     --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
     --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
-    --child-session "$child_session_id" --parent-session "$parent_session_id" \
+    --parent-session "$parent_session_id" \
     --verdict "${sv_verdict:-unknown}" --build "${sv_build:-}" --tests "${sv_tests:-}" \
     --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
 }

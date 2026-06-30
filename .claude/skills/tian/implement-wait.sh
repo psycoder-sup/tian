@@ -72,30 +72,22 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ---- helpers -----------------------------------------------------------------
-# ts_epoch <iso8601> — convert a `YYYY-MM-DDThh:mm:ssZ` timestamp to unix epoch.
-# BSD date (macOS) first, then GNU date; empty on failure.
-ts_epoch() {
-  local ts="$1" e=""
-  e="$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$ts" +%s 2>/dev/null)" \
-    || e="$(date -u -d "$ts" +%s 2>/dev/null)" || e=""
-  printf '%s' "$e"
-}
-
 # latest_rec <branch> — print the LATEST qualifying self-verify record (compact
 # JSON) for <branch>: source=self-verify, branch matches, and ts >= --since.
-# Empty if none yet. The log is append-ordered, so the last qualifying line wins.
+# Empty if none yet. A single jq pass does the whole job: jq parses each ts with
+# fromdateiso8601 (no per-line `date` forks, and no BSD-vs-GNU date fragility —
+# the previous bash version forced a parse failure to epoch 0, which silently
+# dropped a real done-signal whenever --since was non-zero). A malformed ts
+# tolerantly sorts as 0 via `fromdateiso8601? // 0`. The log is append-ordered,
+# so `last` is the newest qualifying record.
 latest_rec() {
-  local b="$1" line ts epoch best=""
+  local b="$1"
   [[ -f "$logf" ]] || { printf ''; return 0; }
-  while IFS= read -r line; do
-    [[ -n "$line" ]] || continue
-    ts="$(printf '%s' "$line" | jq -r '.ts // empty' 2>/dev/null)"
-    [[ -n "$ts" ]] || continue
-    epoch="$(ts_epoch "$ts")"; [[ -n "$epoch" ]] || epoch=0
-    if (( epoch >= since )); then best="$line"; fi
-  done < <(jq -c --arg b "$b" \
-              'select(.source == "self-verify" and .branch == $b)' "$logf" 2>/dev/null)
-  printf '%s' "$best"
+  jq -s -c --arg b "$b" --argjson since "$since" '
+    [ .[]
+      | select(.source == "self-verify" and .branch == $b
+               and ((.ts | fromdateiso8601?) // 0) >= $since) ]
+    | last // empty' "$logf" 2>/dev/null
 }
 
 # ---- poll until satisfied or timed out ---------------------------------------
@@ -125,10 +117,10 @@ for b in "${branches[@]}"; do
     exit_code=4
     continue
   fi
-  verdict="$(printf '%s' "$rec" | jq -r '.verdict // "?"' 2>/dev/null)"
-  build="$(printf '%s'   "$rec" | jq -r '.build // ""' 2>/dev/null)"
-  tests="$(printf '%s'   "$rec" | jq -r '.tests // ""' 2>/dev/null)"
-  ncommits="$(printf '%s' "$rec" | jq -r '(.commits | if type=="array" then length else 0 end)' 2>/dev/null)"
+  # one jq pass extracts all four columns as tab-separated fields
+  IFS=$'\t' read -r verdict build tests ncommits < <(printf '%s' "$rec" | jq -r \
+    '[.verdict // "?", .build // "", .tests // "", (.commits | if type=="array" then length else 0 end)] | @tsv' \
+    2>/dev/null)
   [[ "$ncommits" =~ ^[0-9]+$ ]] || ncommits=0
   printf '%-40s %-15s %-9s %s (%s commits)\n' \
     "$b" "${verdict:-?}" "${build:-?}" "${tests:-—}" "$ncommits"

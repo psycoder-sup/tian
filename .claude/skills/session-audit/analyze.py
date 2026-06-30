@@ -181,23 +181,13 @@ def spawned_branches(rows):
 
 
 def load_runlog(path):
-    """Load the /tian implement run log (JSONL). Silently empty if absent."""
-    rows = []
+    """Load the /tian implement run log (JSONL) via load(); empty if absent."""
     if not path or not os.path.exists(path):
-        return rows
+        return []
     try:
-        with open(path) as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rows.append(json.loads(line))
-                except Exception:
-                    pass
+        return load(path)
     except Exception:
-        pass
-    return rows
+        return []
 
 
 def mangle_worktree(wt):
@@ -219,16 +209,29 @@ def newest_transcript(projdir):
 def resolve_from_runlog(runlog, spawned, projects):
     """{transcript_file: branch} for spawned branches resolvable from the run log.
 
-    For each run-log record whose branch the parent spawned, resolve the child
-    transcript authoritatively — by the recorded child_session_id (exact file),
-    else by worktree + newest transcript. This removes the branch/cwd guessing
-    for implement.sh children (including --no-wait fan-out and pane-send children
-    that still went through implement.sh)."""
-    out = {}
+    For each spawned branch, pick ONE best record (one carrying a child_session_id
+    wins, else the latest by ts) and resolve the child transcript authoritatively —
+    by child_session_id (exact file), else by worktree + newest transcript. Keying
+    by branch (not by file) avoids resolving the same delegation's spawn / watcher /
+    self-verify records to multiple files and double-counting one slice. This removes
+    the branch/cwd guessing for implement.sh children (incl. --no-wait fan-out)."""
+    best = {}  # branch -> best record
     for rec in runlog:
         br = rec.get("branch")
         if not br or br not in spawned:
             continue
+        cur = best.get(br)
+        has_csid = bool((rec.get("child_session_id") or "").strip())
+        if cur is None:
+            best[br] = rec
+            continue
+        cur_has = bool((cur.get("child_session_id") or "").strip())
+        if (has_csid and not cur_has) or \
+           (has_csid == cur_has and rec.get("ts", "") >= cur.get("ts", "")):
+            best[br] = rec
+
+    out = {}
+    for br, rec in best.items():
         f = None
         csid = (rec.get("child_session_id") or "").strip()
         if csid:
@@ -240,7 +243,7 @@ def resolve_from_runlog(runlog, spawned, projects):
             if wt:
                 f = newest_transcript(os.path.join(projects, mangle_worktree(wt)))
         if f and os.path.exists(f):
-            out[f] = br  # later records win (newest resolution for the branch)
+            out[f] = br
     return out
 
 
@@ -251,25 +254,33 @@ def find_children(parent_rows, parent_m, projects, runlog):
 
     # 1) Authoritative: children resolved straight from the run log (no guessing).
     runlog_files = resolve_from_runlog(runlog, spawned, projects)
-    resolved_branches = set(runlog_files.values())
 
     cands = []
     seen = set()
-    for f, _br in runlog_files.items():
+    linked_branches = set()  # branches that actually produced a kept run-log child
+    for f, br in runlog_files.items():
         if f in seen:
             continue
         rows = load(f)
         m = metrics(rows)
         if not m["first"]:
             continue
+        # Same time-overlap guard the heuristic path applies: the run log is a
+        # single global JSONL keyed by branch, so a reused branch name can resolve
+        # to a transcript from an unrelated/earlier run. Require overlap with this
+        # parent before trusting the link.
+        if p_first and p_last and m["first"] and m["last"]:
+            if not (m["first"] <= p_last and m["last"] >= p_first):
+                continue
         cwd = first_cwd(rows) or quick_cwd(f) or ""
         cands.append((f, cwd, rows, m))
         seen.add(f)
+        linked_branches.add(br)
 
     # 2) Heuristic supplement — only for worktrees the run log did NOT already
-    # resolve (e.g. children delegated purely via `pane send`, or sessions from
-    # runs predating the run log). Branch-matched candidates whose branch the run
-    # log already resolved are skipped so we prefer the authoritative link.
+    # link (e.g. children delegated purely via `pane send`, runs predating the run
+    # log, or a run-log child rejected by the overlap guard above). Branches that
+    # actually linked in pass 1 are skipped so we prefer the authoritative link.
     for f in glob.glob(os.path.join(projects, "*", "*.jsonl")):
         if f in seen:
             continue
@@ -279,7 +290,7 @@ def find_children(parent_rows, parent_m, projects, runlog):
         branch = worktree_branch(cwd)
         if cwd not in blob and not (branch and branch in spawned):
             continue
-        if branch and branch in resolved_branches:
+        if branch and branch in linked_branches:
             continue
         rows = load(f)
         m = metrics(rows)
@@ -330,11 +341,14 @@ def child_branch(f, cwd, runlog_files):
 def reconcile(branch, runlog):
     """Reconcile a child's run-log records into a one-line state.
 
-    Returns ("STALL", final_state) when the LATEST record for the branch is a
-    watcher `running`/`timeout` with no later self-verify record (a genuine
-    stall the orchestrator should chase); otherwise ("ok", verdict) where the
-    self-verify verdict supersedes the watcher's interim outcome. None when the
-    run log has nothing for the branch."""
+    Returns one of:
+      ("STALL", "<source> <state>")  — the LATEST record is a non-terminal
+          watcher (running/timeout) or spawn (delegated) outcome with no later
+          self-verify: a genuine stall / incomplete async delegation to chase.
+      ("SUPERSEDED", verdict)        — a self-verify record exists; its verdict
+          supersedes any interim watcher/spawn outcome.
+      ("OK", final_state)            — a terminal record, no self-verify.
+    None when the run log has nothing for the branch."""
     if not branch:
         return None
     recs = [r for r in runlog if r.get("branch") == branch and r.get("ts")]
@@ -344,13 +358,13 @@ def reconcile(branch, runlog):
     latest = recs[-1]
     sv = [r for r in recs if r.get("source") == "self-verify"]
     sv_latest_ts = sv[-1].get("ts", "") if sv else ""
-    if (latest.get("source") == "watcher"
-            and latest.get("final_state") in ("running", "timeout")
+    if (latest.get("source") in ("watcher", "spawn")
+            and latest.get("final_state") in ("running", "timeout", "delegated")
             and (not sv or sv_latest_ts < latest.get("ts", ""))):
-        return ("STALL", latest.get("final_state"))
+        return ("STALL", f"{latest.get('source')} {latest.get('final_state')}")
     if sv:
-        return ("ok", sv[-1].get("verdict") or "unknown")
-    return ("ok", latest.get("final_state") or "?")
+        return ("SUPERSEDED", sv[-1].get("verdict") or "unknown")
+    return ("OK", latest.get("final_state") or "?")
 
 
 # ---------- role-hygiene heuristics ----------
@@ -522,9 +536,11 @@ def main():
             kind, detail = rec
             if kind == "STALL":
                 print(f"      reconcile: GENUINE STALL — latest run-log record is "
-                      f"watcher '{detail}' with no later self-verify (chase this child)")
-            else:
+                      f"'{detail}' with no later self-verify (chase this child)")
+            elif kind == "SUPERSEDED":
                 print(f"      reconcile: self-verify supersedes watcher — verdict={detail}")
+            else:
+                print(f"      reconcile: run-log final_state={detail} (no self-verify record)")
 
     if child_ms:
         cm = child_ms[0][2]

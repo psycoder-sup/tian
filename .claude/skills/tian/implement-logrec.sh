@@ -100,6 +100,7 @@ jq -cn \
   --arg source   "$source" \
   --arg repo     "$repo" \
   --arg branch   "$branch" \
+  --arg worktree "$worktree" \
   --arg space    "$space" \
   --arg pane     "$pane" \
   --arg tab      "$tab" \
@@ -116,6 +117,7 @@ jq -cn \
   --argjson commits "$commits_json" \
   --argjson dirty   "$dirty" \
   '{ts:$ts, workflow_version:$version, source:$source, repo:$repo, branch:$branch,
+    worktree:$worktree,
     space_id:$space, claude_pane_id:$pane, claude_tab_id:$tab, final_state:$fs,
     exit_code:$ec, elapsed_s:$el, timeout_s:$to, verdict:$verdict, build:$build,
     tests:$tests, child_session_id:$csid, parent_session_id:$psid, no_wait:$nowait,
