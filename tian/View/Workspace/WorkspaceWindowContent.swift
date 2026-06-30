@@ -87,6 +87,21 @@ struct WorkspaceWindowContent: View {
                             }
                         }
                     },
+                    onSubmitClaudeWorktree: {
+                        let captured = req
+                        createSpaceRequest = nil
+                        guard let repoRoot = captured.repoRoot else { return }
+                        Task {
+                            do {
+                                _ = try await worktreeOrchestrator.createClaudeWorktreeSpace(
+                                    repoPath: repoRoot.path,
+                                    workspaceID: captured.workspace?.id
+                                )
+                            } catch {
+                                worktreeOrchestrator.presentError(error)
+                            }
+                        }
+                    },
                     onCancel: {
                         pendingResolveTask?.cancel()
                         pendingResolveTask = nil
