@@ -1,16 +1,24 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-06-29",
-  "now": [],
+  "lastUpdated": "2026-06-30",
+  "now": [
+    "`claude --worktree` engine for new spaces: a global setting routes the new-space \"Create worktree\" checkbox to `claude --worktree` (Claude auto-names; tian detects the result via `git worktree list` and binds the space + branch). Implemented + live-verified; PR #46 open."
+  ],
   "next": [
-    "Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003)."
+    "Drive down orchestrator resident-context / output inversions (ADR 0003) using session-audit on real /tian implement runs."
   ],
   "milestones": [
     { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" }
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-06-29",
+      "summary": "Hardened the /tian implement orchestrator↔implementer harness (90-min ceiling; busy-at-ceiling = `running`, not a failure; child commits its own work + emits a done signal) and added a versioned run log (workflow_version 1.0.1) + the session-audit skill. Validated by a live smoke test.",
+      "commit": "9d6e6e5",
+      "link": "https://github.com/psycoder-sup/tian/pull/45"
+    },
     {
       "date": "2026-06-29",
       "summary": "Sidebar shows the orchestrator → implementer hierarchy: worktree Spaces nest under the Space that spawned them (two-level cap, same-workspace), tied by a continuous connector rail with a house (⌂) marker.",
@@ -22,12 +30,6 @@
       "summary": "Released v0.15.0 (notarized): ships `tian worktree remove --delete-branch` and the /tian implement plan-submission fix + self-verify coda.",
       "commit": "f1814ac",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.15.0"
-    },
-    {
-      "date": "2026-06-28",
-      "summary": "Hardened /tian implement: reliable plan submission (fixed the bracketed-paste Return race) + mandatory self-verify coda.",
-      "commit": "dfad7e1",
-      "link": "https://github.com/psycoder-sup/tian/pull/40"
     }
   ]
 }
