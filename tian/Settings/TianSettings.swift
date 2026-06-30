@@ -26,6 +26,7 @@ final class TianSettings {
 
     private enum Keys {
         static let claudeCommand = "claudeCommand"
+        static let useClaudeWorktreeEngine = "useClaudeWorktreeEngine"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -44,10 +45,20 @@ final class TianSettings {
         return trimmed.isEmpty ? Self.defaultClaudeCommand : trimmed
     }
 
+    /// When `true`, checking "Create worktree" in the new-space dialog routes
+    /// to the `claude --worktree` engine: Claude creates and names the worktree
+    /// (`<repo>/.claude/worktrees/<name>`) and tian detects the result. When
+    /// `false` (the default), tian's own `git worktree add` engine runs and the
+    /// user names the branch. Persisted on every mutation so it survives relaunches.
+    var useClaudeWorktreeEngine: Bool {
+        didSet { defaults.set(useClaudeWorktreeEngine, forKey: Keys.useClaudeWorktreeEngine) }
+    }
+
     /// - Parameter defaults: the backing store. Defaults to `.standard`; tests
     ///   inject an isolated suite so they don't pollute the real preferences.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.claudeCommand = defaults.string(forKey: Keys.claudeCommand) ?? Self.defaultClaudeCommand
+        self.useClaudeWorktreeEngine = defaults.bool(forKey: Keys.useClaudeWorktreeEngine)
     }
 }
