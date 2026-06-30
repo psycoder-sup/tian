@@ -183,6 +183,136 @@ final class WorktreeOrchestrator {
         }
     }
 
+    // MARK: - Claude Worktree Engine
+
+    /// Creates a Space whose first Claude pane runs `claude --worktree`, then
+    /// detects the worktree Claude created and binds the Space to it.
+    ///
+    /// Unlike `createWorktreeSpace` (tian's own `git worktree add` engine), tian
+    /// neither picks the name nor runs git here: it launches plain
+    /// `claude --worktree` (cwd = repo root) and polls `git worktree list` until
+    /// a new `<repo>/.claude/worktrees/<name>` entry appears, then renames the
+    /// Space and binds `defaultWorkingDirectory`/`worktreePath` from the detected
+    /// path. Because `claude --worktree` registers that dir as a git worktree,
+    /// git auto-ignores it — so this path skips the gitignore/copy/setup/layout
+    /// work `createWorktreeSpace` does (it is intentionally lighter).
+    ///
+    /// - Parameters:
+    ///   - repoPath: Absolute path to a directory inside the repo.
+    ///   - workspaceID: Target workspace ID. If nil, uses the key window's active workspace.
+    ///   - creatorSpaceID: The Space that requested this worktree, recorded as the
+    ///     new Space's `parentSpaceID` (two-level cap; same rule as `createWorktreeSpace`).
+    /// - Returns: Result with the created Space/pane IDs.
+    @discardableResult
+    func createClaudeWorktreeSpace(
+        repoPath: String,
+        workspaceID: UUID? = nil,
+        creatorSpaceID: UUID? = nil
+    ) async throws -> WorktreeCreateResult {
+        // Step 1: Resolve workspace + git repo root.
+        guard let targetWorkspace = resolveWorkspace(workspaceID: workspaceID)
+            ?? resolveWorkspace(workspaceID: nil) else {
+            throw WorktreeError.gitError(
+                command: "claude --worktree",
+                stderr: "No workspace available to create Space in"
+            )
+        }
+        let repoRoot = try await WorktreeService.resolveRepoRoot(from: repoPath)
+        Log.worktree.info("claude --worktree: resolved git repo root \(repoRoot)")
+
+        // Step 2: Snapshot existing worktrees so the new one can be detected by
+        // diffing against this set.
+        let before = Set(try await WorktreeService.listWorktrees(repoRoot: repoRoot).map(\.path))
+
+        // Step 3: Create the Space and override its seeded Claude pane to run
+        // `claude --worktree` (cwd = repo root). Applied synchronously — no
+        // `await` between createSpace and applyCustomLaunchCommand — so the
+        // override lands before SwiftUI attaches the surface (the autostart env
+        // is read once at spawn), the same timing guarantee
+        // `createTab(customCommand:)` relies on.
+        let claudeWorktreeCommand = "claude --worktree"
+        let space = targetWorkspace.spaceCollection.createSpace(
+            name: "Creating worktree…",
+            workingDirectory: repoRoot,
+            focusOnCreate: true
+        )
+        guard let claudeTab = space.claudeSection.activeTab else {
+            throw WorktreeError.gitError(
+                command: "claude --worktree",
+                stderr: "New Space has no Claude tab to launch claude --worktree in"
+            )
+        }
+        let paneViewModel = claudeTab.paneViewModel
+        let paneID = paneViewModel.splitTree.focusedPaneID
+        paneViewModel.applyCustomLaunchCommand(claudeWorktreeCommand, toPaneID: paneID)
+        claudeTab.launchCommand = claudeWorktreeCommand
+        space.defaultWorkingDirectory = URL(filePath: repoRoot)   // until detection rebinds it
+
+        // Record the orchestrator → implementer link (two-level cap; same rule
+        // as `continueCreation`). Resolve the creator within targetWorkspace only.
+        if let creatorSpaceID,
+           let creator = targetWorkspace.spaceCollection.spaces.first(where: { $0.id == creatorSpaceID }) {
+            space.parentSpaceID = creator.parentSpaceID ?? creator.id
+        }
+        Log.worktree.info("claude --worktree: created Space \(space.id); awaiting worktree detection")
+
+        // Step 4: Poll `git worktree list` until Claude's new worktree appears.
+        let detected = await detectClaudeWorktree(repoRoot: repoRoot, before: before)
+
+        // Step 5: Bind the Space to the detected worktree, or fall back on timeout.
+        if let detected {
+            let url = URL(filePath: detected)
+            space.name = url.lastPathComponent
+            space.defaultWorkingDirectory = url
+            space.worktreePath = url
+            // Reset the pane's launch override so a future restart/restore runs
+            // plain `claude`, never spawning a *second* worktree. Safe to do only
+            // now: detection succeeding implies the pane already spawned with
+            // `claude --worktree` (the worktree only exists once that command ran),
+            // so this can't suppress the original creation.
+            paneViewModel.applyCustomLaunchCommand(SectionSpawner.claudeAutostartCommand, toPaneID: paneID)
+            claudeTab.launchCommand = SectionSpawner.claudeAutostartCommand
+            Log.worktree.info("claude --worktree: detected \(detected); bound Space \(space.id) (name: \(url.lastPathComponent))")
+        } else {
+            // Claude is still running — leave the Space in place but give it a
+            // real name. The pane keeps its `claude --worktree` override: we
+            // can't prove a worktree was created, so resetting it could be wrong.
+            space.name = "worktree"
+            Log.worktree.warning("claude --worktree: timed out waiting for a worktree under \(repoRoot)/.claude/worktrees; leaving Space \(space.id) running")
+        }
+
+        return WorktreeCreateResult(
+            spaceID: space.id,
+            existed: false,
+            tabID: space.activeTab?.id,
+            paneID: space.activeTab?.paneViewModel.splitTree.focusedPaneID,
+            claudeTabID: claudeTab.id,
+            claudePaneID: paneID
+        )
+    }
+
+    /// Polls `git worktree list` until a worktree under
+    /// `<repoRoot>/.claude/worktrees/` that wasn't in `before` appears. App-side
+    /// code (not a shell command), so `Task.sleep` is fine. Returns the detected
+    /// absolute path, or `nil` after the ceiling elapses.
+    private func detectClaudeWorktree(repoRoot: String, before: Set<String>) async -> String? {
+        let pollInterval: Duration = .milliseconds(400)
+        let maxAttempts = 112   // ~45 s at 400 ms per attempt
+        let marker = "/.claude/worktrees/"
+        for _ in 0..<maxAttempts {
+            try? await Task.sleep(for: pollInterval)
+            guard let entries = try? await WorktreeService.listWorktrees(repoRoot: repoRoot) else {
+                continue
+            }
+            if let match = entries.first(where: {
+                !before.contains($0.path) && $0.path.contains(marker)
+            }) {
+                return match.path
+            }
+        }
+        return nil
+    }
+
     // MARK: - Cleanup Flow
 
     /// Removes a worktree-backed Space and its git worktree.
