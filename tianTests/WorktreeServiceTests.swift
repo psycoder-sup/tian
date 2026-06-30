@@ -597,6 +597,57 @@ struct WorktreeServiceTests {
             ["worktree", "remove", "--force", path], in: clone
         )
     }
+
+    // MARK: - parseWorktreeList
+
+    @Test func parseWorktreeListParsesMultipleRecords() {
+        let porcelain = """
+        worktree /repo
+        HEAD abc123
+        branch refs/heads/main
+
+        worktree /repo/.claude/worktrees/robust-skipping-phoenix
+        HEAD def456
+        branch refs/heads/worktree-robust-skipping-phoenix
+
+        """
+        let entries = WorktreeService.parseWorktreeList(porcelain)
+        #expect(entries.count == 2)
+        #expect(entries[0].path == "/repo")
+        #expect(entries[0].branch == "main")
+        #expect(entries[1].path == "/repo/.claude/worktrees/robust-skipping-phoenix")
+        #expect(entries[1].branch == "worktree-robust-skipping-phoenix")
+    }
+
+    @Test func parseWorktreeListHandlesDetachedHead() {
+        let porcelain = """
+        worktree /repo
+        HEAD abc123
+        branch refs/heads/main
+
+        worktree /repo/detached
+        HEAD def456
+        detached
+        """
+        let entries = WorktreeService.parseWorktreeList(porcelain)
+        #expect(entries.count == 2)
+        #expect(entries[1].path == "/repo/detached")
+        #expect(entries[1].branch == nil)
+    }
+
+    @Test func parseWorktreeListEmptyOutputYieldsNoEntries() {
+        #expect(WorktreeService.parseWorktreeList("").isEmpty)
+    }
+
+    @Test func listWorktreesReturnsMainWorktree() async throws {
+        let repo = try makeTempGitRepo()
+        defer { try? FileManager.default.removeItem(atPath: repo) }
+
+        let entries = try await WorktreeService.listWorktrees(repoRoot: repo)
+        #expect(entries.count == 1)
+        // git resolves /var → /private/var on macOS, so compare suffixes.
+        #expect(entries[0].path.hasSuffix(URL(filePath: repo).lastPathComponent))
+    }
 }
 
 private struct StringError: Error, CustomStringConvertible {

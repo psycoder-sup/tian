@@ -75,6 +75,57 @@ enum WorktreeService {
                                      stderr: "Failed to parse worktree path from output")
     }
 
+    /// Lists all worktrees registered for a repository.
+    /// - Parameter repoRoot: Absolute path to the repo root (or any linked worktree).
+    /// - Returns: One entry per worktree — its absolute path and the short branch
+    ///   name checked out there (`nil` for a detached HEAD or a bare main worktree).
+    static func listWorktrees(repoRoot: String) async throws -> [(path: String, branch: String?)] {
+        let result = try await runGit(["worktree", "list", "--porcelain"],
+                                      workingDirectory: repoRoot)
+        guard result.exitCode == 0 else {
+            throw WorktreeError.gitError(command: "git worktree list --porcelain",
+                                         stderr: result.stderr)
+        }
+        return parseWorktreeList(result.stdout)
+    }
+
+    /// Parses `git worktree list --porcelain` output into `(path, branch)` pairs.
+    /// Records are blank-line separated; each begins with a `worktree <path>`
+    /// line and may carry a `branch refs/heads/<name>` line (absent for a
+    /// detached HEAD). The `refs/heads/` prefix is stripped to the short name.
+    /// Factored out as a pure function so it can be unit-tested without git.
+    static func parseWorktreeList(_ porcelain: String) -> [(path: String, branch: String?)] {
+        var entries: [(path: String, branch: String?)] = []
+        var currentPath: String?
+        var currentBranch: String?
+
+        func flush() {
+            if let path = currentPath {
+                entries.append((path: path, branch: currentBranch))
+            }
+            currentPath = nil
+            currentBranch = nil
+        }
+
+        for line in porcelain.components(separatedBy: "\n") {
+            if line.hasPrefix("worktree ") {
+                // A new record starts; emit the previous one first.
+                flush()
+                currentPath = String(line.dropFirst("worktree ".count))
+            } else if line.hasPrefix("branch ") {
+                let ref = String(line.dropFirst("branch ".count))
+                currentBranch = ref.hasPrefix("refs/heads/")
+                    ? String(ref.dropFirst("refs/heads/".count))
+                    : ref
+            } else if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Blank line terminates a record.
+                flush()
+            }
+        }
+        flush()
+        return entries
+    }
+
     /// Creates a new git worktree.
     /// - Parameters:
     ///   - repoRoot: Absolute path to the repo root.
