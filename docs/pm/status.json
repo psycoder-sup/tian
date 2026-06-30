@@ -2,17 +2,21 @@
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-06-30",
-  "now": [
-    "`claude --worktree` engine for new spaces: a global setting routes the new-space \"Create worktree\" checkbox to `claude --worktree` (Claude auto-names; tian detects the result via `git worktree list` and binds the space + branch). Implemented + live-verified; PR #46 open."
-  ],
+  "now": [],
   "next": [
-    "Drive down orchestrator resident-context / output inversions (ADR 0003) using session-audit on real /tian implement runs."
+    "Validate harness v1.1.0 on a real multi-slice run: confirm async fan-out (`--no-wait` + `implement-wait.sh`) yields multi-branch overlap and that the STOP block/structured handoff flips the orchestrator output/resident inversion (ADR 0003); re-audit with session-audit."
   ],
   "milestones": [
     { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" }
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-06-30",
+      "summary": "/tian implement harness v1.1.0: async fan-out (`implement.sh --no-wait` + `implement-wait.sh` await-by-log), orchestrator-leanness STOP block + `files:` handoff in the self-verify report, and run-log parent↔child linkage so session-audit links children authoritatively + filters zombies. Self-verified, independently verified, and /code-review --fix found+fixed 7 real defects. Driven by a session audit of real runs.",
+      "commit": "77d0262",
+      "link": "https://github.com/psycoder-sup/tian/pull/49"
+    },
     {
       "date": "2026-06-29",
       "summary": "Hardened the /tian implement orchestrator↔implementer harness (90-min ceiling; busy-at-ceiling = `running`, not a failure; child commits its own work + emits a done signal) and added a versioned run log (workflow_version 1.0.1) + the session-audit skill. Validated by a live smoke test.",
@@ -24,12 +28,6 @@
       "summary": "Sidebar shows the orchestrator → implementer hierarchy: worktree Spaces nest under the Space that spawned them (two-level cap, same-workspace), tied by a continuous connector rail with a house (⌂) marker.",
       "commit": "271e3c8",
       "link": "https://github.com/psycoder-sup/tian/pull/43"
-    },
-    {
-      "date": "2026-06-29",
-      "summary": "Released v0.15.0 (notarized): ships `tian worktree remove --delete-branch` and the /tian implement plan-submission fix + self-verify coda.",
-      "commit": "f1814ac",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.15.0"
     }
   ]
 }
