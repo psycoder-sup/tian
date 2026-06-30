@@ -79,7 +79,7 @@ struct CreateSpaceFlowTests {
 
     @Test func submitActionBlocksOnEmptyInput() {
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "", worktreeEnabled: false, isGitRepo: true,
+            sanitizedInput: "", worktreeEnabled: false, isGitRepo: true, claudeEngine: false,
             collision: nil, highlightedRow: nil
         )
         #expect(action == .blocked)
@@ -87,7 +87,7 @@ struct CreateSpaceFlowTests {
 
     @Test func submitActionPlainModeReturnsPlain() {
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "my space", worktreeEnabled: false, isGitRepo: false,
+            sanitizedInput: "my space", worktreeEnabled: false, isGitRepo: false, claudeEngine: false,
             collision: nil, highlightedRow: nil
         )
         #expect(action == .plain(name: "my space"))
@@ -95,7 +95,7 @@ struct CreateSpaceFlowTests {
 
     @Test func submitActionWorktreeModeBlocksWhenNotGitRepo() {
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "feature", worktreeEnabled: true, isGitRepo: false,
+            sanitizedInput: "feature", worktreeEnabled: true, isGitRepo: false, claudeEngine: false,
             collision: nil, highlightedRow: nil
         )
         #expect(action == .blocked)
@@ -103,7 +103,7 @@ struct CreateSpaceFlowTests {
 
     @Test func submitActionBlocksOnInvalidChars() {
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "bad~name", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "bad~name", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: nil, highlightedRow: nil
         )
         #expect(action == .blocked)
@@ -112,7 +112,7 @@ struct CreateSpaceFlowTests {
     @Test func submitActionBlocksOnInUseCollision() {
         let inUse = row("feature/auth", isInUse: true)
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: inUse, highlightedRow: nil
         )
         #expect(action == .blocked)
@@ -121,7 +121,7 @@ struct CreateSpaceFlowTests {
     @Test func submitActionChecksOutCollisionWhenNotInUse() {
         let collision = row("feature/auth")
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: collision, highlightedRow: nil
         )
         #expect(action == .checkoutExisting(branch: "feature/auth", remoteRef: nil))
@@ -131,7 +131,7 @@ struct CreateSpaceFlowTests {
         let collision = row("feature/auth")
         let highlighted = row("feature/auth-v2")
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "feature/auth", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: collision, highlightedRow: highlighted
         )
         #expect(action == .checkoutExisting(branch: "feature/auth", remoteRef: nil))
@@ -140,7 +140,7 @@ struct CreateSpaceFlowTests {
     @Test func submitActionUsesHighlightedRowWithoutCollision() {
         let highlighted = row("origin/feature/xyz", remoteRef: "origin/feature/xyz")
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "xyz", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "xyz", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: nil, highlightedRow: highlighted
         )
         #expect(action == .checkoutExisting(
@@ -151,7 +151,7 @@ struct CreateSpaceFlowTests {
 
     @Test func submitActionCreatesNewBranchWhenNoCollisionAndNoHighlight() {
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "brand-new", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "brand-new", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: nil, highlightedRow: nil
         )
         #expect(action == .createBranch(name: "brand-new"))
@@ -160,12 +160,53 @@ struct CreateSpaceFlowTests {
     @Test func submitActionPropagatesRemoteRefOnCollision() {
         let collision = row("feature/remote-only", remoteRef: "origin/feature/remote-only")
         let action = CreateSpaceView.resolveSubmitAction(
-            sanitizedInput: "feature/remote-only", worktreeEnabled: true, isGitRepo: true,
+            sanitizedInput: "feature/remote-only", worktreeEnabled: true, isGitRepo: true, claudeEngine: false,
             collision: collision, highlightedRow: nil
         )
         #expect(action == .checkoutExisting(
             branch: "feature/remote-only",
             remoteRef: "origin/feature/remote-only"
         ))
+    }
+
+    // MARK: - resolveSubmitAction (claude --worktree engine)
+
+    @Test func submitActionClaudeEngineSubmitsOnEmptyInput() {
+        // Claude names the worktree, so an empty field still submits.
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "", worktreeEnabled: true, isGitRepo: true, claudeEngine: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .claudeWorktree)
+    }
+
+    @Test func submitActionClaudeEngineTakesPrecedenceOverTypedInput() {
+        // Even with leftover text, claude-engine mode routes to .claudeWorktree
+        // (the branch field is hidden, so this is just defensive).
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "ignored", worktreeEnabled: true, isGitRepo: true, claudeEngine: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .claudeWorktree)
+    }
+
+    @Test func submitActionClaudeEngineIgnoredWhenWorktreeDisabled() {
+        // With the worktree checkbox off, the engine setting is irrelevant —
+        // a plain space is created.
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "my space", worktreeEnabled: false, isGitRepo: true, claudeEngine: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .plain(name: "my space"))
+    }
+
+    @Test func submitActionClaudeEngineBlockedWhenNotGitRepo() {
+        // claudeEngine only applies in a git repo; an empty field outside one
+        // is blocked, not submitted.
+        let action = CreateSpaceView.resolveSubmitAction(
+            sanitizedInput: "", worktreeEnabled: true, isGitRepo: false, claudeEngine: true,
+            collision: nil, highlightedRow: nil
+        )
+        #expect(action == .blocked)
     }
 }

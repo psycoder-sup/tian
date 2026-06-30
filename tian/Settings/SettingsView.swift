@@ -39,6 +39,23 @@ struct SettingsView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
+
+            Section {
+                Toggle(
+                    "Use `claude --worktree` for worktree spaces",
+                    isOn: $settings.useClaudeWorktreeEngine
+                )
+            } header: {
+                Text("Worktree Engine")
+            } footer: {
+                Text(
+                    "When on, checking “Create worktree” in the new-space dialog lets "
+                    + "Claude create and name the worktree (.claude/worktrees/<name>). "
+                    + "When off, you name the branch and tian creates the worktree."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 460)

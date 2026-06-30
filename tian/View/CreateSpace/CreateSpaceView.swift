@@ -8,6 +8,9 @@ struct CreateSpaceView: View {
     let worktreeDir: String
     let onSubmitPlain: (String) -> Void
     let onSubmitWorktree: (CreateWorktreeSubmission) -> Void
+    /// Submit handler for the `claude --worktree` engine. Takes no arguments —
+    /// Claude auto-names the worktree, so the name is read back from the result.
+    let onSubmitClaudeWorktree: () -> Void
     let onCancel: () -> Void
 
     @State private var inputText: String = ""
@@ -21,6 +24,7 @@ struct CreateSpaceView: View {
         worktreeDir: String,
         onSubmitPlain: @escaping (String) -> Void,
         onSubmitWorktree: @escaping (CreateWorktreeSubmission) -> Void,
+        onSubmitClaudeWorktree: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.workspace = workspace
@@ -28,6 +32,7 @@ struct CreateSpaceView: View {
         self.worktreeDir = worktreeDir
         self.onSubmitPlain = onSubmitPlain
         self.onSubmitWorktree = onSubmitWorktree
+        self.onSubmitClaudeWorktree = onSubmitClaudeWorktree
         self.onCancel = onCancel
         // Initial checkbox state: last-used per workspace, defaulting to false.
         // If the workspace isn't a git repo, force false regardless of memory.
@@ -36,6 +41,19 @@ struct CreateSpaceView: View {
     }
 
     private var isGitRepo: Bool { repoRoot != nil }
+
+    /// `true` when the global setting routes "Create worktree" to the
+    /// `claude --worktree` engine. Reading the `@Observable` singleton inside
+    /// `body` (via the conditionals that consume this) establishes observation,
+    /// so flipping the setting live re-renders the dialog. Only meaningful in a
+    /// git repo — the checkbox is disabled otherwise.
+    private var claudeEngine: Bool { isGitRepo && TianSettings.shared.useClaudeWorktreeEngine }
+
+    /// `true` when the dialog is in `claude --worktree` mode: the worktree
+    /// checkbox is on and the global engine setting is enabled. In this mode the
+    /// branch field/list and resolved-path footer are hidden and submit routes
+    /// to `onSubmitClaudeWorktree`.
+    private var claudeWorktreeMode: Bool { worktreeEnabled && claudeEngine }
 
     private var sanitizedInput: String {
         worktreeEnabled ? Self.sanitizeBranchName(inputText) : inputText
@@ -56,6 +74,7 @@ struct CreateSpaceView: View {
             sanitizedInput: sanitizedInput,
             worktreeEnabled: worktreeEnabled,
             isGitRepo: isGitRepo,
+            claudeEngine: claudeEngine,
             collision: currentCollision,
             highlightedRow: worktreeEnabled ? viewModel.selectedRow() : nil
         )
@@ -81,29 +100,33 @@ struct CreateSpaceView: View {
                 Text("New space")
                     .font(.system(size: 15, weight: .semibold))
 
-                TextField(worktreeEnabled ? "Branch name" : "Space name", text: $inputText)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isFocused)
-                    .onChange(of: inputText) { _, new in
-                        // Live sanitization (worktree mode only).
-                        if worktreeEnabled {
-                            let cleaned = Self.sanitizeBranchName(new)
-                            if cleaned != new {
-                                inputText = cleaned
+                // Hidden in `claude --worktree` mode — Claude auto-names the
+                // worktree, so there's no branch/space name to type.
+                if !claudeWorktreeMode {
+                    TextField(worktreeEnabled ? "Branch name" : "Space name", text: $inputText)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isFocused)
+                        .onChange(of: inputText) { _, new in
+                            // Live sanitization (worktree mode only).
+                            if worktreeEnabled {
+                                let cleaned = Self.sanitizeBranchName(new)
+                                if cleaned != new {
+                                    inputText = cleaned
+                                }
+                                viewModel.query = cleaned
                             }
-                            viewModel.query = cleaned
                         }
-                    }
-                    .onSubmit(handleSubmit)
-                    .onExitCommand { onCancel() }
-                    .onKeyPress(.upArrow) {
-                        guard worktreeEnabled else { return .ignored }
-                        viewModel.moveHighlight(.up); return .handled
-                    }
-                    .onKeyPress(.downArrow) {
-                        guard worktreeEnabled else { return .ignored }
-                        viewModel.moveHighlight(.down); return .handled
-                    }
+                        .onSubmit(handleSubmit)
+                        .onExitCommand { onCancel() }
+                        .onKeyPress(.upArrow) {
+                            guard worktreeEnabled else { return .ignored }
+                            viewModel.moveHighlight(.up); return .handled
+                        }
+                        .onKeyPress(.downArrow) {
+                            guard worktreeEnabled else { return .ignored }
+                            viewModel.moveHighlight(.down); return .handled
+                        }
+                }
 
                 Toggle(isOn: $worktreeEnabled) {
                     Text("Create worktree")
@@ -125,7 +148,7 @@ struct CreateSpaceView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                if worktreeEnabled {
+                if worktreeEnabled && !claudeEngine {
                     branchList
                 }
 
@@ -249,7 +272,9 @@ struct CreateSpaceView: View {
     @ViewBuilder
     private var footer: some View {
         HStack(spacing: 6) {
-            if !worktreeEnabled {
+            if claudeWorktreeMode {
+                Text("Claude will create and name the worktree (claude --worktree)")
+            } else if !worktreeEnabled {
                 if !sanitizedInput.isEmpty {
                     Text("Will create plain space \u{201C}\(sanitizedInput)\u{201D}")
                 }
@@ -290,6 +315,8 @@ struct CreateSpaceView: View {
         switch submitAction {
         case .blocked:
             return
+        case .claudeWorktree:
+            onSubmitClaudeWorktree()
         case .plain(let name):
             onSubmitPlain(name)
         case .createBranch(let name):
@@ -318,9 +345,16 @@ struct CreateSpaceView: View {
         sanitizedInput: String,
         worktreeEnabled: Bool,
         isGitRepo: Bool,
+        claudeEngine: Bool,
         collision: BranchRow?,
         highlightedRow: BranchRow?
     ) -> SubmitAction {
+        // `claude --worktree` mode: Claude names the worktree, so there's no
+        // input to validate. Checked before the empty-input guard so an empty
+        // field still submits. Only meaningful in a git repo.
+        if worktreeEnabled, claudeEngine, isGitRepo {
+            return .claudeWorktree
+        }
         guard !sanitizedInput.isEmpty else { return .blocked }
         if !worktreeEnabled {
             return .plain(name: sanitizedInput)
@@ -369,6 +403,8 @@ struct CreateWorktreeSubmission {
 
 enum SubmitAction: Equatable {
     case blocked
+    /// `claude --worktree` engine: Claude creates and names the worktree.
+    case claudeWorktree
     case plain(name: String)
     case createBranch(name: String)
     case checkoutExisting(branch: String, remoteRef: String?)
