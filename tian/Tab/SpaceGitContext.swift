@@ -29,6 +29,11 @@ final class SpaceGitContext {
     /// The repo ID derived from worktreePath (if set). Always sorted first in pinnedRepoOrder.
     private var worktreeRepoID: GitRepoID?
 
+    /// The retained worktree-init detection task. Pane-driven detection awaits
+    /// this before deciding whether a pane may drive the shared repo's status,
+    /// removing the restore-time parent-vs-worktree race.
+    private var worktreeDetectionTask: Task<Void, Never>?
+
     /// Tracks in-flight refresh tasks per repo for cancellation on rapid re-triggers.
     private var inFlightTasks: [GitRepoID: Task<Void, Never>] = [:]
 
@@ -89,10 +94,10 @@ final class SpaceGitContext {
     /// - Parameter worktreePath: If non-nil, eagerly detects the repo from this path.
     init(worktreePath: URL?) {
         if let worktreePath {
-            let path = worktreePath.path
-            Task { [weak self] in
-                await self?.detectAndRefresh(paneID: nil, directory: path, isWorktreeInit: true)
-            }
+            // Kick off detection directly (not via an outer Task) so
+            // `worktreeDetectionTask` is assigned during init — before any
+            // `paneAdded` restore call runs.
+            detectAndRefresh(paneID: nil, directory: worktreePath.path, isWorktreeInit: true)
         }
     }
 
@@ -112,7 +117,7 @@ final class SpaceGitContext {
         // and the new directory is within the same repo root.
         if let existingRepoID = paneRepoAssignments[paneID],
            let repoRoot = repoRoots[existingRepoID],
-           newDirectory == repoRoot || newDirectory.hasPrefix(repoRoot.hasSuffix("/") ? repoRoot : repoRoot + "/") {
+           pathIsWithin(newDirectory, repoRoot) {
             // Same repo — just refresh branch info without re-detecting.
             // Set repoDirectories BEFORE scheduling so the scheduler's
             // handler resolves the latest directory when it fires.
@@ -125,6 +130,12 @@ final class SpaceGitContext {
         Task { [weak self] in
             guard let self else { return }
 
+            // Don't race the worktree-init detection: it and this pane path
+            // target the same shared worktree/parent GitRepoID (see
+            // detectAndRefresh). await returns immediately for non-worktree
+            // spaces (task is nil).
+            await self.worktreeDetectionTask?.value
+
             let repo = await GitStatusService.detectRepo(directory: newDirectory)
 
             if let repo {
@@ -136,7 +147,17 @@ final class SpaceGitContext {
 
                 // Update pane assignment
                 self.paneRepoAssignments[paneID] = newRepoID
-                self.repoDirectories[newRepoID] = newDirectory
+
+                // A worktree and its parent repo share one GitRepoID. A pane
+                // whose directory is in the parent (not the worktree) must not
+                // overwrite the worktree's authoritative directory/status — but
+                // is still tracked below for pinning/GC.
+                let collidesWithParent = self.collidesWithParentWorktree(
+                    repoID: newRepoID, directory: newDirectory)
+
+                if !collidesWithParent {
+                    self.repoDirectories[newRepoID] = newDirectory
+                }
                 if self.repoRoots[newRepoID] == nil {
                     self.repoRoots[newRepoID] = repo.workingTree
                 }
@@ -149,7 +170,9 @@ final class SpaceGitContext {
                     Log.git.debug("Pinned new repo: \(newRepoID.path)")
                 }
 
-                self.refreshScheduler.schedule(key: newRepoID)
+                if !collidesWithParent {
+                    self.refreshScheduler.schedule(key: newRepoID)
+                }
 
                 // Garbage collect previous repo if pane moved to a different repo
                 if let previousRepoID, newRepoID != previousRepoID {
@@ -216,6 +239,8 @@ final class SpaceGitContext {
     /// Cancels all in-flight tasks and clears state. Called on Space close.
     func teardown() {
         isTornDown = true
+        worktreeDetectionTask?.cancel()
+        worktreeDetectionTask = nil
         for task in inFlightTasks.values { task.cancel() }
         inFlightTasks.removeAll()
         for inner in prFetchTasks.values {
@@ -236,6 +261,26 @@ final class SpaceGitContext {
 
     // MARK: - Private
 
+    /// True when `dir` is `root` itself or a descendant of `root`. Centralizes
+    /// the path-prefix logic shared by the same-repo fast path and the worktree
+    /// parent-collision guard.
+    private func pathIsWithin(_ dir: String, _ root: String) -> Bool {
+        if dir == root { return true }
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        return dir.hasPrefix(prefix)
+    }
+
+    /// True when `repoID` is the Space's own worktree repo but `directory` is
+    /// OUTSIDE the worktree working tree — i.e. a pane in the PARENT repo (which
+    /// shares the worktree's GitRepoID). Such a pane must not drive the shared
+    /// repo's directory/status. Anchored on `repoRoots[worktreeRepoID]`, the same
+    /// git-derived path the same-repo fast path compares against.
+    private func collidesWithParentWorktree(repoID: GitRepoID, directory: String) -> Bool {
+        guard let wtID = worktreeRepoID, repoID == wtID, let wtRoot = repoRoots[wtID]
+        else { return false }
+        return !pathIsWithin(directory, wtRoot)
+    }
+
     /// Sorts pinnedRepoOrder: worktree repo first (if applicable), then alphabetical by path.
     private func sortPinnedRepoOrder() {
         let worktreeID = self.worktreeRepoID
@@ -248,6 +293,11 @@ final class SpaceGitContext {
 
     /// Unpins a repo and cleans up all associated state.
     private func unpinRepo(_ repoID: GitRepoID) {
+        // Never GC the Space's own worktree repo — it's owned by the Space's
+        // worktreePath, not by any pane, so pane removal/move must not remove it.
+        // teardown() clears everything directly and does not route through here.
+        guard repoID != worktreeRepoID else { return }
+
         inFlightTasks[repoID]?.cancel()
         inFlightTasks.removeValue(forKey: repoID)
         if let inner = prFetchTasks[repoID] {
@@ -269,8 +319,17 @@ final class SpaceGitContext {
     ///   - directory: The working directory to detect from.
     ///   - isWorktreeInit: If true, sets worktreeRepoID for sort priority.
     private func detectAndRefresh(paneID: UUID?, directory: String, isWorktreeInit: Bool = false) {
-        Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
+
+            // A pane-driven detection must not race the worktree-init detection:
+            // both target the shared worktree/parent GitRepoID, and the
+            // worktree's authoritative state must settle before we decide
+            // whether this pane may drive it. The worktree-init task must not
+            // await itself; the await is a no-op for non-worktree spaces (nil).
+            if !isWorktreeInit {
+                await self.worktreeDetectionTask?.value
+            }
 
             guard let repo = await GitStatusService.detectRepo(directory: directory) else {
                 if let paneID {
@@ -288,7 +347,6 @@ final class SpaceGitContext {
             if let paneID {
                 self.paneRepoAssignments[paneID] = repoID
             }
-            self.repoDirectories[repoID] = directory
 
             // For worktrees this resolves to the worktree's own root, not the
             // main repo — so the same-repo prefix check at paneWorkingDirectoryChanged
@@ -306,7 +364,26 @@ final class SpaceGitContext {
 
             self.startWatcher(repoID: repoID, location: repo)
 
+            // A worktree and its parent repo share one GitRepoID (keyed on
+            // --git-common-dir). On restore, a claude pane persisted in the
+            // PARENT repo would otherwise overwrite the worktree's authoritative
+            // directory and render the parent's branch. Track the pane for
+            // lifecycle above, but never let it drive the shared repo's status.
+            let collidesWithParent = !isWorktreeInit
+                && self.collidesWithParentWorktree(repoID: repoID, directory: directory)
+            if collidesWithParent {
+                Log.git.debug("Worktree space: parent-repo pane tracked but not driving status: \(directory)")
+                return
+            }
+
+            self.repoDirectories[repoID] = directory
             self.refreshRepo(repoID: repoID, directory: directory)
+        }
+
+        // Retain the worktree-init task synchronously so pane paths can await it.
+        if isWorktreeInit {
+            worktreeDetectionTask?.cancel()
+            worktreeDetectionTask = task
         }
     }
 
