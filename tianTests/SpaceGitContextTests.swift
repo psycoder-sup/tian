@@ -58,6 +58,95 @@ struct SpaceGitContextTests {
         #expect(status?.branchName != nil)
     }
 
+    /// Regression: a worktree-backed space, on restore, gets a claude pane
+    /// whose persisted working directory is the PARENT repo (not the worktree).
+    /// A worktree and its parent share one `GitRepoID` (keyed on
+    /// `--git-common-dir`), so the parent-repo pane must NOT clobber the
+    /// worktree's authoritative branch/status. Before the fix the parent
+    /// detection raced and overwrote the worktree branch; after it, the
+    /// worktree branch stays authoritative.
+    @Test func worktreeSpacePaneInParentRepoDoesNotClobberBranch() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        // Create a linked worktree on a DISTINCT branch.
+        let wtPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-test-wt-\(UUID().uuidString)")
+            .path
+        try runGitSync(["worktree", "add", "-b", "feat/worktree-x", wtPath], in: main)
+        defer {
+            try? runGitSync(["worktree", "remove", "--force", wtPath], in: main)
+            cleanup(wtPath)
+        }
+
+        // The main repo's default branch must differ from the worktree branch,
+        // otherwise the assertion below is meaningless.
+        let mainBranch = try currentBranchSync(in: main)
+        #expect(mainBranch != "feat/worktree-x")
+
+        let context = SpaceGitContext(worktreePath: URL(filePath: wtPath))
+
+        // Simulate the restore collision: the claude pane persisted in the
+        // PARENT repo, added right after the worktree-init detection kicks off.
+        context.paneAdded(paneID: UUID(), workingDirectory: main)
+
+        try await pollUntil(timeout: 5.0) {
+            !context.repoStatuses.isEmpty
+        }
+        // Let the parent-pane task also run so a clobber would have happened.
+        try await Task.sleep(for: .milliseconds(300))
+
+        // The worktree and parent share one GitRepoID, so exactly one repo is
+        // pinned; its branch must be the worktree's, not the parent's.
+        #expect(context.pinnedRepoOrder.count == 1)
+        let repoID = try #require(context.pinnedRepoOrder.first)
+        let status = try #require(context.repoStatuses[repoID])
+        #expect(status.branchName == "feat/worktree-x")
+    }
+
+    /// Regression: the Space's own worktree repo is pinned at init with no
+    /// `paneRepoAssignments` entry — it's owned by the Space's worktreePath,
+    /// not by any pane. A parent-repo pane shares the worktree's `GitRepoID`,
+    /// so removing that pane must NOT garbage-collect (unpin) the worktree repo
+    /// while the Space is still alive. Before the guard, `paneRemoved` unpinned
+    /// the shared repo and the sidebar row vanished; after it, the worktree
+    /// repo stays pinned with its own branch.
+    @Test func worktreeRepoStaysPinnedAfterCollidingPaneRemoved() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        // Create a linked worktree on a DISTINCT branch.
+        let wtPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-test-wt-\(UUID().uuidString)")
+            .path
+        try runGitSync(["worktree", "add", "-b", "feat/worktree-x", wtPath], in: main)
+        defer {
+            try? runGitSync(["worktree", "remove", "--force", wtPath], in: main)
+            cleanup(wtPath)
+        }
+
+        let context = SpaceGitContext(worktreePath: URL(filePath: wtPath))
+
+        // Add a PARENT-repo pane — it shares the worktree's GitRepoID.
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: main)
+
+        try await pollUntil(timeout: 5.0) {
+            !context.repoStatuses.isEmpty
+        }
+        // Let the parent-pane task also run.
+        try await Task.sleep(for: .milliseconds(300))
+
+        let repoID = try #require(context.pinnedRepoOrder.first)
+
+        // Remove the colliding parent-repo pane.
+        context.paneRemoved(paneID: paneID)
+
+        // The worktree repo must stay pinned with its own branch.
+        #expect(context.pinnedRepoOrder.contains(repoID))
+        #expect(context.repoStatuses[repoID]?.branchName == "feat/worktree-x")
+    }
+
     @Test func paneAddedIgnoresEmptyAndTildeDirectories() async {
         let context = SpaceGitContext(worktreePath: nil)
         let paneID = UUID()
@@ -403,6 +492,24 @@ struct SpaceGitContextTests {
             let msg = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             throw StringError("git \(args.joined(separator: " ")) failed: \(msg)")
         }
+    }
+
+    /// Returns the current branch name for a repo (via `git rev-parse
+    /// --abbrev-ref HEAD`). Used to confirm the parent repo's branch differs
+    /// from the worktree branch so the collision assertion is meaningful.
+    private func currentBranchSync(in dir: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/git")
+        process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
+        process.currentDirectoryURL = URL(filePath: dir)
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        return (String(data: data, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func makeTempDir() throws -> String {
