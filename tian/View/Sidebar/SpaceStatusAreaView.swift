@@ -2,13 +2,11 @@ import SwiftUI
 
 /// Status area below the space name in the sidebar.
 /// Renders one row per tab that has a Claude session — each showing the tab's
-/// status dot and its own branch name (worktree-aware) — plus the optional
-/// free-form status label line.
+/// status dot, its tab name, and its own branch name (worktree-aware) — plus
+/// the optional free-form status label line.
 struct SpaceStatusAreaView: View {
     let space: SpaceModel
     let isActive: Bool
-
-    private let maxVisibleLines = 3
 
     private var subtitleColor: Color {
         if isActive {
@@ -22,7 +20,9 @@ struct SpaceStatusAreaView: View {
     private struct TabRow: Identifiable {
         let id: UUID
         let state: ClaudeSessionState
-        let branchLabel: String
+        let tabName: String
+        /// Git branch for this tab. `nil` for non-git tabs.
+        let branchName: String?
         let repoStatus: GitRepoStatus?
         /// True for the space's currently-focused tab (active tab of the
         /// focused section) — drives the active-tab indicator.
@@ -55,19 +55,17 @@ struct SpaceStatusAreaView: View {
             let repoID = space.gitContext.paneRepoAssignments[top.paneID]
             let repoStatus = space.gitContext.status(forPane: top.paneID)
                 ?? repoID.flatMap { space.gitContext.repoStatuses[$0] }
-            let branch = repoStatus?.branchName ?? tab.displayName
 
             rows.append(TabRow(
                 id: tab.id,
                 state: top.state,
-                branchLabel: branch,
+                tabName: tab.displayName,
+                branchName: repoStatus?.branchName,
                 repoStatus: repoStatus,
                 isActiveTab: tab.id == focusedID
             ))
         }
-        // Active tab first (so it's never pushed past `maxVisibleLines` into the
-        // "+N more" overflow — the active-tab indicator must always be visible),
-        // then by session priority.
+        // Active tab first, then by session priority (highest-priority state first).
         return rows.sorted { lhs, rhs in
             if lhs.isActiveTab != rhs.isActiveTab { return lhs.isActiveTab }
             return lhs.state > rhs.state
@@ -77,24 +75,17 @@ struct SpaceStatusAreaView: View {
     var body: some View {
         let latestStatus = PaneStatusManager.shared.latestStatus(in: space)
         let rows = tabRows()
-        let visibleRows = Array(rows.prefix(maxVisibleLines))
-        let overflow = rows.count - visibleRows.count
 
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(visibleRows) { row in
+            ForEach(rows) { row in
                 TabStatusRowView(
                     state: row.state,
-                    branchLabel: row.branchLabel,
+                    tabName: row.tabName,
+                    branchName: row.branchName,
                     repoStatus: row.repoStatus,
                     subtitleColor: subtitleColor,
                     isActiveTab: row.isActiveTab
                 )
-            }
-
-            if overflow > 0 {
-                Text("+\(overflow) more")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color(white: 0.45))
             }
 
             if let status = latestStatus {

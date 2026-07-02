@@ -1,11 +1,15 @@
 import SwiftUI
 
 /// A single tab's status row in the sidebar.
-/// Row 1: [active-tab bar] [session dot] [branch name (or tab title)]
-/// Row 2: [change badge +/-] [PR badge] (only when the tab's repo has changes/PR)
+/// Row 1: [active-tab bar] [session dot] [tab name]
+/// Row 2: [branch icon + name] [change badge +/-] [PR badge] (git tabs;
+///        shown when there's a branch and/or repo changes/PR)
 struct TabStatusRowView: View {
     let state: ClaudeSessionState
-    let branchLabel: String
+    /// Primary label: the tab's display name.
+    let tabName: String
+    /// Secondary muted label: the git branch. `nil`/empty for non-git tabs.
+    let branchName: String?
     /// Repo status backing the diff / PR badges. `nil` for non-git tabs.
     var repoStatus: GitRepoStatus?
     let subtitleColor: Color
@@ -13,7 +17,7 @@ struct TabStatusRowView: View {
     var isActiveTab: Bool = false
 
     /// Leading indicator gutter (3) + spacing (6) + dot (8) + spacing (6):
-    /// indents the badge row to sit under the branch text.
+    /// indents the badge row to sit under the tab name.
     private static let labelIndent: CGFloat = 23
 
     private var hasGitRow: Bool {
@@ -23,6 +27,12 @@ struct TabStatusRowView: View {
 
     private var branchColor: Color {
         isActiveTab ? Color(white: 0.95) : subtitleColor
+    }
+
+    /// Non-empty branch name to render as the secondary label, else `nil`.
+    private var resolvedBranch: String? {
+        guard let branchName, !branchName.isEmpty else { return nil }
+        return branchName
     }
 
     var body: some View {
@@ -36,21 +46,40 @@ struct TabStatusRowView: View {
 
                 SessionDotView(state: state)
 
-                Text(branchLabel)
+                // Primary: tab name.
+                Text(tabName)
                     .font(.system(size: 10, weight: isActiveTab ? .semibold : .medium))
                     .foregroundStyle(branchColor)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
             }
 
-            if let repoStatus, hasGitRow {
+            // Row 2: branch + diff/PR badges, indented under the tab name.
+            // Shown for git tabs with a branch and/or repo changes/PR.
+            if resolvedBranch != nil || hasGitRow {
                 HStack(spacing: 4) {
-                    ChangeBadgeView(
-                        diffSummary: repoStatus.diffSummary,
-                        changedFiles: repoStatus.changedFiles
-                    )
+                    // Secondary: git branch, always muted (branch is never the
+                    // primary). Only shown for git tabs with a non-empty branch.
+                    if let branch = resolvedBranch {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.triangle.branch")
+                                .font(.system(size: 8))
+                            Text(branch)
+                                .font(.system(size: 9))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .foregroundStyle(subtitleColor)
+                    }
 
-                    if let prStatus = repoStatus.prStatus {
+                    if let repoStatus, !repoStatus.diffSummary.isEmpty {
+                        ChangeBadgeView(
+                            diffSummary: repoStatus.diffSummary,
+                            changedFiles: repoStatus.changedFiles
+                        )
+                    }
+
+                    if let prStatus = repoStatus?.prStatus {
                         PRStatusIndicatorView(prStatus: prStatus)
                     }
                 }
