@@ -590,8 +590,9 @@ struct SpaceGitContextTests {
         #expect(context.branch(forPane: paneID) == "feat/nested")
     }
 
-    /// `setPaneDirectory` with the pane's current directory is a no-op (dedupes
-    /// repeated CwdChanged for the same dir).
+    /// A `setPaneDirectory` repeated for the same dir is a no-op (dedupes a busy
+    /// CwdChanged loop). The dedupe keys on the bridge's own history, so the
+    /// FIRST report still runs even after `paneAdded`/OSC 7 already saw the dir.
     @Test func setPaneDirectoryIsNoOpWhenUnchanged() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
@@ -601,9 +602,45 @@ struct SpaceGitContextTests {
         context.paneAdded(paneID: paneID, workingDirectory: repo)
         try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
 
+        context.setPaneDirectory(paneID: paneID, directory: repo)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
+
         let before = context.branch(forPane: paneID)
+        // Repeated report for the same dir: deduped, state unchanged.
         context.setPaneDirectory(paneID: paneID, directory: repo)
         #expect(context.branch(forPane: paneID) == before)
+    }
+
+    /// Regression (ordering): the OSC 7 same-repo fast path writes
+    /// `paneDirectories` for a nested `.claude/worktrees/<name>` path WITHOUT
+    /// updating the worktree root (it treats the nested dir as "still main").
+    /// A subsequent bridge `setPaneDirectory` for that same path must NOT be
+    /// deduped away by the OSC 7 write — it has to force a full detect so the
+    /// tab resolves the nested worktree's own branch.
+    @Test func setPaneDirectoryNotSuppressedByPriorOSC7Write() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        let nested = (main as NSString).appendingPathComponent(".claude/worktrees/nested")
+        try runGitSync(["worktree", "add", "-b", "feat/bridge-nested", nested], in: main)
+        defer { try? runGitSync(["worktree", "remove", "--force", nested], in: main) }
+
+        let mainBranch = try currentBranchSync(in: main)
+        #expect(mainBranch != "feat/bridge-nested")
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: main)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == mainBranch }
+
+        // OSC 7 reports the nested worktree dir first — same-repo fast path keeps
+        // the pane on main and never updates the worktree root.
+        context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: nested)
+
+        // Bridge reports the same dir: must still resolve the nested branch.
+        context.setPaneDirectory(paneID: paneID, directory: nested)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == "feat/bridge-nested" }
+        #expect(context.branch(forPane: paneID) == "feat/bridge-nested")
     }
 
     // MARK: - Helpers

@@ -46,15 +46,7 @@ struct SpaceStatusAreaView: View {
         let focusedID = focusedTabID
         var rows: [TabRow] = []
         for tab in space.allTabs {
-            var top: (paneID: UUID, state: ClaudeSessionState)?
-            for paneID in tab.paneViewModel.splitTree.allLeaves() {
-                guard let state = PaneStatusManager.shared.sessionState(for: paneID),
-                      state != .inactive else { continue }
-                if top == nil || state > top!.state {
-                    top = (paneID, state)
-                }
-            }
-            guard let top else { continue }
+            guard let top = PaneStatusManager.shared.topSessionPane(in: tab) else { continue }
 
             // Prefer the pane's own worktree status (branch + diff + PR), so
             // sibling worktrees sharing a GitRepoID show independent badges.
@@ -73,7 +65,13 @@ struct SpaceStatusAreaView: View {
                 isActiveTab: tab.id == focusedID
             ))
         }
-        return rows.sorted { $0.state > $1.state }
+        // Active tab first (so it's never pushed past `maxVisibleLines` into the
+        // "+N more" overflow — the active-tab indicator must always be visible),
+        // then by session priority.
+        return rows.sorted { lhs, rhs in
+            if lhs.isActiveTab != rhs.isActiveTab { return lhs.isActiveTab }
+            return lhs.state > rhs.state
+        }
     }
 
     var body: some View {

@@ -39,6 +39,12 @@ final class SpaceGitContext {
     /// In-flight per-worktree-root refresh tasks, cancelled on re-entry.
     private var inFlightWorktreeTasks: [String: Task<Void, Never>] = [:]
 
+    /// Directory last applied to each pane via `setPaneDirectory` (the Claude
+    /// bridge). Kept separate from `paneDirectories` (which the OSC 7 path also
+    /// writes) so an OSC 7 update to the same path can't suppress the bridge's
+    /// forced full detect — see `setPaneDirectory`.
+    private var paneBridgeDirectory: [UUID: String] = [:]
+
     // MARK: - Private State
 
     /// The repo ID derived from worktreePath (if set). Always sorted first in pinnedRepoOrder.
@@ -226,8 +232,13 @@ final class SpaceGitContext {
     func setPaneDirectory(paneID: UUID, directory: String) {
         guard !directory.isEmpty else { return }
         // Dedupe repeated CwdChanged for the same dir so a busy `cd` loop
-        // doesn't spawn a git pipeline per event.
-        guard paneDirectories[paneID] != directory else { return }
+        // doesn't spawn a git pipeline per event. Key on the bridge's own
+        // history, NOT `paneDirectories`: the OSC 7 fast path writes
+        // `paneDirectories` without updating `paneWorktreeRoot`, so deduping
+        // against it would let an OSC 7 event to a nested worktree silently
+        // suppress the very full detect this method exists to force.
+        guard paneBridgeDirectory[paneID] != directory else { return }
+        paneBridgeDirectory[paneID] = directory
         paneDirectories[paneID] = directory
         detectAndRefresh(paneID: paneID, directory: directory)
     }
@@ -235,6 +246,7 @@ final class SpaceGitContext {
     /// Called when a pane is closed. Cleans up assignments and garbage-collects orphaned repos.
     func paneRemoved(paneID: UUID) {
         paneDirectories.removeValue(forKey: paneID)
+        paneBridgeDirectory.removeValue(forKey: paneID)
         paneWorktreeRoot.removeValue(forKey: paneID)
         pruneWorktreeStatuses()
         guard let repoID = paneRepoAssignments.removeValue(forKey: paneID) else { return }
@@ -309,6 +321,7 @@ final class SpaceGitContext {
         for task in inFlightWorktreeTasks.values { task.cancel() }
         inFlightWorktreeTasks.removeAll()
         statusByWorktreeRoot.removeAll()
+        paneBridgeDirectory.removeAll()
         paneDirectories.removeAll()
         repoDirectories.removeAll()
         repoRoots.removeAll()
