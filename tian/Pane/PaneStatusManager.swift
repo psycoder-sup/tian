@@ -89,6 +89,21 @@ final class PaneStatusManager {
         sessionStates[paneID]
     }
 
+    /// The highest-priority (needsAttention first) non-inactive session state
+    /// among the tab's panes, or nil when no pane has an active session. Drives
+    /// the single dot on a per-tab sidebar row.
+    func aggregateSessionState(in tab: TabModel) -> ClaudeSessionState? {
+        var aggregate: ClaudeSessionState?
+        for paneID in tab.paneViewModel.splitTree.allLeaves() {
+            guard let state = sessionStates[paneID], state != .inactive else { continue }
+            // `>` compares by priority (needsAttention is greatest).
+            if aggregate == nil || state > aggregate! {
+                aggregate = state
+            }
+        }
+        return aggregate
+    }
+
     /// Whether any pane under this tab is currently in the given state.
     func hasSessionState(_ state: ClaudeSessionState, in tab: TabModel) -> Bool {
         for paneID in tab.paneViewModel.splitTree.allLeaves() {

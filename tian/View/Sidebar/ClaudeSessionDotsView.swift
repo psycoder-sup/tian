@@ -18,13 +18,18 @@ struct ClaudeSessionDotsView: View {
     var body: some View {
         HStack(spacing: 3) {
             ForEach(sessions, id: \.id) { session in
-                dotView(for: session.state)
+                SessionDotView(state: session.state)
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func dotView(for state: ClaudeSessionState) -> some View {
+/// A single Claude-session status dot. Shared by the multi-dot row
+/// (`ClaudeSessionDotsView`) and the per-tab status row (`TabStatusRowView`).
+struct SessionDotView: View {
+    let state: ClaudeSessionState
+
+    var body: some View {
         switch state {
         case .busy:
             BusyDotView()

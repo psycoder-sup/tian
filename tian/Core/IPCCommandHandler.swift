@@ -57,6 +57,7 @@ final class IPCCommandHandler {
         case "pane.focus": return handlePaneFocus(request)
         case "pane.send":  return handlePaneSend(request)
         case "pane.capture": return handlePaneCapture(request)
+        case "pane.set-directory": return handlePaneSetDirectory(request)
         case "pane.set-restore-command": return handleSetRestoreCommand(request)
 
         // Status (Phase 4)
@@ -536,6 +537,30 @@ final class IPCCommandHandler {
         return .success()
     }
 
+    /// Associates a pane with a working directory reported out-of-band (a Claude
+    /// `CwdChanged` / `EnterWorktree` hook), so the sidebar shows the branch the
+    /// session is actually working in even though the shell stays put. Per-pane:
+    /// defaults to the caller's `TIAN_PANE_ID`.
+    private func handlePaneSetDirectory(_ request: IPCRequest) -> IPCResponse {
+        guard let directory = stringParam("directory", from: request.params),
+              !directory.isEmpty else {
+            return .failure(code: 1, message: "Missing required parameter: directory")
+        }
+
+        let paneIdStr = stringParam("paneId", from: request.params).flatMap { $0.isEmpty ? nil : $0 }
+            ?? request.env.paneId
+        guard let paneId = UUID(uuidString: paneIdStr) else {
+            return .failure(code: 1, message: "Invalid pane UUID: \(paneIdStr)")
+        }
+
+        guard let space = resolvePaneSpace(id: paneId) else {
+            return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
+        }
+
+        space.gitContext.setPaneDirectory(paneID: paneId, directory: directory)
+        return .success()
+    }
+
     // MARK: - Status Commands
 
     private func handleStatusSet(_ request: IPCRequest) -> IPCResponse {
@@ -797,6 +822,24 @@ final class IPCCommandHandler {
                         if tab.paneViewModel.splitTree.root.containsLeaf(paneID: id) {
                             return (tab, tab.paneViewModel, id)
                         }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Finds the Space that owns a given pane. Used by commands that must reach
+    /// the pane's `SpaceGitContext` (resolved from the pane, not `env.spaceId`,
+    /// so an explicit `--pane` in another space still targets the right context).
+    private func resolvePaneSpace(id: UUID) -> SpaceModel? {
+        for collection in windowCoordinator.allWorkspaceCollections {
+            for workspace in collection.workspaces {
+                for space in workspace.spaceCollection.spaces {
+                    if space.allTabs.contains(where: {
+                        $0.paneViewModel.splitTree.root.containsLeaf(paneID: id)
+                    }) {
+                        return space
                     }
                 }
             }

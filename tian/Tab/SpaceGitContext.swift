@@ -24,6 +24,21 @@ final class SpaceGitContext {
     /// Ordered list of pinned repos for display. First is worktree-derived repo if applicable.
     private(set) var pinnedRepoOrder: [GitRepoID] = []
 
+    /// Maps each pane to its worktree root (`git rev-parse --show-toplevel`).
+    /// Unlike `paneRepoAssignments` (keyed on the shared `--git-common-dir`), the
+    /// worktree root is unique per branch, so panes in different worktrees of the
+    /// same repo resolve to different roots.
+    private(set) var paneWorktreeRoot: [UUID: String] = [:]
+
+    /// Full git status (branch + diff + PR) per worktree root. Lets the sidebar
+    /// render each tab's own branch AND change/PR badges even when several tabs
+    /// share one `GitRepoID` (e.g. sibling worktrees), which the `GitRepoID`-keyed
+    /// `repoStatuses` cannot distinguish.
+    private(set) var statusByWorktreeRoot: [String: GitRepoStatus] = [:]
+
+    /// In-flight per-worktree-root refresh tasks, cancelled on re-entry.
+    private var inFlightWorktreeTasks: [String: Task<Void, Never>] = [:]
+
     // MARK: - Private State
 
     /// The repo ID derived from worktreePath (if set). Always sorted first in pinnedRepoOrder.
@@ -147,6 +162,10 @@ final class SpaceGitContext {
 
                 // Update pane assignment
                 self.paneRepoAssignments[paneID] = newRepoID
+                // Track the pane's worktree root + status (see paneWorktreeRoot).
+                self.paneWorktreeRoot[paneID] = repo.workingTree
+                self.refreshWorktreeStatus(worktreeRoot: repo.workingTree, repoID: newRepoID)
+                self.pruneWorktreeStatuses()
 
                 // A worktree and its parent repo share one GitRepoID. A pane
                 // whose directory is in the parent (not the worktree) must not
@@ -194,9 +213,30 @@ final class SpaceGitContext {
         detectAndRefresh(paneID: paneID, directory: wd)
     }
 
+    /// Applies a pane's working directory reported out-of-band — e.g. a Claude
+    /// `CwdChanged` / `EnterWorktree` hook — rather than via the shell's OSC 7.
+    ///
+    /// Unlike `paneWorkingDirectoryChanged`, this always runs a full
+    /// `detectRepo` (via `detectAndRefresh`) instead of the same-repo fast path.
+    /// That matters because Claude's default worktrees live at
+    /// `.claude/worktrees/<name>`, physically nested inside the main working
+    /// tree: the fast path's path-prefix check would treat such a directory as
+    /// "still the main repo" and never update `paneWorktreeRoot`, so the tab's
+    /// branch would stay wrong. A full detect resolves the worktree's own root.
+    func setPaneDirectory(paneID: UUID, directory: String) {
+        guard !directory.isEmpty else { return }
+        // Dedupe repeated CwdChanged for the same dir so a busy `cd` loop
+        // doesn't spawn a git pipeline per event.
+        guard paneDirectories[paneID] != directory else { return }
+        paneDirectories[paneID] = directory
+        detectAndRefresh(paneID: paneID, directory: directory)
+    }
+
     /// Called when a pane is closed. Cleans up assignments and garbage-collects orphaned repos.
     func paneRemoved(paneID: UUID) {
         paneDirectories.removeValue(forKey: paneID)
+        paneWorktreeRoot.removeValue(forKey: paneID)
+        pruneWorktreeStatuses()
         guard let repoID = paneRepoAssignments.removeValue(forKey: paneID) else { return }
 
         let stillReferenced = paneRepoAssignments.values.contains(repoID)
@@ -236,6 +276,20 @@ final class SpaceGitContext {
         branchGraphDirty.remove(repoID)
     }
 
+    /// The full git status (branch + diff + PR) for the worktree the given pane
+    /// lives in, or nil when the pane isn't in a git repo (or it hasn't resolved
+    /// yet). Distinct from `repoStatuses[...]`, which is per-`GitRepoID` and so
+    /// collapses sibling worktrees onto one shared status.
+    func status(forPane paneID: UUID) -> GitRepoStatus? {
+        guard let root = paneWorktreeRoot[paneID] else { return nil }
+        return statusByWorktreeRoot[root]
+    }
+
+    /// Convenience: the branch name for the worktree the given pane lives in.
+    func branch(forPane paneID: UUID) -> String? {
+        status(forPane: paneID)?.branchName
+    }
+
     /// Cancels all in-flight tasks and clears state. Called on Space close.
     func teardown() {
         isTornDown = true
@@ -251,6 +305,10 @@ final class SpaceGitContext {
         repoStatuses.removeAll()
         paneRepoAssignments.removeAll()
         pinnedRepoOrder.removeAll()
+        paneWorktreeRoot.removeAll()
+        for task in inFlightWorktreeTasks.values { task.cancel() }
+        inFlightWorktreeTasks.removeAll()
+        statusByWorktreeRoot.removeAll()
         paneDirectories.removeAll()
         repoDirectories.removeAll()
         repoRoots.removeAll()
@@ -288,6 +346,102 @@ final class SpaceGitContext {
             if a == worktreeID { return true }
             if b == worktreeID { return false }
             return a.path < b.path
+        }
+    }
+
+    /// Resolves branch + diff (+ PR) for a single worktree root and stores it in
+    /// `statusByWorktreeRoot`, cancelling any in-flight refresh for that root on
+    /// re-entry. Skips when the root is no longer referenced by any pane (so a
+    /// pruned root isn't resurrected) or when nothing visible changed (avoids
+    /// Observable churn). Mirrors `refreshRepo` but scoped to one worktree root
+    /// so sibling worktrees sharing a `GitRepoID` get independent diff/PR badges.
+    private func refreshWorktreeStatus(worktreeRoot: String, repoID: GitRepoID) {
+        guard !isTornDown else { return }
+        inFlightWorktreeTasks[worktreeRoot]?.cancel()
+
+        let task = Task { [weak self] in
+            async let branchResult = GitStatusService.currentBranch(directory: worktreeRoot)
+            async let diffResult = GitStatusService.diffStatus(directory: worktreeRoot)
+            let branch = await branchResult
+            let diff = await diffResult
+
+            guard !Task.isCancelled, let self, !self.isTornDown else { return }
+            // Root was pruned (pane closed / moved) while we were fetching.
+            guard self.paneWorktreeRoot.values.contains(worktreeRoot) else {
+                self.statusByWorktreeRoot.removeValue(forKey: worktreeRoot)
+                self.inFlightWorktreeTasks.removeValue(forKey: worktreeRoot)
+                return
+            }
+
+            // PR is branch-specific; the (repoID, branch) cache key distinguishes
+            // sibling worktrees even though they share a GitRepoID.
+            var prStatus: PRStatus? = nil
+            if let branchName = branch?.name {
+                if self.statusByWorktreeRoot[worktreeRoot]?.branchName == branchName {
+                    prStatus = self.statusByWorktreeRoot[worktreeRoot]?.prStatus
+                }
+                switch self.prCache.get(repoID: repoID, branch: branchName) {
+                case .hit(let cached):
+                    prStatus = cached
+                case .miss:
+                    self.launchWorktreePRFetch(
+                        worktreeRoot: worktreeRoot,
+                        repoID: repoID,
+                        branch: branchName
+                    )
+                }
+            }
+
+            let status = GitRepoStatus(
+                repoID: repoID,
+                branchName: branch?.name,
+                isDetachedHead: branch?.isDetached ?? false,
+                diffSummary: diff.summary,
+                changedFiles: diff.files,
+                prStatus: prStatus,
+                lastUpdated: Date()
+            )
+            if self.statusByWorktreeRoot[worktreeRoot] != status {
+                self.statusByWorktreeRoot[worktreeRoot] = status
+            }
+            self.inFlightWorktreeTasks.removeValue(forKey: worktreeRoot)
+        }
+        inFlightWorktreeTasks[worktreeRoot] = task
+    }
+
+    /// PR fetch for a specific worktree root's branch, writing the result back
+    /// into `statusByWorktreeRoot`. Dedupes concurrently with `refreshRepo`'s
+    /// PR fetch via the shared `(repoID, branch)` cache; whichever loses the
+    /// `markPending` race seeds its value from the cache on the next refresh.
+    private func launchWorktreePRFetch(worktreeRoot: String, repoID: GitRepoID, branch: String) {
+        guard let fetchGen = prCache.markPending(repoID: repoID, branch: branch) else { return }
+        let taskID = UUID()
+        let prTask = Task { [weak self] in
+            defer {
+                self?.prCache.clearPending(repoID: repoID, branch: branch, generation: fetchGen)
+                self?.prFetchTasks[repoID]?.removeValue(forKey: taskID)
+            }
+            let fetched = await GitStatusService.fetchPRStatus(directory: worktreeRoot, branch: branch)
+            guard !Task.isCancelled, let self else { return }
+            self.prCache.set(repoID: repoID, branch: branch, status: fetched, generation: fetchGen)
+            if let current = self.statusByWorktreeRoot[worktreeRoot],
+               current.branchName == branch,
+               current.prStatus != fetched {
+                var updated = current
+                updated.prStatus = fetched
+                self.statusByWorktreeRoot[worktreeRoot] = updated
+            }
+        }
+        prFetchTasks[repoID, default: [:]][taskID] = prTask
+    }
+
+    /// Drops per-worktree statuses for roots no longer referenced by any pane,
+    /// cancelling their in-flight refreshes.
+    private func pruneWorktreeStatuses() {
+        let live = Set(paneWorktreeRoot.values)
+        for root in statusByWorktreeRoot.keys where !live.contains(root) {
+            statusByWorktreeRoot.removeValue(forKey: root)
+            inFlightWorktreeTasks.removeValue(forKey: root)?.cancel()
         }
     }
 
@@ -346,6 +500,10 @@ final class SpaceGitContext {
 
             if let paneID {
                 self.paneRepoAssignments[paneID] = repoID
+                // Key status by worktree root (unique per branch), not by the
+                // shared GitRepoID, so sibling worktrees stay distinguishable.
+                self.paneWorktreeRoot[paneID] = repo.workingTree
+                self.refreshWorktreeStatus(worktreeRoot: repo.workingTree, repoID: repoID)
             }
 
             // For worktrees this resolves to the worktree's own root, not the
@@ -446,6 +604,20 @@ final class SpaceGitContext {
             if self.repoStatuses[repoID] != status {
                 self.repoStatuses[repoID] = status
             }
+
+            // Re-resolve per-worktree-root status for every worktree this repo's
+            // panes live in, so a branch switch or working-tree change (surfaced
+            // via FSEvents) updates each tab's sidebar row independently. Usually
+            // one root.
+            let roots = Set(
+                self.paneRepoAssignments
+                    .filter { $0.value == repoID }
+                    .compactMap { self.paneWorktreeRoot[$0.key] }
+            )
+            for root in roots {
+                self.refreshWorktreeStatus(worktreeRoot: root, repoID: repoID)
+            }
+
             self.inFlightTasks.removeValue(forKey: repoID)
         }
 

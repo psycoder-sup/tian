@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Status area below the space name in the sidebar.
-/// Renders one line per pinned repo plus optional non-repo dot line.
+/// Renders one row per tab that has a Claude session — each showing the tab's
+/// status dot and its own branch name (worktree-aware) — plus the optional
+/// free-form status label line.
 struct SpaceStatusAreaView: View {
-    let sessions: [(paneID: UUID, state: ClaudeSessionState)]
     let space: SpaceModel
     let isActive: Bool
 
@@ -17,55 +18,85 @@ struct SpaceStatusAreaView: View {
         }
     }
 
-    private func groupSessionsByRepo() -> [GitRepoID?: [ClaudeSessionState]] {
-        var grouped: [GitRepoID?: [ClaudeSessionState]] = [:]
-        for session in sessions {
-            let repoID = space.gitContext.paneRepoAssignments[session.paneID]
-            grouped[repoID, default: []].append(session.state)
+    /// One display row per Claude-task tab, highest-priority state first.
+    private struct TabRow: Identifiable {
+        let id: UUID
+        let state: ClaudeSessionState
+        let branchLabel: String
+        let repoStatus: GitRepoStatus?
+        /// True for the space's currently-focused tab (active tab of the
+        /// focused section) — drives the active-tab indicator.
+        let isActiveTab: Bool
+    }
+
+    /// The id of the space's currently-focused tab: the active tab of whichever
+    /// section (Claude / Terminal) currently holds focus.
+    private var focusedTabID: UUID {
+        switch space.focusedSectionKind {
+        case .claude: space.claudeSection.activeTabID
+        case .terminal: space.terminalSection.activeTabID
         }
-        for key in grouped.keys {
-            grouped[key]?.sort { $0 > $1 }
+    }
+
+    /// Builds the per-tab rows. A tab contributes a row only when one of its
+    /// panes has an active (non-inactive) Claude session; the row is driven by
+    /// the highest-priority such pane, and its branch resolves worktree-first so
+    /// sibling worktrees of one repo stay distinct.
+    private func tabRows() -> [TabRow] {
+        let focusedID = focusedTabID
+        var rows: [TabRow] = []
+        for tab in space.allTabs {
+            var top: (paneID: UUID, state: ClaudeSessionState)?
+            for paneID in tab.paneViewModel.splitTree.allLeaves() {
+                guard let state = PaneStatusManager.shared.sessionState(for: paneID),
+                      state != .inactive else { continue }
+                if top == nil || state > top!.state {
+                    top = (paneID, state)
+                }
+            }
+            guard let top else { continue }
+
+            // Prefer the pane's own worktree status (branch + diff + PR), so
+            // sibling worktrees sharing a GitRepoID show independent badges.
+            // Fall back to the shared repo status only until the worktree status
+            // resolves.
+            let repoID = space.gitContext.paneRepoAssignments[top.paneID]
+            let repoStatus = space.gitContext.status(forPane: top.paneID)
+                ?? repoID.flatMap { space.gitContext.repoStatuses[$0] }
+            let branch = repoStatus?.branchName ?? tab.displayName
+
+            rows.append(TabRow(
+                id: tab.id,
+                state: top.state,
+                branchLabel: branch,
+                repoStatus: repoStatus,
+                isActiveTab: tab.id == focusedID
+            ))
         }
-        return grouped
+        return rows.sorted { $0.state > $1.state }
     }
 
     var body: some View {
         let latestStatus = PaneStatusManager.shared.latestStatus(in: space)
-        let repoOrder = space.gitContext.pinnedRepoOrder
-        let sessionsByRepo = groupSessionsByRepo()
-        let nonRepoDots = sessionsByRepo[nil] ?? []
-        let hasRepoLines = !repoOrder.isEmpty
-        let hasNonRepoDots = !nonRepoDots.isEmpty
-        let hasSessions = !sessions.isEmpty
+        let rows = tabRows()
+        let visibleRows = Array(rows.prefix(maxVisibleLines))
+        let overflow = rows.count - visibleRows.count
 
         VStack(alignment: .leading, spacing: 2) {
-            if hasRepoLines {
-                let visibleRepos = Array(repoOrder.prefix(maxVisibleLines))
-                ForEach(visibleRepos, id: \.self) { repoID in
-                    if let repoStatus = space.gitContext.repoStatuses[repoID] {
-                        let repoDots = sessionsByRepo[repoID] ?? []
-                        let prependedDots: [ClaudeSessionState] = (repoOrder.count == 1 && hasNonRepoDots) ? nonRepoDots : []
+            ForEach(visibleRows) { row in
+                TabStatusRowView(
+                    state: row.state,
+                    branchLabel: row.branchLabel,
+                    repoStatus: row.repoStatus,
+                    subtitleColor: subtitleColor,
+                    isActiveTab: row.isActiveTab
+                )
+            }
 
-                        RepoStatusLineView(
-                            repoStatus: repoStatus,
-                            subtitleColor: subtitleColor,
-                            claudeDots: repoDots,
-                            prependedDots: prependedDots
-                        )
-                    }
-                }
-
-                if repoOrder.count > maxVisibleLines {
-                    Text("+\(repoOrder.count - maxVisibleLines) more")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Color(white: 0.45))
-                }
-
-                if repoOrder.count > 1 && hasNonRepoDots {
-                    ClaudeSessionDotsView(states: nonRepoDots)
-                }
-            } else if hasSessions {
-                ClaudeSessionDotsView(states: sessions.map(\.state).sorted { $0 > $1 })
+            if overflow > 0 {
+                Text("+\(overflow) more")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color(white: 0.45))
             }
 
             if let status = latestStatus {

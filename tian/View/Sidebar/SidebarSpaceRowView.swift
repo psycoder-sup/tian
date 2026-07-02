@@ -216,7 +216,7 @@ struct SidebarSpaceRowView: View {
                             )
                     }
 
-                    SpaceStatusAreaView(sessions: sessions, space: space, isActive: isActive)
+                    SpaceStatusAreaView(space: space, isActive: isActive)
                 }
             }
         }

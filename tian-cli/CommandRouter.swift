@@ -428,6 +428,7 @@ struct PaneGroup: ParsableCommand {
             PaneSend.self,
             PaneCapture.self,
             PaneSetRestoreCommand.self,
+            PaneSetDirectory.self,
         ]
     )
 }
@@ -626,6 +627,26 @@ struct PaneSetRestoreCommand: ParsableCommand {
 
     func run() throws {
         let response = try sendRequest(command: "pane.set-restore-command", params: ["command": .string(command)])
+        try handleVoidResponse(response)
+    }
+}
+
+struct PaneSetDirectory: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "set-directory",
+        abstract: "Associate a pane with a working directory (e.g. a worktree a Claude session entered), so the sidebar shows that directory's branch."
+    )
+
+    @Argument(help: "Absolute path of the directory the pane is working in.")
+    var directory: String
+
+    @Option(name: .long, help: "Pane ID (defaults to current pane).")
+    var pane: String?
+
+    func run() throws {
+        var params: [String: IPCValue] = ["directory": .string(directory)]
+        if let pane { params["paneId"] = .string(pane) }
+        let response = try sendRequest(command: "pane.set-directory", params: params)
         try handleVoidResponse(response)
     }
 }
