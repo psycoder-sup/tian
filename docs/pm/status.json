@@ -13,8 +13,8 @@
   "shipped": [
     {
       "date": "2026-07-02",
-      "summary": "Sidebar per-tab worktree branch rows: each Claude-task tab shows its own branch + diff/PR badges (git status keyed by worktree root, not the shared --git-common-dir), a Claude->tian worktree bridge (`tian pane set-directory` + CwdChanged/PostToolUse hooks sync each pane's Claude cwd so EnterWorktree reflects in the sidebar), and an active-tab indicator. 874 unit tests green.",
-      "commit": "43a3736",
+      "summary": "Sidebar per-tab worktree branch rows: each Claude-task tab shows its own branch + diff/PR badges (git status keyed by worktree root, not the shared --git-common-dir), a Claude->tian worktree bridge (`tian pane set-directory` + CwdChanged/PostToolUse hooks sync each pane's Claude cwd so EnterWorktree reflects in the sidebar), and an active-tab indicator. /code-review medium --fix landed 3 fixes: pin the active tab into the visible window, dedup the bridge on its own history so an OSC 7 write can't suppress it, and single-source the top-pane aggregation. Unit suite green.",
+      "commit": "5f672bb",
       "link": "https://github.com/psycoder-sup/tian/pull/52"
     },
     {
