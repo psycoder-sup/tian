@@ -362,6 +362,53 @@ struct PaneStatusManagerTests {
         #expect(result.isEmpty)
     }
 
+    // MARK: - aggregateSessionState(in:)
+
+    @Test func aggregateSessionStateNilWhenNoSession() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        #expect(manager.aggregateSessionState(in: tab) == nil)
+    }
+
+    @Test func aggregateSessionStateReturnsSinglePaneState() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+
+        manager.setSessionState(paneID: paneID, state: .active)
+        #expect(manager.aggregateSessionState(in: tab) == .active)
+    }
+
+    @Test func aggregateSessionStateExcludesInactive() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+
+        manager.setSessionState(paneID: paneID, state: .inactive)
+        #expect(manager.aggregateSessionState(in: tab) == nil)
+    }
+
+    /// A tab with several panes rolls up to the highest-priority state
+    /// (needsAttention > failed > busy > active > idle), which drives the
+    /// single dot on the tab's sidebar row.
+    @Test func aggregateSessionStatePicksHighestPriorityAcrossPanes() {
+        let manager = PaneStatusManager()
+        let tab = TabModel()
+        let pane1 = tab.paneViewModel.splitTree.focusedPaneID
+        guard let pane2 = tab.paneViewModel.splitPane(direction: .horizontal) else {
+            Issue.record("splitPane failed to create a second pane")
+            return
+        }
+
+        manager.setSessionState(paneID: pane1, state: .idle)
+        manager.setSessionState(paneID: pane2, state: .busy)
+        #expect(manager.aggregateSessionState(in: tab) == .busy)
+
+        // A higher-priority state on any pane wins.
+        manager.setSessionState(paneID: pane1, state: .needsAttention)
+        #expect(manager.aggregateSessionState(in: tab) == .needsAttention)
+    }
+
     // MARK: - Per-PVM mirror (dual-write via pane registry)
 
     @Test func dualWritesMirrorToOwnerPaneViewModel() {

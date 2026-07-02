@@ -88,7 +88,7 @@ A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace m
 
 **Live state lives in [`docs/pm/status.json`](docs/pm/status.json) — read it first each session.** It's structured JSON; keep this section to a 2–4 line summary of the current focus and let `status.json` carry the detail. Humans: launch the live dashboard with `python3 docs/pm/dashboard/serve.py`.
 
-- **Now:** Nothing in flight — v0.15.0 just shipped (worktree `--delete-branch` + `/tian implement` plan-submission fix); see `status.json`.
+- **Now:** Sidebar per-tab worktree branch rows + Claude→tian worktree bridge + active-tab indicator up for review (PR #52); see `status.json`.
 - **Next:** Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003).
 
 ## Repo layout (context docs)

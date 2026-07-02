@@ -206,6 +206,41 @@ struct IPCCommandHandlerTests {
         #expect(response.error?.message.contains("at least one of") == true)
     }
 
+    // MARK: - Pane set-directory
+
+    @Test @MainActor func paneSetDirectoryMissingDirectoryReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(version: 1, command: "pane.set-directory", params: [:], env: dummyEnv)
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Missing required parameter: directory") == true)
+    }
+
+    @Test @MainActor func paneSetDirectoryInvalidPaneUUIDReturnsError() async {
+        let invalidEnv = IPCEnv(
+            paneId: "not-a-uuid",
+            tabId: "00000000-0000-0000-0000-000000000000",
+            spaceId: "00000000-0000-0000-0000-000000000000",
+            workspaceId: "00000000-0000-0000-0000-000000000000"
+        )
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(version: 1, command: "pane.set-directory", params: ["directory": .string("/tmp")], env: invalidEnv)
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid pane UUID") == true)
+    }
+
+    @Test @MainActor func paneSetDirectoryNonexistentPaneReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator())
+        let request = IPCRequest(version: 1, command: "pane.set-directory", params: ["directory": .string("/tmp")], env: dummyEnv)
+        let response = await handler.handle(request)
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Pane not found") == true)
+    }
+
     // MARK: - Notify Commands
 
     @Test @MainActor func notifyMissingMessageReturnsError() async {

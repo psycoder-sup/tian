@@ -449,6 +449,200 @@ struct SpaceGitContextTests {
         #expect(order[0].path < order[1].path)
     }
 
+    // MARK: - Per-Worktree-Root Branch (per-tab sidebar rows)
+
+    /// Two panes in DIFFERENT worktrees of the same repo share one `GitRepoID`
+    /// (keyed on `--git-common-dir`), yet `branch(forPane:)` must resolve each to
+    /// its OWN branch. This is what lets the sidebar show a distinct branch per
+    /// tab instead of collapsing sibling worktrees onto one row.
+    @Test func distinctWorktreesResolveDistinctBranchesPerPane() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        let wtPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-test-wt-\(UUID().uuidString)")
+            .path
+        try runGitSync(["worktree", "add", "-b", "feat/branch-x", wtPath], in: main)
+        defer {
+            try? runGitSync(["worktree", "remove", "--force", wtPath], in: main)
+            cleanup(wtPath)
+        }
+
+        let mainBranch = try currentBranchSync(in: main)
+        #expect(mainBranch != "feat/branch-x")
+
+        // Non-worktree space: both panes drive detection normally.
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneMain = UUID()
+        let paneWt = UUID()
+        context.paneAdded(paneID: paneMain, workingDirectory: main)
+        context.paneAdded(paneID: paneWt, workingDirectory: wtPath)
+
+        try await pollUntil(timeout: 5.0) {
+            context.branch(forPane: paneMain) != nil && context.branch(forPane: paneWt) != nil
+        }
+
+        // Same repo (one shared GitRepoID) …
+        #expect(context.pinnedRepoOrder.count == 1)
+        // … but each pane resolves its own worktree's branch.
+        #expect(context.branch(forPane: paneMain) == mainBranch)
+        #expect(context.branch(forPane: paneWt) == "feat/branch-x")
+    }
+
+    /// Regression (per-worktree diff badge): two panes in different worktrees of
+    /// one repo must show their OWN diff, not a single shared one. Before the fix
+    /// both rows rendered whichever directory last drove the GitRepoID's status.
+    @Test func distinctWorktreesResolveDistinctDiffPerPane() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        let wtPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-test-wt-\(UUID().uuidString)")
+            .path
+        try runGitSync(["worktree", "add", "-b", "feat/diff-x", wtPath], in: main)
+        defer {
+            try? runGitSync(["worktree", "remove", "--force", wtPath], in: main)
+            cleanup(wtPath)
+        }
+
+        // Dirty ONLY the worktree (modify its copy of the committed README).
+        let readme = (wtPath as NSString).appendingPathComponent("README.md")
+        try "# Changed only in the worktree".write(toFile: readme, atomically: true, encoding: .utf8)
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneMain = UUID()
+        let paneWt = UUID()
+        context.paneAdded(paneID: paneMain, workingDirectory: main)
+        context.paneAdded(paneID: paneWt, workingDirectory: wtPath)
+
+        try await pollUntil(timeout: 5.0) {
+            context.status(forPane: paneMain) != nil && context.status(forPane: paneWt) != nil
+        }
+
+        // Same repo (one GitRepoID), but each pane sees its own worktree's diff.
+        #expect(context.status(forPane: paneMain)?.diffSummary.isEmpty == true)
+        #expect(context.status(forPane: paneWt)?.diffSummary.isEmpty == false)
+    }
+
+    /// Removing a pane drops its worktree-root branch label so a stale branch
+    /// never lingers on the sidebar after the tab closes.
+    @Test func branchLabelPrunedWhenPaneRemoved() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
+        #expect(!context.statusByWorktreeRoot.isEmpty)
+
+        context.paneRemoved(paneID: paneID)
+
+        #expect(context.branch(forPane: paneID) == nil)
+        #expect(context.statusByWorktreeRoot.isEmpty)
+    }
+
+    /// `teardown()` clears per-worktree branch state along with the rest.
+    @Test func teardownClearsBranchState() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
+
+        context.teardown()
+
+        #expect(context.branch(forPane: paneID) == nil)
+        #expect(context.statusByWorktreeRoot.isEmpty)
+        #expect(context.paneWorktreeRoot.isEmpty)
+    }
+
+    /// The Claude→tian bridge: a session enters a worktree nested INSIDE the main
+    /// working tree (`.claude/worktrees/<name>`, Claude's default). The OSC 7
+    /// same-repo fast path would treat that nested path as "still main" and keep
+    /// the branch wrong; `setPaneDirectory` forces a full detect so the pane
+    /// resolves the nested worktree's own branch.
+    @Test func setPaneDirectoryResolvesBranchForNestedWorktree() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        let nested = (main as NSString).appendingPathComponent(".claude/worktrees/nested")
+        try runGitSync(["worktree", "add", "-b", "feat/nested", nested], in: main)
+        defer { try? runGitSync(["worktree", "remove", "--force", nested], in: main) }
+
+        let mainBranch = try currentBranchSync(in: main)
+        #expect(mainBranch != "feat/nested")
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        // Pane starts in main (what the shell reports via OSC 7).
+        context.paneAdded(paneID: paneID, workingDirectory: main)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == mainBranch }
+
+        // Bridge reports the worktree the Claude session entered.
+        context.setPaneDirectory(paneID: paneID, directory: nested)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == "feat/nested" }
+
+        #expect(context.branch(forPane: paneID) == "feat/nested")
+    }
+
+    /// A `setPaneDirectory` repeated for the same dir is a no-op (dedupes a busy
+    /// CwdChanged loop). The dedupe keys on the bridge's own history, so the
+    /// FIRST report still runs even after `paneAdded`/OSC 7 already saw the dir.
+    @Test func setPaneDirectoryIsNoOpWhenUnchanged() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
+
+        context.setPaneDirectory(paneID: paneID, directory: repo)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
+
+        let before = context.branch(forPane: paneID)
+        // Repeated report for the same dir: deduped, state unchanged.
+        context.setPaneDirectory(paneID: paneID, directory: repo)
+        #expect(context.branch(forPane: paneID) == before)
+    }
+
+    /// Regression (ordering): the OSC 7 same-repo fast path writes
+    /// `paneDirectories` for a nested `.claude/worktrees/<name>` path WITHOUT
+    /// updating the worktree root (it treats the nested dir as "still main").
+    /// A subsequent bridge `setPaneDirectory` for that same path must NOT be
+    /// deduped away by the OSC 7 write — it has to force a full detect so the
+    /// tab resolves the nested worktree's own branch.
+    @Test func setPaneDirectoryNotSuppressedByPriorOSC7Write() async throws {
+        let main = try makeTempGitRepo()
+        defer { cleanup(main) }
+
+        let nested = (main as NSString).appendingPathComponent(".claude/worktrees/nested")
+        try runGitSync(["worktree", "add", "-b", "feat/bridge-nested", nested], in: main)
+        defer { try? runGitSync(["worktree", "remove", "--force", nested], in: main) }
+
+        let mainBranch = try currentBranchSync(in: main)
+        #expect(mainBranch != "feat/bridge-nested")
+
+        let context = SpaceGitContext(worktreePath: nil)
+        let paneID = UUID()
+        context.paneAdded(paneID: paneID, workingDirectory: main)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == mainBranch }
+
+        // OSC 7 reports the nested worktree dir first — same-repo fast path keeps
+        // the pane on main and never updates the worktree root.
+        context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: nested)
+
+        // Bridge reports the same dir: must still resolve the nested branch.
+        context.setPaneDirectory(paneID: paneID, directory: nested)
+        try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == "feat/bridge-nested" }
+        #expect(context.branch(forPane: paneID) == "feat/bridge-nested")
+    }
+
     // MARK: - Helpers
 
     private func pollUntil(timeout: Double, condition: @MainActor () -> Bool) async throws {
