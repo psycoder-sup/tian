@@ -13,6 +13,12 @@
   "shipped": [
     {
       "date": "2026-07-02",
+      "summary": "Sidebar per-tab rows now show the tab name (Row 1) with the git branch moved to Row 2 beside the diff/PR badges (arrow.triangle.branch icon + muted name); non-git tabs show the name only. Dropped the 3-row cap and the '+N more' overflow so every Claude-task tab gets a visible row. /orchestrate (single code-implementer per change, W=1), /code-review medium clean, Debug build green.",
+      "commit": "f236dbe",
+      "link": "https://github.com/psycoder-sup/tian/pull/53"
+    },
+    {
+      "date": "2026-07-02",
       "summary": "Sidebar per-tab worktree branch rows: each Claude-task tab shows its own branch + diff/PR badges (git status keyed by worktree root, not the shared --git-common-dir), a Claude->tian worktree bridge (`tian pane set-directory` + CwdChanged/PostToolUse hooks sync each pane's Claude cwd so EnterWorktree reflects in the sidebar), and an active-tab indicator. /code-review medium --fix landed 3 fixes: pin the active tab into the visible window, dedup the bridge on its own history so an OSC 7 write can't suppress it, and single-source the top-pane aggregation. Unit suite green.",
       "commit": "5f672bb",
       "link": "https://github.com/psycoder-sup/tian/pull/52"
@@ -22,12 +28,6 @@
       "summary": "Fixed worktree/child Spaces showing the parent repo's branch/status in the sidebar on restore — a restored parent-repo pane clobbered the worktree's shared GitRepoID (worktree + parent share one id, keyed on --git-common-dir). Anchored git status to the worktree path and guarded the worktree repo from pane-GC unpin. Ran via /orchestrate (2 waves), /code-review-hardened; full unit suite 861 green.",
       "commit": "37df922",
       "link": "https://github.com/psycoder-sup/tian/pull/51"
-    },
-    {
-      "date": "2026-06-30",
-      "summary": "/tian implement harness v1.1.0: async fan-out (`implement.sh --no-wait` + `implement-wait.sh` await-by-log), orchestrator-leanness STOP block + `files:` handoff in the self-verify report, and run-log parent↔child linkage so session-audit links children authoritatively + filters zombies. Self-verified, independently verified, and /code-review --fix found+fixed 7 real defects. Driven by a session audit of real runs.",
-      "commit": "77d0262",
-      "link": "https://github.com/psycoder-sup/tian/pull/49"
     }
   ]
 }
