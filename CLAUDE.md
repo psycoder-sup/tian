@@ -87,8 +87,8 @@ A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace m
 
 **Live state lives in [`docs/pm/status.json`](docs/pm/status.json) — read it first each session.** It's structured JSON; keep this section to a 2–4 line summary of the current focus and let `status.json` carry the detail. Humans: launch the live dashboard with `python3 docs/pm/dashboard/serve.py`.
 
-- **Now:** Workspace→Session hierarchy flatten (removes Spaces/Sections/Tabs; a session = one Claude pane + a toggleable terminal panel) landed on the `feat/session-flatten` branch — in verification, not yet merged (ADR 0004). See `status.json`.
-- **Next:** Verify the flatten end-to-end (v6→v7 migration smoke, CLI + keyboard smoke) and merge; then revisit /tian implement token duplication (ADR 0003).
+- **Now:** Workspace→Session flatten shipped (PR #54, ADR 0004) — daily-drive it, then cut v0.19.0. See `status.json`.
+- **Next:** Validate the /tian implement harness v1.2.0 on a real multi-slice run (ADR 0003).
 
 ## Repo layout (context docs)
 
