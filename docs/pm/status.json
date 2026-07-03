@@ -4,7 +4,7 @@
   "lastUpdated": "2026-07-03",
   "now": [],
   "next": [
-    "Cut a release with the Workspace→Session flatten (v0.19.0) after a few days of daily-driving it.",
+    "Daily-drive v1.0.0 (session model) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -13,6 +13,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-03",
+      "summary": "Released v1.0.0 — the Workspace→Session model goes public (major bump): built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release live; Sparkle appcast signed + pushed (the v0.18.0 sign_update gotcha is resolved — the EdDSA key is now in the keychain and verified against SUPublicEDKey).",
+      "commit": "3dd1cb0",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.0.0"
+    },
     {
       "date": "2026-07-03",
       "summary": "Workspace→Session hierarchy flatten merged (ADR 0004): removed Spaces/Sections/Tabs — a session = one never-split Claude pane + toggleable terminal panel; persistence v6→v7 migration; clean-break IPC/CLI v2 (session verbs, TIAN_SESSION_ID); sessions auto-name from the Claude pane title; Claude exit closes the session; terminal spawn + inspect panel follow Claude's EnterWorktree. Verified: 907 tianTests green, live v6→v7 + CLI smoke, 8-angle adversarial review with all confirmed findings fixed.",
@@ -24,12 +30,6 @@
       "summary": "Released v0.18.0 (sidebar tab-name + per-tab branch rows): built, notarized (Apple Accepted), stapled, GitHub Release live, Sparkle appcast signed + pushed. Gotcha: the Sparkle EdDSA private key is NOT in the local keychain, so publish.sh dies at sign_update — signed the DMG directly via `sign_update --ed-key-file` after verifying the key derives to the app's SUPublicEDKey (KDEXWrfR…).",
       "commit": "3dfa201",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.18.0"
-    },
-    {
-      "date": "2026-07-02",
-      "summary": "Sidebar per-tab rows now show the tab name (Row 1) with the git branch moved to Row 2 beside the diff/PR badges (arrow.triangle.branch icon + muted name); non-git tabs show the name only. Dropped the 3-row cap and the '+N more' overflow so every Claude-task tab gets a visible row. /orchestrate (single code-implementer per change, W=1), /code-review medium clean, Debug build green.",
-      "commit": "f236dbe",
-      "link": "https://github.com/psycoder-sup/tian/pull/53"
     }
   ]
 }
