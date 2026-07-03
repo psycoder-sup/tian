@@ -75,37 +75,63 @@ struct IPCMessageTests {
 
     @Test func requestRoundTrip() throws {
         let request = IPCRequest(
-            version: 1,
+            version: 2,
             command: "workspace.create",
             params: ["name": .string("my-project"), "directory": .string("/tmp/test")],
             env: IPCEnv(
                 paneId: "aaa-bbb",
-                tabId: "ccc-ddd",
-                spaceId: "eee-fff",
+                sessionId: "ccc-ddd",
                 workspaceId: "ggg-hhh"
             )
         )
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(IPCRequest.self, from: data)
-        #expect(decoded.version == 1)
+        #expect(decoded.version == 2)
         #expect(decoded.command == "workspace.create")
         #expect(decoded.params["name"]?.stringValue == "my-project")
         #expect(decoded.params["directory"]?.stringValue == "/tmp/test")
         #expect(decoded.env.paneId == "aaa-bbb")
+        #expect(decoded.env.sessionId == "ccc-ddd")
         #expect(decoded.env.workspaceId == "ggg-hhh")
     }
 
     @Test func requestWithEmptyParams() throws {
         let request = IPCRequest(
-            version: 1,
+            version: 2,
             command: "ping",
             params: [:],
-            env: IPCEnv(paneId: "", tabId: "", spaceId: "", workspaceId: "")
+            env: IPCEnv(paneId: "", sessionId: "", workspaceId: "")
         )
         let data = try encoder.encode(request)
         let decoded = try decoder.decode(IPCRequest.self, from: data)
         #expect(decoded.command == "ping")
         #expect(decoded.params.isEmpty)
+    }
+
+    // MARK: - IPCEnv v2 codec
+
+    /// v2 dropped `tabId`/`spaceId` and added `sessionId`. The wire format must
+    /// carry exactly `paneId`, `sessionId`, `workspaceId` and none of the old keys.
+    @Test func envV2EncodesSessionIdAndDropsLegacyKeys() throws {
+        let env = IPCEnv(paneId: "p", sessionId: "s", workspaceId: "w")
+        let data = try encoder.encode(env)
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(json.contains("\"sessionId\""))
+        #expect(json.contains("\"paneId\""))
+        #expect(json.contains("\"workspaceId\""))
+        // Quote the removed keys so the `spaceId` substring inside `workspaceId`
+        // doesn't produce a false positive.
+        #expect(!json.contains("\"tabId\""))
+        #expect(!json.contains("\"spaceId\""))
+    }
+
+    @Test func envV2RoundTrip() throws {
+        let env = IPCEnv(paneId: "pane-1", sessionId: "sess-1", workspaceId: "ws-1")
+        let data = try encoder.encode(env)
+        let decoded = try decoder.decode(IPCEnv.self, from: data)
+        #expect(decoded.paneId == "pane-1")
+        #expect(decoded.sessionId == "sess-1")
+        #expect(decoded.workspaceId == "ws-1")
     }
 
     // MARK: - IPCResponse round-trip
@@ -139,7 +165,7 @@ struct IPCMessageTests {
 
     // MARK: - Protocol version
 
-    @Test func protocolVersionIsOne() {
-        #expect(ipcProtocolVersion == 1)
+    @Test func protocolVersionIsTwo() {
+        #expect(ipcProtocolVersion == 2)
     }
 }

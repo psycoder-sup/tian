@@ -8,45 +8,44 @@ A native macOS terminal emulator built with SwiftUI. Uses the full ghostty embed
 
 ## Concepts
 
-tian organizes terminals in a 4-level hierarchy:
+tian organizes terminals in a 2-level hierarchy:
 
 ```
-Workspace → Space → Tab → Pane (split tree)
+Workspace → Session (Claude pane + terminal panel)
 ```
 
-- **Workspace** — Top-level organizational unit (e.g., a project). Each workspace maps to one OS window. Has a name, default working directory, and contains a `SpaceCollection`.
-- **Space** — Named group of tabs within a workspace (similar to virtual desktops). Navigated with Cmd+Shift+Arrow. Contains an ordered list of `TabModel`s.
-- **Tab** — Single tab within a space. Lightweight container that owns a `PaneViewModel` (split tree + surfaces). Displays the focused pane's title.
-- **Pane** — A single terminal session. Panes live as leaves in a binary `SplitTree` (value-type). Each pane maps 1:1 to a `GhosttyTerminalSurface` (`ghostty_surface_t`). Panes can be split horizontally or vertically.
+- **Workspace** — Top-level organizational unit (e.g., a project). Each workspace maps to one OS window. Has a name, default working directory, and contains a `SessionCollection`.
+- **Session** — A single Claude session, shown as one sidebar row (name + branch + git diff). Owns exactly one **Claude pane** (never splittable) plus an optional, toggleable **terminal panel** (Ctrl+`, docked right or bottom with a draggable divider). Navigated with Cmd+Shift+Left/Right and Cmd+1–9. Maps 1:1 to `Session`, which owns two `PaneViewModel`s (`claudePane`, `terminalPanel`). Its sidebar name auto-derives from the Claude pane title (falling back to the working-directory basename) unless the user renames it.
+- **Pane** — A single terminal surface, 1:1 with a `GhosttyTerminalSurface` (`ghostty_surface_t`). The Claude pane is always a single leaf; the terminal panel's panes live as leaves in a binary `SplitTree` and **can** be split horizontally or vertically. `PaneViewModel.kind` (`PaneKind.claude` / `.terminal`) tags which area a pane belongs to; `allowsSplits` is true only for terminal panes.
 
 ### Split Tree
 
-Pane layout is modeled as an immutable binary tree (`SplitTree` / `PaneNode`):
+Pane layout is modeled as an immutable binary tree (`SplitTree` / `PaneNode`) — used for the terminal panel; the Claude pane is always a single leaf:
 - `.leaf(paneID, workingDirectory)` — a terminal pane
 - `.split(id, direction, ratio, first, second)` — a container splitting two children
 
-All mutations return new values (value semantics). `PaneViewModel` replaces the entire `splitTree` on each change. Spatial navigation between panes uses concrete layout frames, not tree position.
+All mutations return new values (value semantics). `PaneViewModel` replaces the entire `splitTree` on each change. Spatial navigation between panes — and across the Claude/terminal divider via `SessionSplitNavigation` — uses concrete layout frames, not tree position.
 
 ### Working Directory Resolution
 
-Fallback chain: active pane (OSC 7) → pane node → space default → workspace default → `$HOME`.
+Fallback chain: active pane (OSC 7) → session default → workspace default → `$HOME`.
 
 ### Lifecycle
 
-Cascading close via `onEmpty` callbacks: `PaneViewModel` → `TabModel` → `SpaceModel` → `SpaceCollection` → `Workspace`.
+Cascading close via `onEmpty` / `onSessionClose` callbacks: `PaneViewModel` → `Session` → `SessionCollection` → `Workspace`. A Claude pane exit (or ⌘W on the Claude pane) closes the session; emptying the terminal panel just drops the panel.
 
 ## Architecture
 
 ### Source Layout
 
 - `Workspace/` — `Workspace`, `WorkspaceCollection`, `WorkspaceManager`
-- `Tab/` — `SpaceModel`, `TabModel`, `SpaceCollection`, `SpaceGitContext`
-- `Pane/` — `PaneViewModel`, `SplitTree`, `PaneNode`, `SplitNavigation`, `SplitLayout`, `PaneHierarchyContext`, `PaneStatusManager`
-- `Core/` — `GhosttyApp`, `GhosttyTerminalSurface`, notifications, IPC, `ClaudeSessionState`, `GitTypes`
-- `View/` — SwiftUI components (terminal, sidebar, tabs, splits)
+- `Session/` — `Session`, `SessionCollection`, `SessionGitContext`, `PaneSpawner`, `SessionReaderState`, `SessionDividerDragController`, `DockPosition`, `ClaudeLaunchBadge`
+- `Pane/` — `PaneViewModel`, `PaneKind`, `SplitTree`, `PaneNode`, `SplitNavigation`, `SessionSplitNavigation`, `SplitLayout`, `PaneHierarchyContext`, `PaneStatusManager`
+- `Core/` — `GhosttyApp`, `GhosttyTerminalSurface`, notifications, IPC, `EnvironmentBuilder`, `ClaudeSessionState`, `GitTypes`
+- `View/` — SwiftUI components. `View/Session/` (content area, divider, layout, header), `View/Reader/` (markdown/image reader overlay), `View/CreateSession/`, `View/Sidebar/`, plus the terminal/split views
 - `WindowManagement/` — `WorkspaceWindowController`, `WindowCoordinator`, `TianAppDelegate`
 - `Persistence/` — Session serialization/restoration (`SessionState`)
-- `DragAndDrop/` — Drag item types for reordering workspaces/spaces/tabs
+- `DragAndDrop/` — Drag item types for reordering workspaces and sessions
 - `Input/` — Key binding registry and handling
 - `Utilities/` — `Logger`, `Colors`, `WorkingDirectoryResolver`
 - `Vendor/` — `GhosttyKit.xcframework` + `ghostty.h` (built from `.ghostty-src` via `scripts/build-ghostty.sh`)
@@ -60,7 +59,7 @@ Cascading close via `onEmpty` callbacks: `PaneViewModel` → `TabModel` → `Spa
 
 ### State Management
 
-All model classes use `@MainActor @Observable`. Ghostty surface events flow through `NotificationCenter` (surface close/exit/title/pwd/bell). `PaneHierarchyContext` carries workspace/space/tab IDs down to panes as `TIAN_*` environment variables.
+All model classes use `@MainActor @Observable`. Ghostty surface events flow through `NotificationCenter` (surface close/exit/title/pwd/bell). `PaneHierarchyContext` carries workspace/session IDs down to panes as `TIAN_*` environment variables (`TIAN_WORKSPACE_ID`, `TIAN_SESSION_ID`, `TIAN_PANE_ID`).
 
 ## Build
 
@@ -88,8 +87,8 @@ A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace m
 
 **Live state lives in [`docs/pm/status.json`](docs/pm/status.json) — read it first each session.** It's structured JSON; keep this section to a 2–4 line summary of the current focus and let `status.json` carry the detail. Humans: launch the live dashboard with `python3 docs/pm/dashboard/serve.py`.
 
-- **Now:** v0.18.0 shipped (sidebar tab-name + per-tab branch rows, PRs #52/#53); GitHub Release + Sparkle appcast live. See `status.json`.
-- **Next:** Optimize /tian implement parent↔child context duplication when tokens get scarce (ADR 0003).
+- **Now:** Workspace→Session hierarchy flatten (removes Spaces/Sections/Tabs; a session = one Claude pane + a toggleable terminal panel) landed on the `feat/session-flatten` branch — in verification, not yet merged (ADR 0004). See `status.json`.
+- **Next:** Verify the flatten end-to-end (v6→v7 migration smoke, CLI + keyboard smoke) and merge; then revisit /tian implement token duplication (ADR 0003).
 
 ## Repo layout (context docs)
 

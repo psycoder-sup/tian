@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import tian
 
-// MARK: - SessionState Round-Trip Tests
+// MARK: - SessionState Round-Trip Tests (v7)
 
 struct SessionStateRoundTripTests {
     private static func makeEncoder() -> JSONEncoder {
@@ -18,34 +18,29 @@ struct SessionStateRoundTripTests {
         return decoder
     }
 
-    @Test func roundTripSimpleLeaf() throws {
+    @Test func roundTripSingleSession() throws {
+        let sessionID = UUID()
+        let paneID = UUID()
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: UUID(),
             workspaces: [
                 WorkspaceState(
                     id: UUID(),
                     name: "default",
-                    activeSpaceId: UUID(),
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: "/Users/me/project",
-                    spaces: [
-                        SpaceState(
-                            id: UUID(),
-                            name: "default",
-                            activeTabId: UUID(),
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: UUID(),
-                                    name: "Tab 1",
-                                    activePaneId: UUID(),
-                                    root: .pane(PaneLeafState(
-                                        paneID: UUID(),
-                                        workingDirectory: "/Users/me/project"
-                                    ))
-                                )
-                            ]
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "default",
+                            defaultWorkingDirectory: "/Users/me/project",
+                            claudePane: PaneLeafState(paneID: paneID, workingDirectory: "/Users/me/project"),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
                         )
                     ],
                     windowFrame: WindowFrame(x: 100, y: 200, width: 800, height: 600),
@@ -60,47 +55,48 @@ struct SessionStateRoundTripTests {
         #expect(decoded == state)
     }
 
-    @Test func roundTripNestedSplits() throws {
-        let paneA = UUID()
-        let paneB = UUID()
-        let paneC = UUID()
+    @Test func roundTripSessionWithTerminalTree() throws {
+        let sessionID = UUID()
+        let claudePaneID = UUID()
+        let termA = UUID()
+        let termB = UUID()
+        let termC = UUID()
 
-        let root: PaneNodeState = .split(PaneSplitState(
+        let terminalRoot: PaneNodeState = .split(PaneSplitState(
             direction: "horizontal",
             ratio: 0.5,
-            first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp/a")),
+            first: .pane(PaneLeafState(paneID: termA, workingDirectory: "/tmp/a")),
             second: .split(PaneSplitState(
                 direction: "vertical",
                 ratio: 0.3,
-                first: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp/b")),
-                second: .pane(PaneLeafState(paneID: paneC, workingDirectory: "/tmp/c"))
+                first: .pane(PaneLeafState(paneID: termB, workingDirectory: "/tmp/b")),
+                second: .pane(PaneLeafState(paneID: termC, workingDirectory: "/tmp/c"))
             ))
         ))
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 2000000),
             activeWorkspaceId: UUID(),
             workspaces: [
                 WorkspaceState(
                     id: UUID(),
                     name: "project",
-                    activeSpaceId: UUID(),
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: nil,
-                    spaces: [
-                        SpaceState(
-                            id: UUID(),
-                            name: "default",
-                            activeTabId: UUID(),
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "with-terminal",
                             defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: paneA,
-                                    name: nil,
-                                    activePaneId: paneB,
-                                    root: root
-                                )
-                            ]
+                            worktreePath: nil,
+                            claudePane: PaneLeafState(paneID: claudePaneID, workingDirectory: "/tmp"),
+                            terminalRoot: terminalRoot,
+                            terminalFocusedPaneId: termB,
+                            terminalVisible: true,
+                            dockPosition: .right,
+                            splitRatio: 0.6,
+                            focusedArea: .terminal
                         )
                     ],
                     windowFrame: nil,
@@ -115,70 +111,34 @@ struct SessionStateRoundTripTests {
         #expect(decoded == state)
     }
 
-    @Test func roundTripMultipleWorkspacesAndSpaces() throws {
-        let wsID1 = UUID()
-        let wsID2 = UUID()
-        let spaceID1 = UUID()
-        let spaceID2 = UUID()
-        let tabID1 = UUID()
-        let tabID2 = UUID()
-        let paneID1 = UUID()
-        let paneID2 = UUID()
+    @Test func roundTripNilClaudePane() throws {
+        // The empty-Claude placeholder persists as a nil claudePane. It stays
+        // legal even when the session still carries a terminal tree.
+        let sessionID = UUID()
+        let termID = UUID()
 
         let state = SessionState(
-            version: 1,
-            savedAt: Date(timeIntervalSince1970: 3000000),
-            activeWorkspaceId: wsID1,
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(timeIntervalSince1970: 2500000),
+            activeWorkspaceId: UUID(),
             workspaces: [
                 WorkspaceState(
-                    id: wsID1,
-                    name: "Workspace 1",
-                    activeSpaceId: spaceID1,
-                    defaultWorkingDirectory: "/Users/me/ws1",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID1,
-                            name: "Space 1",
-                            activeTabId: tabID1,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID1,
-                                    name: "Tab 1",
-                                    activePaneId: paneID1,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID1,
-                                        workingDirectory: "/Users/me/ws1"
-                                    ))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: WindowFrame(x: 0, y: 0, width: 1920, height: 1080),
-                    isFullscreen: true
-                ),
-                WorkspaceState(
-                    id: wsID2,
-                    name: "Workspace 2",
-                    activeSpaceId: spaceID2,
+                    id: UUID(),
+                    name: "empty-claude",
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: nil,
-                    spaces: [
-                        SpaceState(
-                            id: spaceID2,
-                            name: "Space 2",
-                            activeTabId: tabID2,
-                            defaultWorkingDirectory: "/tmp/space2",
-                            tabs: [
-                                TabState(
-                                    id: tabID2,
-                                    name: nil,
-                                    activePaneId: paneID2,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID2,
-                                        workingDirectory: "/tmp/space2"
-                                    ))
-                                )
-                            ]
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "empty",
+                            defaultWorkingDirectory: nil,
+                            claudePane: nil,
+                            terminalRoot: .pane(PaneLeafState(paneID: termID, workingDirectory: "/tmp")),
+                            terminalFocusedPaneId: termID,
+                            terminalVisible: true,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .terminal
                         )
                     ],
                     windowFrame: nil,
@@ -191,6 +151,127 @@ struct SessionStateRoundTripTests {
         let decoded = try Self.makeDecoder().decode(SessionState.self, from: data)
 
         #expect(decoded == state)
+        #expect(decoded.workspaces[0].sessions[0].claudePane == nil)
+    }
+
+    @Test func roundTripMultipleWorkspacesAndSessions() throws {
+        let wsID1 = UUID()
+        let wsID2 = UUID()
+        let sessionID1 = UUID()
+        let sessionID2 = UUID()
+        let siblingID = UUID()
+        let paneID1 = UUID()
+        let paneID2 = UUID()
+        let siblingPaneID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(timeIntervalSince1970: 3000000),
+            activeWorkspaceId: wsID1,
+            workspaces: [
+                WorkspaceState(
+                    id: wsID1,
+                    name: "Workspace 1",
+                    activeSessionId: sessionID1,
+                    defaultWorkingDirectory: "/Users/me/ws1",
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID1,
+                            customName: "Session 1",
+                            defaultWorkingDirectory: "/Users/me/ws1",
+                            claudePane: PaneLeafState(paneID: paneID1, workingDirectory: "/Users/me/ws1"),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
+                        ),
+                        // A sibling nested under the primary via parentSessionID.
+                        SessionRecord(
+                            id: siblingID,
+                            customName: "Session 1 (2)",
+                            defaultWorkingDirectory: "/Users/me/ws1",
+                            claudePane: PaneLeafState(paneID: siblingPaneID, workingDirectory: "/Users/me/ws1"),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude,
+                            parentSessionID: sessionID1
+                        )
+                    ],
+                    windowFrame: WindowFrame(x: 0, y: 0, width: 1920, height: 1080),
+                    isFullscreen: true
+                ),
+                WorkspaceState(
+                    id: wsID2,
+                    name: "Workspace 2",
+                    activeSessionId: sessionID2,
+                    defaultWorkingDirectory: nil,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID2,
+                            customName: "Session 2",
+                            defaultWorkingDirectory: "/tmp/ws2",
+                            claudePane: PaneLeafState(paneID: paneID2, workingDirectory: "/tmp/ws2"),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
+                        )
+                    ],
+                    windowFrame: nil,
+                    isFullscreen: nil
+                )
+            ]
+        )
+
+        let data = try Self.makeEncoder().encode(state)
+        let decoded = try Self.makeDecoder().decode(SessionState.self, from: data)
+
+        #expect(decoded == state)
+        #expect(decoded.workspaces[0].sessions[1].parentSessionID == sessionID1)
+    }
+
+    @Test func nilOptionalsDecodeAsNil() throws {
+        // A session with nil default directory / worktree path round-trips with
+        // those fields nil (encoder omits them; decoder restores nil).
+        let sessionID = UUID()
+        let paneID = UUID()
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(timeIntervalSince1970: 4000000),
+            activeWorkspaceId: UUID(),
+            workspaces: [
+                WorkspaceState(
+                    id: UUID(),
+                    name: "ws",
+                    activeSessionId: sessionID,
+                    defaultWorkingDirectory: nil,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "s",
+                            defaultWorkingDirectory: nil,
+                            worktreePath: nil,
+                            claudePane: PaneLeafState(paneID: paneID, workingDirectory: "/tmp"),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
+                        )
+                    ],
+                    windowFrame: nil,
+                    isFullscreen: nil
+                )
+            ]
+        )
+
+        let data = try Self.makeEncoder().encode(state)
+        let decoded = try Self.makeDecoder().decode(SessionState.self, from: data)
+
+        #expect(decoded.workspaces[0].sessions[0].defaultWorkingDirectory == nil)
+        #expect(decoded.workspaces[0].sessions[0].worktreePath == nil)
+        #expect(decoded.workspaces[0].sessions[0].terminalRoot == nil)
+        #expect(decoded.workspaces[0].sessions[0].terminalFocusedPaneId == nil)
     }
 }
 
@@ -376,7 +457,7 @@ struct SplitDirectionConversionTests {
     }
 }
 
-// MARK: - Snapshot from Live Model Tests
+// MARK: - Snapshot from Live Model Tests (v7)
 
 @MainActor
 struct SessionSnapshotTests {
@@ -390,10 +471,13 @@ struct SessionSnapshotTests {
 
         let ws = snapshot.workspaces[0]
         #expect(ws.name == "default")
-        #expect(ws.spaces.count == 1)
-        // v4: fresh Space seeds Claude section with one tab; Terminal is empty.
-        #expect(ws.spaces[0].claudeSection.tabs.count == 1)
-        #expect(ws.spaces[0].terminalSection.tabs.isEmpty)
+        // v7: a fresh workspace seeds exactly one session with a live Claude
+        // pane and no terminal panel yet.
+        #expect(ws.sessions.count == 1)
+        #expect(ws.sessions[0].claudePane != nil)
+        #expect(ws.sessions[0].terminalRoot == nil)
+        #expect(ws.sessions[0].terminalVisible == false)
+        #expect(ws.sessions[0].focusedArea == .claude)
     }
 
     @Test func snapshotCapturesMultipleWorkspaces() {
@@ -410,17 +494,14 @@ struct SessionSnapshotTests {
     @Test func snapshotCapturesActiveIDs() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
-        let space = ws.spaceCollection.activeSpace!
-        // v4: use the seeded Claude tab (Terminal empty on fresh Space).
-        let tab = space.claudeSection.tabs[0]
-        let focusedPaneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = ws.sessionCollection.activeSession!
+        let focusedPaneID = session.claudePane!.splitTree.focusedPaneID
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
         #expect(snapshot.activeWorkspaceId == ws.id)
-        #expect(snapshot.workspaces[0].activeSpaceId == space.id)
-        #expect(snapshot.workspaces[0].spaces[0].claudeSection.activeTabId == tab.id)
-        #expect(snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].activePaneId == focusedPaneID)
+        #expect(snapshot.workspaces[0].activeSessionId == session.id)
+        #expect(snapshot.workspaces[0].sessions[0].claudePane?.paneID == focusedPaneID)
     }
 
     @Test func snapshotCapturesWorkingDirectory() {
@@ -434,55 +515,91 @@ struct SessionSnapshotTests {
         #expect(snapshot.workspaces[0].defaultWorkingDirectory == "/tmp/project")
     }
 
-    @Test func snapshotCapturesSpaceDefaultDirectory() {
+    @Test func snapshotCapturesSessionDefaultDirectory() {
         let collection = WorkspaceCollection()
-        let space = collection.workspaces[0].spaceCollection.activeSpace!
-        space.defaultWorkingDirectory = URL(filePath: "/tmp/space-dir")
+        let session = collection.workspaces[0].sessionCollection.activeSession!
+        session.defaultWorkingDirectory = URL(filePath: "/tmp/session-dir")
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        #expect(snapshot.workspaces[0].spaces[0].defaultWorkingDirectory == "/tmp/space-dir")
+        #expect(snapshot.workspaces[0].sessions[0].defaultWorkingDirectory == "/tmp/session-dir")
     }
 
-    @Test func snapshotNilDirectoriesEncodeAsNull() {
+    @Test func snapshotCapturesTerminalPanel() {
         let collection = WorkspaceCollection()
+        let session = collection.workspaces[0].sessionCollection.activeSession!
+        session.showTerminal()
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        // default workspace has a directory set from init, but space does not
-        #expect(snapshot.workspaces[0].spaces[0].defaultWorkingDirectory == nil)
+        let record = snapshot.workspaces[0].sessions[0]
+        #expect(record.terminalRoot != nil)
+        #expect(record.terminalFocusedPaneId != nil)
+        #expect(record.terminalVisible == true)
+        // showTerminal moves focus to the terminal area.
+        #expect(record.focusedArea == .terminal)
+        // The Claude side stays a single leaf.
+        #expect(record.claudePane != nil)
     }
 
     @Test func snapshotCapturesRestoreCommand() {
         let collection = WorkspaceCollection()
-        let space = collection.workspaces[0].spaceCollection.activeSpace!
-        // v4: use the seeded Claude tab (Terminal is empty on a fresh Space).
-        let tab = space.claudeSection.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
-        tab.paneViewModel.setRestoreCommand(paneID: paneID, command: "claude --resume test123")
+        let session = collection.workspaces[0].sessionCollection.activeSession!
+        let pvm = session.claudePane!
+        let paneID = pvm.splitTree.focusedPaneID
+        pvm.setRestoreCommand(paneID: paneID, command: "claude --resume test123")
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        let root = snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].root
-        if case .pane(let leaf) = root {
-            #expect(leaf.restoreCommand == "claude --resume test123")
-        } else {
-            Issue.record("Expected .pane")
-        }
+        #expect(snapshot.workspaces[0].sessions[0].claudePane?.restoreCommand == "claude --resume test123")
     }
 
-    @Test func snapshotNilRestoreCommandForRegularPane() {
+    @Test func snapshotNilRestoreCommandForFreshSession() {
         let collection = WorkspaceCollection()
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        // v4: Claude section holds the seeded tab on a fresh Space.
-        let root = snapshot.workspaces[0].spaces[0].claudeSection.tabs[0].root
-        if case .pane(let leaf) = root {
-            #expect(leaf.restoreCommand == nil)
-        } else {
-            Issue.record("Expected .pane")
-        }
+        #expect(snapshot.workspaces[0].sessions[0].claudePane?.restoreCommand == nil)
+    }
+
+    /// The Claude side is always a single leaf. If a stray split ever slipped
+    /// into the Claude pane's tree, the serializer collapses it to the
+    /// depth-first first leaf rather than dropping the session.
+    @Test func snapshotCollapsesStraySplitClaudePaneToFirstLeaf() {
+        let leafA = UUID()
+        let leafB = UUID()
+        let split: PaneNodeState = .split(PaneSplitState(
+            direction: "horizontal",
+            ratio: 0.5,
+            first: .pane(PaneLeafState(paneID: leafA, workingDirectory: "/tmp/a")),
+            second: .pane(PaneLeafState(paneID: leafB, workingDirectory: "/tmp/b"))
+        ))
+        let claudePVM = PaneViewModel.fromState(split, focusedPaneID: leafA, kind: .claude)
+        let session = Session(
+            id: UUID(),
+            customName: "stray-split",
+            claudePane: claudePVM,
+            terminalPanel: nil,
+            focusedArea: .claude
+        )
+        let sessionCollection = SessionCollection(
+            sessions: [session],
+            activeSessionID: session.id,
+            workspaceDefaultDirectory: nil
+        )
+        let workspace = Workspace(
+            id: UUID(),
+            name: "ws",
+            defaultWorkingDirectory: nil,
+            sessionCollection: sessionCollection
+        )
+        let collection = WorkspaceCollection(workspaces: [workspace], activeWorkspaceID: workspace.id)
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        let record = snapshot.workspaces[0].sessions[0]
+        #expect(record.claudePane?.paneID == leafA)
+        #expect(record.claudePane?.workingDirectory == "/tmp/a")
     }
 }
 
@@ -613,9 +730,9 @@ struct WindowFrameTests {
     }
 }
 
-// MARK: - SpaceState worktreePath Tests
+// MARK: - SessionRecord worktreePath Tests
 
-struct SpaceStateWorktreePathTests {
+struct SessionRecordWorktreePathTests {
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -631,138 +748,74 @@ struct SpaceStateWorktreePathTests {
 
     @Test func encodesAndDecodesWithWorktreePath() throws {
         let paneID = UUID()
-        let space = SpaceState(
+        let record = SessionRecord(
             id: UUID(),
-            name: "feature-branch",
-            activeTabId: paneID,
+            customName: "feature-branch",
             defaultWorkingDirectory: "/tmp/repo/.worktrees/feature",
             worktreePath: "/tmp/repo/.worktrees/feature",
-            tabs: [
-                TabState(
-                    id: paneID,
-                    name: nil,
-                    activePaneId: paneID,
-                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp/repo/.worktrees/feature"))
-                )
-            ]
+            claudePane: PaneLeafState(paneID: paneID, workingDirectory: "/tmp/repo/.worktrees/feature"),
+            terminalVisible: false,
+            dockPosition: .right,
+            splitRatio: 0.7,
+            focusedArea: .claude
         )
 
-        let data = try Self.makeEncoder().encode(space)
-        let decoded = try Self.makeDecoder().decode(SpaceState.self, from: data)
+        let data = try Self.makeEncoder().encode(record)
+        let decoded = try Self.makeDecoder().decode(SessionRecord.self, from: data)
 
-        #expect(decoded == space)
+        #expect(decoded == record)
         #expect(decoded.worktreePath == "/tmp/repo/.worktrees/feature")
     }
 
     @Test func encodesAndDecodesWithNilWorktreePath() throws {
         let paneID = UUID()
-        let space = SpaceState(
+        let record = SessionRecord(
             id: UUID(),
-            name: "default",
-            activeTabId: paneID,
+            customName: "default",
             defaultWorkingDirectory: "/tmp",
-            tabs: [
-                TabState(
-                    id: paneID,
-                    name: nil,
-                    activePaneId: paneID,
-                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                )
-            ]
+            claudePane: PaneLeafState(paneID: paneID, workingDirectory: "/tmp"),
+            terminalVisible: false,
+            dockPosition: .bottom,
+            splitRatio: 0.7,
+            focusedArea: .claude
         )
 
-        let data = try Self.makeEncoder().encode(space)
-        let decoded = try Self.makeDecoder().decode(SpaceState.self, from: data)
+        let data = try Self.makeEncoder().encode(record)
+        let decoded = try Self.makeDecoder().decode(SessionRecord.self, from: data)
 
-        #expect(decoded == space)
+        #expect(decoded == record)
         #expect(decoded.worktreePath == nil)
-    }
-
-    @Test func decodesV1JSONWithMissingWorktreePath() throws {
-        // v4: the SpaceState shape no longer has a flat `tabs` field, so
-        // v1 payloads reach this code path only AFTER the migrator has
-        // rewritten them into the v4 shape. Here we drive the full
-        // migration chain (v1 → v2 → v3 → v4) and then decode.
-        let paneID = UUID().uuidString
-        let workspaceID = UUID().uuidString
-        let spaceID = UUID().uuidString
-        let tabID = UUID().uuidString
-        let json: [String: Any] = [
-            "version": 1,
-            "savedAt": "2026-04-20T00:00:00Z",
-            "activeWorkspaceId": workspaceID,
-            "workspaces": [
-                [
-                    "id": workspaceID,
-                    "name": "ws",
-                    "activeSpaceId": spaceID,
-                    "defaultWorkingDirectory": "/tmp",
-                    "spaces": [
-                        [
-                            "id": spaceID,
-                            "name": "default",
-                            "activeTabId": tabID,
-                            "defaultWorkingDirectory": "/tmp",
-                            "tabs": [
-                                [
-                                    "id": tabID,
-                                    "name": "Tab 1",
-                                    "activePaneId": paneID,
-                                    "root": [
-                                        "type": "pane",
-                                        "paneID": paneID,
-                                        "workingDirectory": "/tmp"
-                                    ] as [String: Any]
-                                ] as [String: Any]
-                            ]
-                        ] as [String: Any]
-                    ]
-                ] as [String: Any]
-            ]
-        ]
-
-        let v1Data = try JSONSerialization.data(withJSONObject: json)
-        let migratedOpt = try SessionStateMigrator.migrateIfNeeded(data: v1Data)
-        let migrated = try #require(migratedOpt)
-        // Use SessionRestorer.decode to pick up the ISO-8601 date strategy
-        // the snapshot writer uses.
-        let decoded = try SessionRestorer.decode(from: migrated)
-
-        #expect(decoded.workspaces[0].spaces[0].worktreePath == nil)
-        #expect(decoded.workspaces[0].spaces[0].name == "default")
-        #expect(decoded.workspaces[0].spaces[0].terminalSection.tabs.count == 1)
-        #expect(decoded.workspaces[0].spaces[0].claudeSection.tabs.count == 1)
     }
 }
 
-// MARK: - Snapshot worktreePath Tests
+// MARK: - Snapshot worktreePath Tests (v7)
 
 @MainActor
 struct SessionSnapshotWorktreePathTests {
     @Test func snapshotIncludesWorktreePath() {
         let collection = WorkspaceCollection()
-        let space = collection.workspaces[0].spaceCollection.activeSpace!
+        let session = collection.workspaces[0].sessionCollection.activeSession!
         let worktreeURL = URL(filePath: "/tmp/repo/.worktrees/feature-x")
-        space.worktreePath = worktreeURL
+        session.worktreePath = worktreeURL
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        #expect(snapshot.workspaces[0].spaces[0].worktreePath == "/tmp/repo/.worktrees/feature-x")
+        #expect(snapshot.workspaces[0].sessions[0].worktreePath == "/tmp/repo/.worktrees/feature-x")
     }
 
-    @Test func snapshotNilWorktreePathForRegularSpace() {
+    @Test func snapshotNilWorktreePathForRegularSession() {
         let collection = WorkspaceCollection()
 
         let snapshot = SessionSerializer.snapshot(from: collection)
 
-        #expect(snapshot.workspaces[0].spaces[0].worktreePath == nil)
+        #expect(snapshot.workspaces[0].sessions[0].worktreePath == nil)
     }
 }
 
-// MARK: - Migration v1→v2 Tests
+// MARK: - Migration v1→v7 Chain Tests
 
-struct SessionMigrationV1ToV2Tests {
-    @Test func migratesV1ToV2Successfully() throws {
+struct SessionMigrationV1ChainTests {
+    @Test func migratesV1ToCurrentVersionSuccessfully() throws {
         let json: [String: Any] = [
             "version": 1,
             "savedAt": "2026-01-01T00:00:00Z",
@@ -801,154 +854,9 @@ struct SessionMigrationV1ToV2Tests {
     }
 }
 
-// MARK: - SessionRestorer worktreePath Tests
+// MARK: - Restore Command Round-Trip Tests (v7)
 
-@MainActor
-struct SessionRestorerWorktreePathTests {
-    @Test func setsWorktreePathFromSpaceState() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
-        let wsID = UUID()
-        let worktreeDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tian-wt-test-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: worktreeDir) }
-
-        let state = SessionState(
-            version: SessionSerializer.currentVersion,
-            savedAt: Date(),
-            activeWorkspaceId: wsID,
-            workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "default",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "feature",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: "/tmp",
-                            worktreePath: worktreeDir.path,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: nil,
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
-            ]
-        )
-
-        let collection = SessionRestorer.buildWorkspaceCollection(from: state)
-        let space = collection.workspaces[0].spaceCollection.spaces[0]
-
-        #expect(space.worktreePath == worktreeDir)
-    }
-
-    @Test func clearsStaleWorktreePathDuringValidation() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
-        let wsID = UUID()
-        let nonExistentPath = "/tmp/tian-wt-nonexistent-\(UUID().uuidString)"
-
-        let state = SessionState(
-            version: SessionSerializer.currentVersion,
-            savedAt: Date(),
-            activeWorkspaceId: wsID,
-            workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "default",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "stale-feature",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: "/tmp",
-                            worktreePath: nonExistentPath,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: nil,
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
-            ]
-        )
-
-        let validated = try SessionRestorer.validate(state)
-        #expect(validated.workspaces[0].spaces[0].worktreePath == nil)
-    }
-
-    @Test func preservesValidWorktreePathDuringValidation() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
-        let wsID = UUID()
-        let worktreeDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tian-wt-valid-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: worktreeDir) }
-
-        let state = SessionState(
-            version: SessionSerializer.currentVersion,
-            savedAt: Date(),
-            activeWorkspaceId: wsID,
-            workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "default",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "valid-feature",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: "/tmp",
-                            worktreePath: worktreeDir.path,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: nil,
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
-            ]
-        )
-
-        let validated = try SessionRestorer.validate(state)
-        #expect(validated.workspaces[0].spaces[0].worktreePath == worktreeDir.path)
-    }
-}
-
-// MARK: - Restore Command Round-Trip Tests
-
-struct RestoreCommandRoundTripTests {
+struct SessionRecordRestoreCommandRoundTripTests {
     private static func makeEncoder() -> JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -962,40 +870,35 @@ struct RestoreCommandRoundTripTests {
         return decoder
     }
 
-    @Test func roundTripWithRestoreCommand() throws {
+    @Test func roundTripClaudePaneRestoreCommand() throws {
         let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 2,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: wsID,
             workspaces: [
                 WorkspaceState(
                     id: wsID,
                     name: "default",
-                    activeSpaceId: spaceID,
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "default",
                             defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: nil,
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID,
-                                        workingDirectory: "/tmp",
-                                        restoreCommand: "claude --resume abc123"
-                                    ))
-                                )
-                            ]
+                            claudePane: PaneLeafState(
+                                paneID: paneID,
+                                workingDirectory: "/tmp",
+                                restoreCommand: "claude --resume abc123"
+                            ),
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
                         )
                     ],
                     windowFrame: nil,
@@ -1008,21 +911,17 @@ struct RestoreCommandRoundTripTests {
         let decoded = try Self.makeDecoder().decode(SessionState.self, from: data)
 
         #expect(decoded == state)
-        if case .pane(let leaf) = decoded.workspaces[0].spaces[0].tabs[0].root {
-            #expect(leaf.restoreCommand == "claude --resume abc123")
-        } else {
-            Issue.record("Expected .pane")
-        }
+        #expect(decoded.workspaces[0].sessions[0].claudePane?.restoreCommand == "claude --resume abc123")
     }
 
-    @Test func roundTripMixedPanesWithAndWithoutRestoreCommand() throws {
+    @Test func roundTripTerminalTreeMixedRestoreCommands() throws {
         let paneA = UUID()
         let paneB = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let claudePaneID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
-        let root: PaneNodeState = .split(PaneSplitState(
+        let terminalRoot: PaneNodeState = .split(PaneSplitState(
             direction: "horizontal",
             ratio: 0.5,
             first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp/a", restoreCommand: "claude --resume sess1")),
@@ -1030,24 +929,27 @@ struct RestoreCommandRoundTripTests {
         ))
 
         let state = SessionState(
-            version: 2,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 2000000),
             activeWorkspaceId: wsID,
             workspaces: [
                 WorkspaceState(
                     id: wsID,
                     name: "default",
-                    activeSpaceId: spaceID,
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: nil,
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "default",
                             defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(id: tabID, name: nil, activePaneId: paneA, root: root)
-                            ]
+                            claudePane: PaneLeafState(paneID: claudePaneID, workingDirectory: "/tmp"),
+                            terminalRoot: terminalRoot,
+                            terminalFocusedPaneId: paneA,
+                            terminalVisible: true,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .terminal
                         )
                     ],
                     windowFrame: nil,
@@ -1060,7 +962,7 @@ struct RestoreCommandRoundTripTests {
         let decoded = try Self.makeDecoder().decode(SessionState.self, from: data)
 
         #expect(decoded == state)
-        if case .split(let split) = decoded.workspaces[0].spaces[0].tabs[0].root {
+        if case .split(let split) = decoded.workspaces[0].sessions[0].terminalRoot {
             if case .pane(let first) = split.first {
                 #expect(first.restoreCommand == "claude --resume sess1")
             } else {

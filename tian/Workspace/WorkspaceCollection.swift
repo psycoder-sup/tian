@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Per-window workspace ownership. Each window owns one WorkspaceCollection
-/// containing multiple workspaces. Follows the SpaceCollection pattern.
+/// containing multiple workspaces. Follows the SessionCollection pattern.
 @MainActor @Observable
 final class WorkspaceCollection {
     private(set) var workspaces: [Workspace]
@@ -57,8 +57,8 @@ final class WorkspaceCollection {
         workspaces.first(where: { $0.id == activeWorkspaceID })
     }
 
-    var activeSpaceCollection: SpaceCollection? {
-        activeWorkspace?.spaceCollection
+    var activeSessionCollection: SessionCollection? {
+        activeWorkspace?.sessionCollection
     }
 
     // MARK: - Workspace Operations
@@ -139,50 +139,52 @@ final class WorkspaceCollection {
         activeWorkspaceID = workspaces[prevIndex].id
     }
 
-    /// Navigate to the next space across all workspaces.
-    /// If on the last space of the current workspace, moves to the first space of the next workspace.
-    func nextSpaceGlobal() {
+    /// Navigate to the next session across all workspaces.
+    /// If on the last session of the current workspace, moves to the first session of the next workspace.
+    func nextSessionGlobal() {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
-        let sc = workspaces[wsIndex].spaceCollection
-        guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
+        let sc = workspaces[wsIndex].sessionCollection
+        guard let activeID = sc.activeSessionID,
+              let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }) else { return }
 
-        if spaceIndex + 1 < sc.spaces.count {
-            activate(sc.spaces[spaceIndex + 1], in: sc)
+        if sessionIndex + 1 < sc.sessions.count {
+            activate(sc.sessions[sessionIndex + 1], in: sc)
         } else {
             let nextWsIndex = (wsIndex + 1) % workspaces.count
             activeWorkspaceID = workspaces[nextWsIndex].id
-            let nextSC = workspaces[nextWsIndex].spaceCollection
-            if let first = nextSC.spaces.first {
+            let nextSC = workspaces[nextWsIndex].sessionCollection
+            if let first = nextSC.sessions.first {
                 activate(first, in: nextSC)
             }
         }
     }
 
-    /// Navigate to the previous space across all workspaces.
-    /// If on the first space of the current workspace, moves to the last space of the previous workspace.
-    func previousSpaceGlobal() {
+    /// Navigate to the previous session across all workspaces.
+    /// If on the first session of the current workspace, moves to the last session of the previous workspace.
+    func previousSessionGlobal() {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
-        let sc = workspaces[wsIndex].spaceCollection
-        guard let spaceIndex = sc.spaces.firstIndex(where: { $0.id == sc.activeSpaceID }) else { return }
+        let sc = workspaces[wsIndex].sessionCollection
+        guard let activeID = sc.activeSessionID,
+              let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }) else { return }
 
-        if spaceIndex > 0 {
-            activate(sc.spaces[spaceIndex - 1], in: sc)
+        if sessionIndex > 0 {
+            activate(sc.sessions[sessionIndex - 1], in: sc)
         } else {
             let prevWsIndex = (wsIndex - 1 + workspaces.count) % workspaces.count
             activeWorkspaceID = workspaces[prevWsIndex].id
-            let prevSC = workspaces[prevWsIndex].spaceCollection
-            if let last = prevSC.spaces.last {
+            let prevSC = workspaces[prevWsIndex].sessionCollection
+            if let last = prevSC.sessions.last {
                 activate(last, in: prevSC)
             }
         }
     }
 
-    /// Cross-workspace space activation that also resets focus to the
-    /// Claude section — switching spaces should always land in Claude.
-    private func activate(_ space: SpaceModel, in collection: SpaceCollection) {
-        collection.activeSpaceID = space.id
-        if space.focusedSectionKind != .claude {
-            space.focusedSectionKind = .claude
+    /// Cross-workspace session activation that also resets focus to the
+    /// Claude pane — switching sessions should always land in Claude.
+    private func activate(_ session: Session, in collection: SessionCollection) {
+        collection.activeSessionID = session.id
+        if session.focusedArea != .claude {
+            session.focusedArea = .claude
         }
     }
 

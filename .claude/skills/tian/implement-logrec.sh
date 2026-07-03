@@ -20,7 +20,7 @@ LOG_DEFAULT="$HOME/.claude/tian/implement-runs.jsonl"
 
 # ---- defaults / parse --------------------------------------------------------
 final_state=""; source="watcher"; branch=""; repo=""; worktree=""
-space=""; pane=""; tab=""; verdict=""; build=""; tests=""; version="unknown"
+session=""; pane=""; verdict=""; build=""; tests=""; version="unknown"
 exit_code="null"; elapsed="null"; timeout="null"; logf="${TIAN_IMPLEMENT_LOG:-$LOG_DEFAULT}"
 child_session=""; parent_session=""; no_wait="false"
 
@@ -32,9 +32,8 @@ while [[ $# -gt 0 ]]; do
     --branch)      branch="$2"; shift 2 ;;
     --repo)        repo="$2"; shift 2 ;;
     --worktree)    worktree="$2"; shift 2 ;;
-    --space)       space="$2"; shift 2 ;;
+    --session)     session="$2"; shift 2 ;;
     --pane)        pane="$2"; shift 2 ;;
-    --tab)         tab="$2"; shift 2 ;;
     --exit-code)   exit_code="$2"; shift 2 ;;
     --elapsed)     elapsed="$2"; shift 2 ;;
     --timeout)     timeout="$2"; shift 2 ;;
@@ -101,9 +100,8 @@ jq -cn \
   --arg repo     "$repo" \
   --arg branch   "$branch" \
   --arg worktree "$worktree" \
-  --arg space    "$space" \
+  --arg session  "$session" \
   --arg pane     "$pane" \
-  --arg tab      "$tab" \
   --arg fs       "$final_state" \
   --argjson ec   "$exit_code" \
   --argjson el   "$elapsed" \
@@ -118,7 +116,7 @@ jq -cn \
   --argjson dirty   "$dirty" \
   '{ts:$ts, workflow_version:$version, source:$source, repo:$repo, branch:$branch,
     worktree:$worktree,
-    space_id:$space, claude_pane_id:$pane, claude_tab_id:$tab, final_state:$fs,
+    session_id:$session, claude_pane_id:$pane, final_state:$fs,
     exit_code:$ec, elapsed_s:$el, timeout_s:$to, verdict:$verdict, build:$build,
     tests:$tests, child_session_id:$csid, parent_session_id:$psid, no_wait:$nowait,
     commits:$commits, dirty:$dirty}' \

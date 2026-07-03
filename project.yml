@@ -158,9 +158,9 @@ targets:
         INFOPLIST_KEY_UTExportedTypeDeclarations: |
           (
             {
-              UTTypeIdentifier = "com.tian.space-drag-item";
+              UTTypeIdentifier = "com.tian.session-drag-item";
               UTTypeConformsTo = ("public.data");
-              UTTypeDescription = "tian Space";
+              UTTypeDescription = "tian Session";
               UTTypeTagSpecification = {};
             },
             {

@@ -5,6 +5,29 @@ import Foundation
 @MainActor
 struct PaneStatusManagerTests {
 
+    // MARK: - Helpers
+
+    /// A fresh session with a live Claude pane and no terminal panel.
+    private func makeSession() -> Session {
+        Session(customName: "test", workingDirectory: "/tmp")
+    }
+
+    /// A session with both a Claude pane and a terminal panel — two panes for
+    /// exercising the cross-pane aggregators.
+    private func makeSessionWithClaudeAndTerminal() -> Session {
+        let session = Session(customName: "test", workingDirectory: "/tmp")
+        session.showTerminal()
+        return session
+    }
+
+    private func claudePaneID(_ session: Session) -> UUID {
+        session.claudePane!.splitTree.focusedPaneID
+    }
+
+    private func terminalPaneID(_ session: Session) -> UUID {
+        session.terminalPanel!.splitTree.focusedPaneID
+    }
+
     // MARK: - setStatus (FR-21)
 
     @Test func setStatusStoresLabel() {
@@ -54,8 +77,8 @@ struct PaneStatusManagerTests {
     @Test func closePaneClearsStatus() {
         let shared = PaneStatusManager.shared
 
-        let tab = TabModel()
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let pvm = PaneViewModel(kind: .terminal)
+        let paneID = pvm.splitTree.focusedPaneID
 
         // Clean up any prior state
         shared.clearStatus(paneID: paneID)
@@ -63,7 +86,7 @@ struct PaneStatusManagerTests {
         shared.setStatus(paneID: paneID, label: "Running")
         #expect(shared.statuses[paneID]?.label == "Running")
 
-        tab.paneViewModel.closePane(paneID: paneID)
+        pvm.closePane(paneID: paneID)
 
         #expect(shared.statuses[paneID] == nil)
     }
@@ -110,38 +133,34 @@ struct PaneStatusManagerTests {
 
     // MARK: - latestStatus
 
-    @Test func latestStatusReturnsMostRecentInSpace() {
+    @Test func latestStatusReturnsMostRecentInSession() {
         let manager = PaneStatusManager()
-        let tab1 = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab1)
-        let tab2 = space.createTab()
+        let session = makeSessionWithClaudeAndTerminal()
 
-        let pane1 = tab1.paneViewModel.splitTree.focusedPaneID
-        let pane2 = tab2.paneViewModel.splitTree.focusedPaneID
+        let pane1 = claudePaneID(session)
+        let pane2 = terminalPaneID(session)
 
         manager.setStatus(paneID: pane1, label: "Older")
         manager.setStatus(paneID: pane2, label: "Newer")
 
-        let latest = manager.latestStatus(in: space)
+        let latest = manager.latestStatus(in: session)
         #expect(latest?.label == "Newer")
     }
 
     @Test func latestStatusReturnsNilWhenEmpty() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
+        let session = makeSession()
 
-        #expect(manager.latestStatus(in: space) == nil)
+        #expect(manager.latestStatus(in: session) == nil)
     }
 
-    @Test func latestStatusIgnoresPanesOutsideSpace() {
+    @Test func latestStatusIgnoresPanesOutsideSession() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
+        let session = makeSession()
 
         manager.setStatus(paneID: UUID(), label: "Outside")
 
-        #expect(manager.latestStatus(in: space) == nil)
+        #expect(manager.latestStatus(in: session) == nil)
     }
 
     // MARK: - Edge Cases
@@ -311,54 +330,49 @@ struct PaneStatusManagerTests {
 
     // MARK: - sessionStates(in:)
 
-    @Test func sessionStatesInSpaceReturnsSortedNonInactive() {
+    @Test func sessionStatesInSessionReturnsSortedNonInactive() {
         let manager = PaneStatusManager()
-        let tab1 = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab1)
-        let tab2 = space.createTab()
+        let session = makeSessionWithClaudeAndTerminal()
 
-        let pane1 = tab1.paneViewModel.splitTree.focusedPaneID
-        let pane2 = tab2.paneViewModel.splitTree.focusedPaneID
+        let pane1 = claudePaneID(session)
+        let pane2 = terminalPaneID(session)
 
         manager.setSessionState(paneID: pane1, state: .idle)
         manager.setSessionState(paneID: pane2, state: .busy)
 
-        let result = manager.sessionStates(in: space)
+        let result = manager.sessionStates(in: session)
 
         #expect(result.count == 2)
         #expect(result[0].state == .busy)
         #expect(result[1].state == .idle)
     }
 
-    @Test func sessionStatesInSpaceExcludesInactive() {
+    @Test func sessionStatesInSessionExcludesInactive() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = makeSession()
+        let paneID = claudePaneID(session)
 
         manager.setSessionState(paneID: paneID, state: .inactive)
 
-        let result = manager.sessionStates(in: space)
+        let result = manager.sessionStates(in: session)
         #expect(result.isEmpty)
     }
 
-    @Test func sessionStatesInSpaceExcludesPanesOutsideSpace() {
+    @Test func sessionStatesInSessionExcludesPanesOutsideSession() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
+        let session = makeSession()
 
         manager.setSessionState(paneID: UUID(), state: .busy)
 
-        let result = manager.sessionStates(in: space)
+        let result = manager.sessionStates(in: session)
         #expect(result.isEmpty)
     }
 
-    @Test func sessionStatesInSpaceReturnsEmptyWhenNone() {
+    @Test func sessionStatesInSessionReturnsEmptyWhenNone() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
+        let session = makeSession()
 
-        let result = manager.sessionStates(in: space)
+        let result = manager.sessionStates(in: session)
         #expect(result.isEmpty)
     }
 
@@ -366,55 +380,85 @@ struct PaneStatusManagerTests {
 
     @Test func aggregateSessionStateNilWhenNoSession() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        #expect(manager.aggregateSessionState(in: tab) == nil)
+        let session = makeSession()
+        #expect(manager.aggregateSessionState(in: session) == nil)
     }
 
     @Test func aggregateSessionStateReturnsSinglePaneState() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = makeSession()
+        let paneID = claudePaneID(session)
 
         manager.setSessionState(paneID: paneID, state: .active)
-        #expect(manager.aggregateSessionState(in: tab) == .active)
+        #expect(manager.aggregateSessionState(in: session) == .active)
     }
 
     @Test func aggregateSessionStateExcludesInactive() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = makeSession()
+        let paneID = claudePaneID(session)
 
         manager.setSessionState(paneID: paneID, state: .inactive)
-        #expect(manager.aggregateSessionState(in: tab) == nil)
+        #expect(manager.aggregateSessionState(in: session) == nil)
     }
 
-    /// A tab with several panes rolls up to the highest-priority state
-    /// (needsAttention > failed > busy > active > idle), which drives the
-    /// single dot on the tab's sidebar row.
+    /// A session with several panes rolls up to the highest-priority state
+    /// (needsAttention > failed > busy > active > idle), which drives the single
+    /// dot on the session's sidebar row.
     @Test func aggregateSessionStatePicksHighestPriorityAcrossPanes() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let pane1 = tab.paneViewModel.splitTree.focusedPaneID
-        guard let pane2 = tab.paneViewModel.splitPane(direction: .horizontal) else {
-            Issue.record("splitPane failed to create a second pane")
-            return
-        }
+        let session = makeSessionWithClaudeAndTerminal()
+        let pane1 = claudePaneID(session)
+        let pane2 = terminalPaneID(session)
 
         manager.setSessionState(paneID: pane1, state: .idle)
         manager.setSessionState(paneID: pane2, state: .busy)
-        #expect(manager.aggregateSessionState(in: tab) == .busy)
+        #expect(manager.aggregateSessionState(in: session) == .busy)
 
         // A higher-priority state on any pane wins.
         manager.setSessionState(paneID: pane1, state: .needsAttention)
-        #expect(manager.aggregateSessionState(in: tab) == .needsAttention)
+        #expect(manager.aggregateSessionState(in: session) == .needsAttention)
+    }
+
+    // MARK: - topSessionPane(in:)
+
+    @Test func topSessionPaneReturnsWinningPaneAndState() {
+        let manager = PaneStatusManager()
+        let session = makeSessionWithClaudeAndTerminal()
+        let pane1 = claudePaneID(session)
+        let pane2 = terminalPaneID(session)
+
+        manager.setSessionState(paneID: pane1, state: .idle)
+        manager.setSessionState(paneID: pane2, state: .needsAttention)
+
+        let top = manager.topSessionPane(in: session)
+        #expect(top?.paneID == pane2)
+        #expect(top?.state == .needsAttention)
+    }
+
+    @Test func topSessionPaneNilWhenNoActiveState() {
+        let manager = PaneStatusManager()
+        let session = makeSession()
+        #expect(manager.topSessionPane(in: session) == nil)
+    }
+
+    // MARK: - hasSessionState(_:in:)
+
+    @Test func hasSessionStateDetectsPresence() {
+        let manager = PaneStatusManager()
+        let session = makeSession()
+        let paneID = claudePaneID(session)
+
+        manager.setSessionState(paneID: paneID, state: .busy)
+        #expect(manager.hasSessionState(.busy, in: session))
+        #expect(!manager.hasSessionState(.needsAttention, in: session))
     }
 
     // MARK: - Per-PVM mirror (dual-write via pane registry)
 
     @Test func dualWritesMirrorToOwnerPaneViewModel() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let pvm = tab.paneViewModel
+        let pvm = PaneViewModel(kind: .terminal)
         let paneID = pvm.splitTree.focusedPaneID
 
         // Use the shared registry path: register, set, read from PVM.
@@ -435,8 +479,7 @@ struct PaneStatusManagerTests {
 
     @Test func unregisterStopsMirroring() {
         let manager = PaneStatusManager()
-        let tab = TabModel()
-        let pvm = tab.paneViewModel
+        let pvm = PaneViewModel(kind: .terminal)
         let paneID = pvm.splitTree.focusedPaneID
 
         manager.registerPane(paneID, owner: pvm)

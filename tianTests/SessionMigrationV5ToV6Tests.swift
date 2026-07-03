@@ -9,9 +9,9 @@ struct SessionMigrationV5ToV6Tests {
         #expect(SessionStateMigrator.migrations[5] != nil)
     }
 
-    // FR-T31 — current schema version is 6.
-    @Test func currentVersionIsSix() {
-        #expect(SessionSerializer.currentVersion == 6)
+    // FR-T31 — current schema version is 7 (the flatten refactor bumped it).
+    @Test func currentVersionIsSeven() {
+        #expect(SessionSerializer.currentVersion == 7)
     }
 
     // FR-T29 / FR-T31 — a v5 fixture (no activeTab field) migrates to v6;
@@ -63,10 +63,11 @@ struct SessionMigrationV5ToV6Tests {
         }
         """.data(using: .utf8)!
 
-        // Migration should succeed and bump version to 6.
+        // Migration chain now continues to v7; the field-default behaviour under
+        // test (nil activeTab decodes fine) is unchanged.
         let migratedData = try SessionStateMigrator.migrateIfNeeded(data: v5JSON)!
         let json = try JSONSerialization.jsonObject(with: migratedData) as! [String: Any]
-        #expect((json["version"] as? Int) == 6)
+        #expect((json["version"] as? Int) == SessionSerializer.currentVersion)
 
         // Decode into typed model.
         let decoder = JSONDecoder()
@@ -83,9 +84,9 @@ struct SessionMigrationV5ToV6Tests {
         let wsState = WorkspaceState(
             id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
             name: "myWorkspace",
-            activeSpaceId: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+            activeSessionId: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
             defaultWorkingDirectory: nil,
-            spaces: [],
+            sessions: [],
             windowFrame: nil,
             isFullscreen: nil,
             inspectPanelVisible: true,

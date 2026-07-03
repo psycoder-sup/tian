@@ -17,21 +17,21 @@ struct CloseConfirmationDialogTests {
         #expect(ran)
     }
 
-    @Test func confirmIfNeededRunsActionForTabTargetWithZeroProcesses() {
+    @Test func confirmIfNeededRunsActionForSessionTargetWithZeroProcesses() {
         var ran = false
         CloseConfirmationDialog.confirmIfNeeded(
             processCount: 0,
-            target: .tab,
+            target: .session(paneCount: 1),
             action: { ran = true }
         )
         #expect(ran)
     }
 
-    @Test func confirmIfNeededRunsActionForBatchTargetWithZeroProcesses() {
+    @Test func confirmIfNeededRunsActionForMultiPaneSessionTargetWithZeroProcesses() {
         var ran = false
         CloseConfirmationDialog.confirmIfNeeded(
             processCount: 0,
-            target: .tabs(count: 3),
+            target: .session(paneCount: 3),
             action: { ran = true }
         )
         #expect(ran)

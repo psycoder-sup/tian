@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Bottom-right overlay shown while `[[setup]]`, `[[archive]]` commands run,
-/// or while `git worktree remove` is in progress for a Space.
+/// or while `git worktree remove` is in progress for a Session.
 /// Rendering is phase-driven: `.setup`/`.cleanup` show a step counter,
 /// current command, and a cancel button; `.removing` shows only the bare
 /// "Removing..." label with no counter, no command, and no cancel affordance.

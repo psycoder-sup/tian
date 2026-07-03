@@ -64,12 +64,12 @@ struct KeyBindingRegistry {
         let layoutChars = KeyboardLayoutTranslator.shared.character(forKeyCode: event.keyCode)
 
         // Cmd+digit special case (must come before the dict lookup so it shadows
-        // any hypothetical future binding on Cmd+0..9). `.goToTab(n)` carries an
-        // associated value and cannot be precomputed in a chord dict.
+        // any hypothetical future binding on Cmd+0..9). `.goToSession(n)` carries
+        // an associated value and cannot be precomputed in a chord dict.
         if modifiers == [.command],
            let chars = layoutChars ?? event.charactersIgnoringModifiers,
            let digit = Int(chars), digit >= 0, digit <= 9 {
-            return digit == 0 ? .focusSidebar : .goToTab(digit)
+            return digit == 0 ? .focusSidebar : .goToSession(digit)
         }
 
         for chars in [layoutChars, event.charactersIgnoringModifiers?.lowercased()] {
@@ -103,23 +103,17 @@ struct KeyBindingRegistry {
     private static func defaults() -> KeyBindingRegistry {
         var registry = KeyBindingRegistry()
 
-        // Tab navigation
-        registry.bindings[.nextTab] = [KeyBinding(
-            characters: "]", keyCode: nil, modifiers: [.command, .shift])]
-        registry.bindings[.previousTab] = [KeyBinding(
-            characters: "[", keyCode: nil, modifiers: [.command, .shift])]
-        registry.bindings[.newTab] = [KeyBinding(
-            characters: "t", keyCode: nil, modifiers: [.command])]
-
-        // Space navigation
-        registry.bindings[.newSpace] = [KeyBinding(
+        // Session navigation
+        // Cmd+Shift+T creates a session (Cmd+T is intentionally left unbound so
+        // it falls through to the shell).
+        registry.bindings[.newSession] = [KeyBinding(
             characters: "t", keyCode: nil, modifiers: [.command, .shift])]
 
-        // Space navigation (across workspaces)
+        // Session navigation (across workspaces)
         // Cmd+Shift+Right (keyCode 124) / Cmd+Shift+Left (keyCode 123)
-        registry.bindings[.nextSpace] = [KeyBinding(
+        registry.bindings[.nextSession] = [KeyBinding(
             characters: nil, keyCode: 124, modifiers: [.command, .shift])]
-        registry.bindings[.previousSpace] = [KeyBinding(
+        registry.bindings[.previousSession] = [KeyBinding(
             characters: nil, keyCode: 123, modifiers: [.command, .shift])]
         registry.bindings[.newWorkspace] = [KeyBinding(
             characters: "n", keyCode: nil, modifiers: [.command, .shift])]
@@ -132,13 +126,13 @@ struct KeyBindingRegistry {
             KeyBinding(characters: "w", keyCode: nil, modifiers: [.command, .shift]),
         ]
 
-        // Sections (space-sections feature)
+        // Session panes (Claude / terminal areas)
         // `` Ctrl+` `` — keyCode 50 is the backtick key on US layouts.
-        registry.bindings[.toggleTerminalSection] = [KeyBinding(
+        registry.bindings[.toggleTerminalPanel] = [KeyBinding(
             characters: nil, keyCode: 50, modifiers: [.control])]
         // `` Cmd+Shift+` `` and Cmd+' (no shift required for users on
         // layouts where backtick needs Shift).
-        registry.bindings[.cycleSectionFocus] = [
+        registry.bindings[.cycleFocusArea] = [
             KeyBinding(characters: nil, keyCode: 50, modifiers: [.command, .shift]),
             KeyBinding(characters: "'", keyCode: nil, modifiers: [.command]),
         ]

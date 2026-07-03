@@ -8,7 +8,7 @@ struct PaneExitOverlay: View {
     /// Claude-kind panes show "Retry" so the wording matches the user's
     /// mental model (the Claude binary failed to spawn), while Terminal
     /// panes keep the existing "Restart Shell" copy.
-    var sectionKind: SectionKind = .terminal
+    var kind: PaneKind = .terminal
     let onRestart: () -> Void
     let onClose: () -> Void
 
@@ -51,7 +51,7 @@ struct PaneExitOverlay: View {
     private var restartLabel: String {
         switch state {
         case .spawnFailed:
-            return sectionKind == .claude ? "Retry" : "Restart Shell"
+            return kind == .claude ? "Retry" : "Restart Shell"
         case .exited:
             return "Restart Shell"
         case .running:

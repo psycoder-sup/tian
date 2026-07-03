@@ -1,0 +1,32 @@
+import SwiftUI
+
+/// A single Claude-session status dot. Drives the session row's leading
+/// indicator in the sidebar.
+struct SessionDotView: View {
+    let state: ClaudeSessionState
+
+    var body: some View {
+        switch state {
+        case .busy:
+            BusyDotView()
+        case .needsAttention:
+            Circle()
+                .fill(Color(red: 1.0, green: 0.624, blue: 0.039))
+                .frame(width: 8, height: 8)
+        case .failed:
+            Circle()
+                .fill(Color(red: 1.0, green: 0.231, blue: 0.188))
+                .frame(width: 8, height: 8)
+        case .active:
+            Circle()
+                .fill(Color(red: 0.204, green: 0.78, blue: 0.349))
+                .frame(width: 8, height: 8)
+        case .idle:
+            Circle()
+                .fill(Color(red: 0.557, green: 0.557, blue: 0.576))
+                .frame(width: 8, height: 8)
+        case .inactive:
+            EmptyView()
+        }
+    }
+}

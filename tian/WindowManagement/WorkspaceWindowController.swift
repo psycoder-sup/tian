@@ -117,11 +117,11 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
             }
 
             switch action {
-            case .nextSpace:
-                self.workspaceCollection.nextSpaceGlobal()
+            case .nextSession:
+                self.workspaceCollection.nextSessionGlobal()
                 return nil
-            case .previousSpace:
-                self.workspaceCollection.previousSpaceGlobal()
+            case .previousSession:
+                self.workspaceCollection.previousSessionGlobal()
                 return nil
             case .nextWorkspace:
                 self.workspaceCollection.nextWorkspace()
@@ -152,14 +152,14 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                     object: self.workspaceCollection
                 )
                 return nil
-            case .newSpace:
+            case .newSession:
                 let workspaceID = self.workspaceCollection.activeWorkspaceID
                 var userInfo: [AnyHashable: Any] = [:]
                 if let id = workspaceID {
-                    userInfo[Notification.createSpaceWorkspaceIDKey] = id
+                    userInfo[Notification.createSessionWorkspaceIDKey] = id
                 }
                 NotificationCenter.default.post(
-                    name: .showCreateSpaceInput,
+                    name: .showCreateSessionInput,
                     object: self.workspaceCollection,
                     userInfo: userInfo
                 )
@@ -168,24 +168,24 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                 break
             }
 
-            guard let collection = self.workspaceCollection.activeSpaceCollection else { return event }
+            guard let collection = self.workspaceCollection.activeSessionCollection else { return event }
 
             switch action {
-            case .newTab:
-                guard let space = collection.activeSpace else { return event }
-                let wd = collection.resolveWorkingDirectory()
-                // FR-18: new tab lands in the focused pane's section.
-                space.createTab(in: space.focusedSection, workingDirectory: wd)
-            case .nextTab:
-                collection.activeSpace?.focusedSection.nextTab()
-            case .previousTab:
-                collection.activeSpace?.focusedSection.previousTab()
-            case .goToTab(let index):
-                collection.activeSpace?.focusedSection.goToTab(index: index)
-            case .toggleTerminalSection:
-                collection.activeSpace?.toggleTerminal()
-            case .cycleSectionFocus:
-                collection.activeSpace?.cycleFocusedSection()
+            case .goToSession(let index):
+                // Cmd+1…8 jump to the Nth session; Cmd+9 always jumps to the
+                // last (mirrors the former SectionModel.goToTab affordance).
+                let entries = collection.hierarchicalOrder()
+                guard !entries.isEmpty else { return nil }
+                if index == 9 {
+                    collection.activateSession(id: entries[entries.count - 1].session.id)
+                } else {
+                    guard index >= 1, index <= entries.count else { return nil }  // consume; out-of-range no-op
+                    collection.activateSession(id: entries[index - 1].session.id)
+                }
+            case .toggleTerminalPanel:
+                collection.activeSession?.toggleTerminal()
+            case .cycleFocusArea:
+                collection.activeSession?.cycleFocusedArea()
             default:
                 return event
             }

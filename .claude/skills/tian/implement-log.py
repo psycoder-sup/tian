@@ -60,11 +60,11 @@ def rank(r):
 
 def delegation_key(r):
     """Group key tying a delegation's spawn/watcher/self-verify records together."""
-    return r.get("space_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
+    return r.get("session_id") or f"{r.get('branch')}|{r.get('claude_pane_id')}"
 
 
 def dedup(rows):
-    """One record per delegation (keyed by space_id, else branch+pane)."""
+    """One record per delegation (keyed by session_id, else branch+pane)."""
     groups = {}
     for r in rows:
         key = delegation_key(r)

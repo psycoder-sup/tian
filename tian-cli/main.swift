@@ -5,14 +5,13 @@ struct TianCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tian",
         abstract: "Control the tian terminal emulator.",
-        discussion: "`tian open` launches (or focuses) the app and works from any shell. The remaining commands manage workspaces, spaces, tabs, and panes of the running app and must be run from within a tian terminal session (they require the TIAN_SOCKET environment variable set by the tian app).",
+        discussion: "`tian open` launches (or focuses) the app and works from any shell. The remaining commands manage workspaces, sessions, and panes of the running app and must be run from within a tian terminal session (they require the TIAN_SOCKET environment variable set by the tian app).",
         version: "0.1.0",
         subcommands: [
             Open.self,
             Ping.self,
             WorkspaceGroup.self,
-            SpaceGroup.self,
-            TabGroup.self,
+            SessionGroup.self,
             PaneGroup.self,
             StatusGroup.self,
             NotifyCommand.self,
@@ -28,12 +27,11 @@ struct TianCLI: ParsableCommand {
 struct TianEnvironment {
     let socketPath: String
     let paneId: String
-    let tabId: String
-    let spaceId: String
+    let sessionId: String
     let workspaceId: String
 
     var ipcEnv: IPCEnv {
-        IPCEnv(paneId: paneId, tabId: tabId, spaceId: spaceId, workspaceId: workspaceId)
+        IPCEnv(paneId: paneId, sessionId: sessionId, workspaceId: workspaceId)
     }
 
     static func fromEnvironment() throws -> TianEnvironment {
@@ -54,8 +52,7 @@ struct TianEnvironment {
         return TianEnvironment(
             socketPath: socketPath,
             paneId: env["TIAN_PANE_ID"] ?? "00000000-0000-0000-0000-000000000000",
-            tabId: env["TIAN_TAB_ID"] ?? "00000000-0000-0000-0000-000000000000",
-            spaceId: env["TIAN_SPACE_ID"] ?? "00000000-0000-0000-0000-000000000000",
+            sessionId: env["TIAN_SESSION_ID"] ?? "00000000-0000-0000-0000-000000000000",
             workspaceId: env["TIAN_WORKSPACE_ID"] ?? "00000000-0000-0000-0000-000000000000"
         )
     }

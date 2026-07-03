@@ -73,19 +73,19 @@ final class WindowCoordinator {
 
     var windowCount: Int { controllers.count }
 
-    /// Finds a pane by UUID across all windows, activates its workspace/space/tab,
+    /// Finds a pane by UUID across all windows, activates its workspace/session,
     /// focuses the pane, and brings the window to front.
     /// The `id` may be a pane UUID or a Ghostty surface UUID; both are tried.
     func focusPane(id paneID: UUID) {
         for controller in controllers {
             let collection = controller.workspaceCollection
             for workspace in collection.workspaces {
-                for space in workspace.spaceCollection.spaces {
-                    for tab in space.allTabs {
-                        guard tab.paneViewModel.splitTree.root.containsLeaf(paneID: paneID) else {
+                for session in workspace.sessionCollection.sessions {
+                    for pane in session.allPanes {
+                        guard pane.splitTree.root.containsLeaf(paneID: paneID) else {
                             continue
                         }
-                        activatePane(paneID, controller: controller, workspace: workspace, space: space, tab: tab)
+                        activatePane(paneID, controller: controller, workspace: workspace, session: session, pane: pane)
                         return
                     }
                 }
@@ -94,12 +94,12 @@ final class WindowCoordinator {
         for controller in controllers {
             let collection = controller.workspaceCollection
             for workspace in collection.workspaces {
-                for space in workspace.spaceCollection.spaces {
-                    for tab in space.allTabs {
-                        guard let resolved = tab.paneViewModel.paneID(forSurfaceID: paneID) else {
+                for session in workspace.sessionCollection.sessions {
+                    for pane in session.allPanes {
+                        guard let resolved = pane.paneID(forSurfaceID: paneID) else {
                             continue
                         }
-                        activatePane(resolved, controller: controller, workspace: workspace, space: space, tab: tab)
+                        activatePane(resolved, controller: controller, workspace: workspace, session: session, pane: pane)
                         return
                     }
                 }
@@ -111,13 +111,18 @@ final class WindowCoordinator {
         _ paneID: UUID,
         controller: WorkspaceWindowController,
         workspace: Workspace,
-        space: SpaceModel,
-        tab: TabModel
+        session: Session,
+        pane: PaneViewModel
     ) {
         controller.workspaceCollection.activateWorkspace(id: workspace.id)
-        workspace.spaceCollection.activateSpace(id: space.id)
-        space.activate(tab: tab)
-        tab.paneViewModel.focusPane(paneID: paneID)
+        workspace.sessionCollection.activateSession(id: session.id)
+        // Reveal the region that holds this pane before focusing it — a terminal
+        // pane is only interactable when its panel is visible.
+        if pane.kind == .terminal {
+            session.terminalVisible = true
+        }
+        session.focusedArea = pane.kind
+        pane.focusPane(paneID: paneID)
         NSApp.activate()
         controller.window?.makeKeyAndOrderFront(nil)
     }

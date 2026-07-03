@@ -1,103 +1,216 @@
 import Foundation
 @testable import tian
 
-// Legacy v3-shape init overloads used exclusively by the existing
-// SessionRestorerTests fixtures. Keeps the >40 constructor sites working
-// without rewriting each one — the tests were authored against the v3
-// flat `tabs` shape, and Phase 4 introduced v4 `claudeSection` /
-// `terminalSection`. These helpers upgrade the legacy arguments into a
-// valid v4 SpaceState by:
-//   - routing the caller's `tabs` into the Terminal section, and
-//   - synthesising a minimal Claude section so validation passes.
+// Raw-JSON fixture builders for pre-v7 (v6-shape) session state.
+//
+// The v6→v7 migration operates on raw `[String: Any]` dictionaries (the v6
+// Workspace → Space → Section → Tab typed models — `SpaceState`,
+// `SectionState`, `TabState` — were deleted in the flatten refactor), so the
+// migration suites drive it with these builders instead of typed models. A
+// space carries a `claudeSection` and a `terminalSection`, each holding an
+// ordered list of tabs; reader tabs additionally carry a `markdownFilePath` or
+// `imageFilePath`.
+enum LegacyFixtures {
 
-extension SpaceState {
-    /// v3-shape read-only accessor. Returns Terminal-section tabs. Used by
-    /// older SessionRestorerTests fixtures that predate Phase 4.
-    var tabs: [TabState] { terminalSection.tabs }
+    // MARK: - Pane nodes
 
-    /// v3-shape read-only accessor. Falls back to the Claude section's
-    /// activeTabId when the Terminal section is empty so tests that assert
-    /// on this field always see a valid UUID.
-    var activeTabId: UUID {
-        terminalSection.activeTabId ?? claudeSection.activeTabId ?? UUID()
+    /// A leaf pane node dict (`"type": "pane"`).
+    static func paneNode(
+        paneID: String = UUID().uuidString,
+        workingDirectory: String = "/tmp",
+        restoreCommand: String? = nil,
+        claudeSessionState: [String: Any]? = nil
+    ) -> [String: Any] {
+        [
+            "type": "pane",
+            "paneID": paneID,
+            "workingDirectory": workingDirectory,
+            "restoreCommand": restoreCommand ?? NSNull(),
+            "claudeSessionState": claudeSessionState ?? NSNull(),
+        ]
     }
-}
 
-extension TabState {
-    /// v3-shape convenience init. Defaults `sectionKind` to `.terminal`
-    /// so legacy SessionRestorerTests fixtures keep compiling.
-    init(id: UUID, name: String?, activePaneId: UUID, root: PaneNodeState) {
-        self.init(
+    /// A split pane node dict (`"type": "split"`).
+    static func splitNode(
+        direction: String = "horizontal",
+        ratio: Double = 0.5,
+        first: [String: Any],
+        second: [String: Any]
+    ) -> [String: Any] {
+        [
+            "type": "split",
+            "direction": direction,
+            "ratio": ratio,
+            "first": first,
+            "second": second,
+        ]
+    }
+
+    // MARK: - Tabs
+
+    /// A tab dict. Pass `markdownFilePath` / `imageFilePath` to make it a reader
+    /// tab (which the v7 migration drops).
+    static func tab(
+        id: String = UUID().uuidString,
+        name: String? = nil,
+        activePaneId: String,
+        root: [String: Any],
+        sectionKind: String,
+        markdownFilePath: String? = nil,
+        imageFilePath: String? = nil
+    ) -> [String: Any] {
+        var t: [String: Any] = [
+            "id": id,
+            "name": name ?? NSNull(),
+            "activePaneId": activePaneId,
+            "root": root,
+            "sectionKind": sectionKind,
+        ]
+        if let markdownFilePath { t["markdownFilePath"] = markdownFilePath }
+        if let imageFilePath { t["imageFilePath"] = imageFilePath }
+        return t
+    }
+
+    /// A Claude tab whose root is a single pane leaf.
+    static func claudeTab(
+        id: String = UUID().uuidString,
+        name: String? = nil,
+        paneID: String = UUID().uuidString,
+        workingDirectory: String = "/tmp",
+        restoreCommand: String? = nil,
+        claudeSessionState: [String: Any]? = nil
+    ) -> [String: Any] {
+        tab(
             id: id,
             name: name,
-            activePaneId: activePaneId,
-            root: root,
-            sectionKind: .terminal
+            activePaneId: paneID,
+            root: paneNode(
+                paneID: paneID,
+                workingDirectory: workingDirectory,
+                restoreCommand: restoreCommand,
+                claudeSessionState: claudeSessionState
+            ),
+            sectionKind: "claude"
         )
     }
-}
 
-extension SpaceState {
-    /// v3-shape convenience init. Legacy `tabs` are routed into the
-    /// Terminal section; a synthesised Claude section with one placeholder
-    /// pane satisfies the v4 invariants.
-    init(
-        id: UUID,
-        name: String,
-        activeTabId: UUID,
-        defaultWorkingDirectory: String?,
+    /// A Terminal tab. Pass an explicit `root` for a split tree.
+    static func terminalTab(
+        id: String = UUID().uuidString,
+        name: String? = nil,
+        paneID: String = UUID().uuidString,
+        workingDirectory: String = "/tmp",
+        root: [String: Any]? = nil
+    ) -> [String: Any] {
+        tab(
+            id: id,
+            name: name,
+            activePaneId: paneID,
+            root: root ?? paneNode(paneID: paneID, workingDirectory: workingDirectory),
+            sectionKind: "terminal"
+        )
+    }
+
+    /// A reader (Markdown) tab — dropped by the v7 migration.
+    static func markdownReaderTab(
+        id: String = UUID().uuidString,
+        paneID: String = UUID().uuidString,
+        markdownFilePath: String = "/tmp/readme.md"
+    ) -> [String: Any] {
+        tab(
+            id: id,
+            name: "readme.md",
+            activePaneId: paneID,
+            root: paneNode(paneID: paneID),
+            sectionKind: "claude",
+            markdownFilePath: markdownFilePath
+        )
+    }
+
+    /// A reader (image) tab — dropped by the v7 migration.
+    static func imageReaderTab(
+        id: String = UUID().uuidString,
+        paneID: String = UUID().uuidString,
+        imageFilePath: String = "/tmp/pic.png"
+    ) -> [String: Any] {
+        tab(
+            id: id,
+            name: "pic.png",
+            activePaneId: paneID,
+            root: paneNode(paneID: paneID),
+            sectionKind: "claude",
+            imageFilePath: imageFilePath
+        )
+    }
+
+    // MARK: - Sections / spaces / workspaces
+
+    static func section(kind: String, activeTabId: String?, tabs: [[String: Any]]) -> [String: Any] {
+        [
+            "id": UUID().uuidString,
+            "kind": kind,
+            "activeTabId": activeTabId ?? NSNull(),
+            "tabs": tabs,
+        ]
+    }
+
+    static func space(
+        id: String = UUID().uuidString,
+        name: String = "space",
+        defaultWorkingDirectory: String? = "/tmp",
         worktreePath: String? = nil,
-        tabs: [TabState]
-    ) {
-        let claudePaneID = UUID()
-        let claudeTabID = UUID()
-        let wd = defaultWorkingDirectory ?? "/tmp"
-        let claudeLeaf = PaneLeafState(paneID: claudePaneID, workingDirectory: wd)
-        let claudeTab = TabState(
-            id: claudeTabID,
-            name: nil,
-            activePaneId: claudePaneID,
-            root: .pane(claudeLeaf),
-            sectionKind: .claude
-        )
-        let claudeSection = SectionState(
-            id: UUID(),
-            kind: .claude,
-            activeTabId: claudeTabID,
-            tabs: [claudeTab]
-        )
+        parentSpaceID: String? = nil,
+        terminalVisible: Bool = false,
+        dockPosition: String = "right",
+        splitRatio: Double = 0.7,
+        focusedSectionKind: String = "claude",
+        claudeSection: [String: Any],
+        terminalSection: [String: Any]
+    ) -> [String: Any] {
+        var s: [String: Any] = [
+            "id": id,
+            "name": name,
+            "defaultWorkingDirectory": defaultWorkingDirectory ?? NSNull(),
+            "worktreePath": worktreePath ?? NSNull(),
+            "terminalVisible": terminalVisible,
+            "dockPosition": dockPosition,
+            "splitRatio": splitRatio,
+            "focusedSectionKind": focusedSectionKind,
+            "claudeSection": claudeSection,
+            "terminalSection": terminalSection,
+        ]
+        if let parentSpaceID { s["parentSpaceID"] = parentSpaceID }
+        return s
+    }
 
-        // Normalise provided tabs so they all carry `.terminal` — some
-        // fixtures construct TabState via the v3-shape init above, which
-        // already defaults to `.terminal`; others may pre-tag them.
-        let terminalTabs = tabs.map { existing in
-            TabState(
-                id: existing.id,
-                name: existing.name,
-                activePaneId: existing.activePaneId,
-                root: existing.root,
-                sectionKind: .terminal
-            )
-        }
-        let terminalActiveTabId: UUID? = terminalTabs.isEmpty ? nil : activeTabId
-        let terminalSection = SectionState(
-            id: UUID(),
-            kind: .terminal,
-            activeTabId: terminalActiveTabId,
-            tabs: terminalTabs
-        )
+    static func workspace(
+        id: String = UUID().uuidString,
+        name: String = "default",
+        activeSpaceId: String,
+        defaultWorkingDirectory: String? = "/tmp",
+        spaces: [[String: Any]]
+    ) -> [String: Any] {
+        [
+            "id": id,
+            "name": name,
+            "activeSpaceId": activeSpaceId,
+            "defaultWorkingDirectory": defaultWorkingDirectory ?? NSNull(),
+            "windowFrame": NSNull(),
+            "isFullscreen": false,
+            "spaces": spaces,
+        ]
+    }
 
-        self.init(
-            id: id,
-            name: name,
-            defaultWorkingDirectory: defaultWorkingDirectory,
-            worktreePath: worktreePath,
-            claudeSection: claudeSection,
-            terminalSection: terminalSection,
-            terminalVisible: false,
-            dockPosition: .right,
-            splitRatio: 0.7,
-            focusedSectionKind: .claude
-        )
+    static func state(
+        version: Int = 6,
+        activeWorkspaceId: String,
+        workspaces: [[String: Any]]
+    ) -> [String: Any] {
+        [
+            "version": version,
+            "savedAt": "2026-06-01T00:00:00Z",
+            "activeWorkspaceId": activeWorkspaceId,
+            "workspaces": workspaces,
+        ]
     }
 }

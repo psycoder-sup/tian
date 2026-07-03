@@ -1,13 +1,17 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-02",
-  "now": [],
+  "lastUpdated": "2026-07-03",
+  "now": [
+    "Workspace→Session hierarchy flatten (removes Spaces/Sections/Tabs; a session = one Claude pane + a toggleable terminal panel; clean-break IPC/CLI v2 + persistence v6→v7 migration). App + CLI build green; in verification on `feat/session-flatten`, not yet merged (ADR 0004)."
+  ],
   "next": [
-    "Validate harness v1.1.0 on a real multi-slice run: confirm async fan-out (`--no-wait` + `implement-wait.sh`) yields multi-branch overlap and that the STOP block/structured handoff flips the orchestrator output/resident inversion (ADR 0003); re-audit with session-audit."
+    "Finish flatten verification: v6→v7 migration smoke + CLI/keyboard smoke in the debug app (ADR 0004), then merge.",
+    "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
-    { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" }
+    { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" },
+    { "title": "Flatten hierarchy to Workspace→Session", "done": false, "target": "2026-07" }
   ],
   "blocked": [],
   "shipped": [

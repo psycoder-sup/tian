@@ -13,20 +13,18 @@ struct RestoreMetrics: Sendable, Equatable {
     // MARK: - Entity Counts
 
     var workspaceCount: Int = 0
-    var spaceCount: Int = 0
-    var tabCount: Int = 0
+    var sessionCount: Int = 0
     var paneCount: Int = 0
 
     // MARK: - Corrections
 
     var staleWorkspaceIdFixes: Int = 0
-    var staleSpaceIdFixes: Int = 0
-    var staleTabIdFixes: Int = 0
+    var staleSessionIdFixes: Int = 0
     var stalePaneIdFixes: Int = 0
     var directoryFallbacks: Int = 0
 
     var totalStaleIdFixes: Int {
-        staleWorkspaceIdFixes + staleSpaceIdFixes + staleTabIdFixes + stalePaneIdFixes
+        staleWorkspaceIdFixes + staleSessionIdFixes + stalePaneIdFixes
     }
 
     // MARK: - Timing
@@ -43,8 +41,7 @@ struct RestoreMetrics: Sendable, Equatable {
             duration_ms=\(durationMs) \
             file_bytes=\(fileBytes) \
             workspaces=\(workspaceCount) \
-            spaces=\(spaceCount) \
-            tabs=\(tabCount) \
+            sessions=\(sessionCount) \
             panes=\(paneCount) \
             stale_ids=\(totalStaleIdFixes) \
             dir_fallbacks=\(directoryFallbacks)

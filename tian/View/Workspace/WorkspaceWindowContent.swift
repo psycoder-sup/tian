@@ -5,7 +5,7 @@ struct WorkspaceWindowContent: View {
     let worktreeOrchestrator: WorktreeOrchestrator
 
     @State private var showDebugOverlay = false
-    @State private var createSpaceRequest: CreateSpaceRequest?
+    @State private var createSessionRequest: CreateSessionRequest?
     @State private var pendingResolveTask: Task<Void, Never>?
     /// Mirrors `GhosttyApp.shared.defaultBackgroundColor` so the root
     /// fills with the same color the Claude pane Metal layer paints.
@@ -55,27 +55,27 @@ struct WorkspaceWindowContent: View {
         }
         .background(rootBackgroundColor.ignoresSafeArea())
         .overlay {
-            if let req = createSpaceRequest, let workspace = req.workspace {
-                CreateSpaceView(
+            if let req = createSessionRequest, let workspace = req.workspace {
+                CreateSessionView(
                     workspace: workspace,
                     repoRoot: req.repoRoot,
                     worktreeDir: req.worktreeDir,
                     onSubmitPlain: { name in
                         let captured = req
-                        createSpaceRequest = nil
-                        let wd = captured.workspace?.spaceCollection.resolveWorkingDirectory() ?? "~"
-                        captured.workspace?.spaceCollection.createSpace(
+                        createSessionRequest = nil
+                        let wd = captured.workspace?.sessionCollection.resolveWorkingDirectory() ?? "~"
+                        captured.workspace?.sessionCollection.createSession(
                             name: name,
                             workingDirectory: wd
                         )
                     },
                     onSubmitWorktree: { submission in
                         let captured = req
-                        createSpaceRequest = nil
+                        createSessionRequest = nil
                         guard let repoRoot = captured.repoRoot else { return }
                         Task {
                             do {
-                                _ = try await worktreeOrchestrator.createWorktreeSpace(
+                                _ = try await worktreeOrchestrator.createWorktreeSession(
                                     branchName: submission.branchName,
                                     existingBranch: submission.existingBranch,
                                     remoteRef: submission.remoteRef,
@@ -89,11 +89,11 @@ struct WorkspaceWindowContent: View {
                     },
                     onSubmitClaudeWorktree: {
                         let captured = req
-                        createSpaceRequest = nil
+                        createSessionRequest = nil
                         guard let repoRoot = captured.repoRoot else { return }
                         Task {
                             do {
-                                _ = try await worktreeOrchestrator.createClaudeWorktreeSpace(
+                                _ = try await worktreeOrchestrator.createClaudeWorktreeSession(
                                     repoPath: repoRoot.path,
                                     workspaceID: captured.workspace?.id
                                 )
@@ -105,7 +105,7 @@ struct WorkspaceWindowContent: View {
                     onCancel: {
                         pendingResolveTask?.cancel()
                         pendingResolveTask = nil
-                        createSpaceRequest = nil
+                        createSessionRequest = nil
                     }
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -124,7 +124,7 @@ struct WorkspaceWindowContent: View {
             Text(String(describing: err))   // WorktreeError conforms to CustomStringConvertible
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
-        .animation(.easeInOut(duration: 0.15), value: createSpaceRequest != nil)
+        .animation(.easeInOut(duration: 0.15), value: createSessionRequest != nil)
         .animation(.easeInOut(duration: 0.15), value: displayedProgress != nil)
         .onChange(of: worktreeOrchestrator.setupProgress) { _, new in
             if let new {
@@ -157,10 +157,10 @@ struct WorkspaceWindowContent: View {
                   obj === workspaceCollection else { return }
             showDebugOverlay.toggle()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showCreateSpaceInput)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .showCreateSessionInput)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }
-            let workspaceID = notification.userInfo?[Notification.createSpaceWorkspaceIDKey] as? UUID
+            let workspaceID = notification.userInfo?[Notification.createSessionWorkspaceIDKey] as? UUID
             let workspace: Workspace? = {
                 if let id = workspaceID,
                    let ws = workspaceCollection.workspaces.first(where: { $0.id == id }) {
@@ -169,7 +169,7 @@ struct WorkspaceWindowContent: View {
                 return workspaceCollection.activeWorkspace
             }()
             guard let workspace else { return }
-            let wd = workspace.spaceCollection.resolveWorkingDirectory()
+            let wd = workspace.sessionCollection.resolveWorkingDirectory()
             // Rapid repeat triggers (⇧⌘T held, or ⇧⌘T after clicking +) used to
             // spawn overlapping resolutions; the last to finish would re-open
             // the modal even if the user had already cancelled an earlier one.
@@ -195,7 +195,7 @@ struct WorkspaceWindowContent: View {
                     config = WorktreeConfig()
                 }
                 if Task.isCancelled { return }
-                createSpaceRequest = CreateSpaceRequest(
+                createSessionRequest = CreateSessionRequest(
                     workspace: workspace,
                     repoRoot: repoURL,
                     worktreeDir: config.worktreeDir
@@ -210,14 +210,14 @@ struct WorkspaceWindowContent: View {
     }
 }
 
-// MARK: - Create Space Request
+// MARK: - Create Session Request
 
-private struct CreateSpaceRequest: Equatable {
+private struct CreateSessionRequest: Equatable {
     weak var workspace: Workspace?
     let repoRoot: URL?
     let worktreeDir: String
 
-    static func == (lhs: CreateSpaceRequest, rhs: CreateSpaceRequest) -> Bool {
+    static func == (lhs: CreateSessionRequest, rhs: CreateSessionRequest) -> Bool {
         lhs.workspace?.id == rhs.workspace?.id
             && lhs.repoRoot == rhs.repoRoot
             && lhs.worktreeDir == rhs.worktreeDir

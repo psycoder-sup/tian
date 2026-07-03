@@ -6,7 +6,7 @@ import Foundation
 struct AutoSetPayload: Codable, Equatable {
     let setup: [SetupEntry]
     let copy: [CopyEntry]
-    /// Cleanup commands run when the worktree Space is removed — inverse
+    /// Cleanup commands run when the worktree session is removed — inverse
     /// of `setup`. Same shape as a setup entry; empty array when nothing
     /// to clean up.
     let archive: [SetupEntry]

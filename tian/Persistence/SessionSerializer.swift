@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 6   // bumped from 5 for activeTab field
+    static let currentVersion = 7   // bumped from 6 for the flattened Session model
 
     static var stateDirectory: URL {
         FileManager.default
@@ -36,26 +36,19 @@ enum SessionSerializer {
     ) -> SessionState {
         let sessionStates = PaneStatusManager.shared.sessionStates
         let workspaces = collection.workspaces.map { workspace in
-            WorkspaceState(
+            let sessions = workspace.sessionCollection.sessions.map { session in
+                sessionRecord(from: session, sessionStates: sessionStates)
+            }
+            return WorkspaceState(
                 id: workspace.id,
                 name: workspace.name,
-                activeSpaceId: workspace.spaceCollection.activeSpaceID,
+                // Fallback to the first session's id (then a fresh UUID) when
+                // no active session is set; SessionRestorer.validate reshapes a
+                // stale value on read, so a sentinel here is harmless.
+                activeSessionId: workspace.sessionCollection.activeSessionID
+                    ?? sessions.first?.id ?? UUID(),
                 defaultWorkingDirectory: workspace.defaultWorkingDirectory?.path,
-                spaces: workspace.spaceCollection.spaces.map { space in
-                    SpaceState(
-                        id: space.id,
-                        name: space.name,
-                        defaultWorkingDirectory: space.defaultWorkingDirectory?.path,
-                        worktreePath: space.worktreePath?.path,
-                        claudeSection: sectionState(from: space.claudeSection, sessionStates: sessionStates),
-                        terminalSection: sectionState(from: space.terminalSection, sessionStates: sessionStates),
-                        terminalVisible: space.terminalVisible,
-                        dockPosition: space.dockPosition,
-                        splitRatio: space.splitRatio,
-                        focusedSectionKind: space.focusedSectionKind,
-                        parentSpaceID: space.parentSpaceID
-                    )
-                },
+                sessions: sessions,
                 windowFrame: windowFrame,
                 isFullscreen: isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelState.isVisible,
@@ -75,29 +68,39 @@ enum SessionSerializer {
     }
 
     @MainActor
-    private static func sectionState(
-        from section: SectionModel,
+    private static func sessionRecord(
+        from session: Session,
         sessionStates: [UUID: ClaudeSessionState]
-    ) -> SectionState {
-        let tabs = section.tabs.map { tab in
-            TabState(
-                id: tab.id,
-                name: tab.customName,
-                activePaneId: tab.paneViewModel.splitTree.focusedPaneID,
-                root: tab.paneViewModel.splitTree.root.toState(
-                    restoreCommands: tab.paneViewModel.restoreCommands,
-                    sessionStates: sessionStates
-                ),
-                sectionKind: section.kind,
-                markdownFilePath: tab.markdownFilePath,
-                imageFilePath: tab.imageFilePath
+    ) -> SessionRecord {
+        // The Claude side is a single leaf. It should always be a `.pane`, but
+        // if a stray split slipped in, persist its depth-first first leaf so we
+        // never lose the session.
+        let claudeLeaf: PaneLeafState? = session.claudePane.map { pvm in
+            let root = pvm.splitTree.root.toState(
+                restoreCommands: pvm.restoreCommands,
+                sessionStates: sessionStates
+            )
+            return root.firstLeaf
+        }
+        let terminalRoot: PaneNodeState? = session.terminalPanel.map { pvm in
+            pvm.splitTree.root.toState(
+                restoreCommands: pvm.restoreCommands,
+                sessionStates: sessionStates
             )
         }
-        return SectionState(
-            id: section.id,
-            kind: section.kind,
-            activeTabId: tabs.isEmpty ? nil : section.activeTabID,
-            tabs: tabs
+        return SessionRecord(
+            id: session.id,
+            customName: session.customName,
+            defaultWorkingDirectory: session.defaultWorkingDirectory?.path,
+            worktreePath: session.worktreePath?.path,
+            claudePane: claudeLeaf,
+            terminalRoot: terminalRoot,
+            terminalFocusedPaneId: session.terminalPanel?.splitTree.focusedPaneID,
+            terminalVisible: session.terminalVisible,
+            dockPosition: session.dockPosition,
+            splitRatio: session.splitRatio,
+            focusedArea: session.focusedArea,
+            parentSessionID: session.parentSessionID
         )
     }
 

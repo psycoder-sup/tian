@@ -1,6 +1,6 @@
 import Foundation
 
-let ipcProtocolVersion = 1
+let ipcProtocolVersion = 2
 
 // MARK: - Request
 
@@ -11,10 +11,9 @@ struct IPCRequest: Codable {
     let env: IPCEnv
 }
 
-struct IPCEnv: Codable {
+struct IPCEnv: Codable, Sendable {
     let paneId: String
-    let tabId: String
-    let spaceId: String
+    let sessionId: String
     let workspaceId: String
 }
 

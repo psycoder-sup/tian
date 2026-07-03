@@ -3,8 +3,7 @@ import Foundation
 /// Information about a surface with a running foreground process.
 struct RunningProcessInfo: Sendable {
     let workspaceName: String
-    let spaceName: String
-    let tabName: String
+    let sessionName: String
     let paneID: UUID
 }
 
@@ -21,15 +20,14 @@ enum ProcessDetector {
 
         for collection in collections {
             for workspace in collection.workspaces {
-                for space in workspace.spaceCollection.spaces {
-                    for tab in space.allTabs {
-                        for (paneID, terminalSurface) in tab.paneViewModel.surfaces {
+                for session in workspace.sessionCollection.sessions {
+                    for pane in session.allPanes {
+                        for (paneID, terminalSurface) in pane.surfaces {
                             guard let surface = terminalSurface.surface,
                                   ghostty_surface_needs_confirm_quit(surface) else { continue }
                             results.append(RunningProcessInfo(
                                 workspaceName: workspace.name,
-                                spaceName: space.name,
-                                tabName: tab.displayName,
+                                sessionName: session.displayName,
                                 paneID: paneID
                             ))
                         }
@@ -56,13 +54,13 @@ enum ProcessDetector {
         return ghostty_surface_needs_confirm_quit(s)
     }
 
-    /// Count running processes across a single tab's panes.
-    static func runningProcessCount(in tab: TabModel) -> Int {
-        tab.paneViewModel.surfaces.values.filter { needsConfirmation(surface: $0) }.count
+    /// Count running processes across a single pane's surfaces.
+    static func runningProcessCount(in pane: PaneViewModel) -> Int {
+        pane.surfaces.values.filter { needsConfirmation(surface: $0) }.count
     }
 
-    /// Count running processes across multiple tabs.
-    static func runningProcessCount(in tabs: [TabModel]) -> Int {
-        tabs.reduce(0) { $0 + runningProcessCount(in: $1) }
+    /// Count running processes across multiple panes.
+    static func runningProcessCount(in panes: [PaneViewModel]) -> Int {
+        panes.reduce(0) { $0 + runningProcessCount(in: $1) }
     }
 }

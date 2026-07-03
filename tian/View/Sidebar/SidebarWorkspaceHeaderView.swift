@@ -6,7 +6,7 @@ struct SidebarWorkspaceHeaderView: View {
     let isActive: Bool
     let isKeyboardSelected: Bool
     let onToggleDisclosure: () -> Void
-    let onAddSpace: () -> Void
+    let onAddSession: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
 
@@ -31,7 +31,7 @@ struct SidebarWorkspaceHeaderView: View {
 
             Spacer()
 
-            Button(action: onAddSpace) {
+            Button(action: onAddSession) {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color(white: 0.4, opacity: 1))
@@ -39,9 +39,9 @@ struct SidebarWorkspaceHeaderView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("add-space-\(workspace.id)")
-            .accessibilityLabel("New space in \(workspace.name)")
-            .help("New space (⇧⌘T)")
+            .accessibilityIdentifier("add-session-\(workspace.id)")
+            .accessibilityLabel("New session in \(workspace.name)")
+            .help("New session (⇧⌘T)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
@@ -66,14 +66,14 @@ struct SidebarWorkspaceHeaderView: View {
                 onSet: onSetDirectory
             )
             Divider()
-            Button("New Space...", action: onAddSpace)
+            Button("New Session...", action: onAddSession)
             Divider()
             Button("Close Workspace", action: onClose)
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("workspace-header-\(workspace.id)")
-        .accessibilityLabel("\(workspace.name), \(workspace.spaceCollection.spaces.count) spaces, \(isExpanded ? "expanded" : "collapsed")")
+        .accessibilityLabel("\(workspace.name), \(workspace.sessionCollection.sessions.count) sessions, \(isExpanded ? "expanded" : "collapsed")")
         .accessibilityHint("Double-tap to expand or collapse")
     }
 }

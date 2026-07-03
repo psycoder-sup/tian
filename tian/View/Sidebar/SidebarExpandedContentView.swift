@@ -15,8 +15,8 @@ struct SidebarExpandedContentView: View {
             if disclosedWorkspaces.contains(workspace.id) {
                 // Use the same hierarchical ordering as the render so arrow-key
                 // selection indices stay in lockstep with the drawn rows.
-                for entry in workspace.spaceCollection.hierarchicalOrder() {
-                    items.append(.spaceRow(workspace, entry.space))
+                for entry in workspace.sessionCollection.hierarchicalOrder() {
+                    items.append(.sessionRow(workspace, entry.session))
                 }
             }
         }
@@ -33,7 +33,7 @@ struct SidebarExpandedContentView: View {
                         isActive: workspace.id == workspaceCollection.activeWorkspaceID,
                         isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
                         onToggleDisclosure: { toggleDisclosure(workspace.id) },
-                        onAddSpace: { addSpace(to: workspace) },
+                        onAddSession: { addSession(to: workspace) },
                         onSetDirectory: { url in
                             workspace.setDefaultWorkingDirectory(url)
                         },
@@ -44,30 +44,30 @@ struct SidebarExpandedContentView: View {
                         // Zero inter-row spacing so the per-row connector rail
                         // segments abut into one continuous vertical line.
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(workspace.spaceCollection.hierarchicalOrder(), id: \.space.id) { entry in
-                                SidebarSpaceRowView(
-                                    space: entry.space,
+                            ForEach(workspace.sessionCollection.hierarchicalOrder(), id: \.session.id) { entry in
+                                SidebarSessionRowView(
+                                    session: entry.session,
                                     isActive: workspace.id == workspaceCollection.activeWorkspaceID
-                                        && entry.space.id == workspace.spaceCollection.activeSpaceID,
+                                        && entry.session.id == workspace.sessionCollection.activeSessionID,
                                     isChild: entry.isChild,
                                     isOrchestrator: entry.isOrchestrator,
-                                    isKeyboardSelected: selectedIndex == flatIndex(for: .spaceRow(workspace, entry.space)),
-                                    setupProgress: worktreeOrchestrator.setupProgress?.spaceID == entry.space.id
+                                    isKeyboardSelected: selectedIndex == flatIndex(for: .sessionRow(workspace, entry.session)),
+                                    setupProgress: worktreeOrchestrator.setupProgress?.sessionID == entry.session.id
                                         ? worktreeOrchestrator.setupProgress
                                         : nil,
-                                    onSelect: { selectSpace(workspace: workspace, spaceID: entry.space.id) },
+                                    onSelect: { selectSession(workspace: workspace, sessionID: entry.session.id) },
                                     onSetDirectory: { url in
-                                        entry.space.defaultWorkingDirectory = url
+                                        entry.session.defaultWorkingDirectory = url
                                     },
-                                    onClose: { closeSpace(entry.space, in: workspace) }
+                                    onClose: { closeSession(entry.session, in: workspace) }
                                 )
                             }
                         }
                         .padding(.horizontal, 6)
                         .padding(.top, 2)
                         .padding(.bottom, 4)
-                        .dropDestination(for: SpaceDragItem.self) { items, _ in
-                            handleSpaceDrop(items: items, spaceCollection: workspace.spaceCollection)
+                        .dropDestination(for: SessionDragItem.self) { items, _ in
+                            handleSessionDrop(items: items, sessionCollection: workspace.sessionCollection)
                         }
                     }
                 }
@@ -123,14 +123,14 @@ struct SidebarExpandedContentView: View {
         return true
     }
 
-    private func handleSpaceDrop(items: [SpaceDragItem], spaceCollection: SpaceCollection) -> Bool {
+    private func handleSessionDrop(items: [SessionDragItem], sessionCollection: SessionCollection) -> Bool {
         guard let item = items.first,
-              let sourceIndex = spaceCollection.spaces.firstIndex(where: { $0.id == item.spaceID }) else {
+              let sourceIndex = sessionCollection.sessions.firstIndex(where: { $0.id == item.sessionID }) else {
             return false
         }
-        let destinationIndex = spaceCollection.spaces.count - 1
+        let destinationIndex = sessionCollection.sessions.count - 1
         if sourceIndex != destinationIndex {
-            spaceCollection.reorderSpace(from: sourceIndex, to: destinationIndex)
+            sessionCollection.reorderSession(from: sourceIndex, to: destinationIndex)
         }
         return true
     }
@@ -146,30 +146,30 @@ struct SidebarExpandedContentView: View {
         clampSelectedIndex()
     }
 
-    // MARK: - Add Space
+    // MARK: - Add Session
 
-    private func addSpace(to workspace: Workspace) {
+    private func addSession(to workspace: Workspace) {
         NotificationCenter.default.post(
-            name: .showCreateSpaceInput,
+            name: .showCreateSessionInput,
             object: workspaceCollection,
             userInfo: [
-                Notification.createSpaceWorkspaceIDKey: workspace.id
+                Notification.createSessionWorkspaceIDKey: workspace.id
             ]
         )
         disclosedWorkspaces.insert(workspace.id)
     }
 
-    // MARK: - Close Space
+    // MARK: - Close Session
 
-    private func closeSpace(_ space: SpaceModel, in workspace: Workspace) {
-        SpaceCloseFlow.run(space: space, in: workspace, worktreeOrchestrator: worktreeOrchestrator)
+    private func closeSession(_ session: Session, in workspace: Workspace) {
+        SessionCloseFlow.run(session: session, in: workspace, worktreeOrchestrator: worktreeOrchestrator)
     }
 
-    // MARK: - Space Selection
+    // MARK: - Session Selection
 
-    private func selectSpace(workspace: Workspace, spaceID: UUID) {
+    private func selectSession(workspace: Workspace, sessionID: UUID) {
         workspaceCollection.activateWorkspace(id: workspace.id)
-        workspace.spaceCollection.activateSpace(id: spaceID)
+        workspace.sessionCollection.activateSession(id: sessionID)
         sidebarState.focusTarget = .terminal
     }
 
@@ -230,8 +230,8 @@ struct SidebarExpandedContentView: View {
         switch items[index] {
         case .workspaceHeader(let ws):
             toggleDisclosure(ws.id)
-        case .spaceRow(let ws, let space):
-            selectSpace(workspace: ws, spaceID: space.id)
+        case .sessionRow(let ws, let session):
+            selectSession(workspace: ws, sessionID: session.id)
         }
     }
 
@@ -244,12 +244,12 @@ struct SidebarExpandedContentView: View {
 
 private enum SidebarItem {
     case workspaceHeader(Workspace)
-    case spaceRow(Workspace, SpaceModel)
+    case sessionRow(Workspace, Session)
 
     var id: String {
         switch self {
         case .workspaceHeader(let ws): "header-\(ws.id)"
-        case .spaceRow(_, let space): "space-\(space.id)"
+        case .sessionRow(_, let session): "session-\(session.id)"
         }
     }
 }

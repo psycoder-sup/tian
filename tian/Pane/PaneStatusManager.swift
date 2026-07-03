@@ -51,15 +51,13 @@ final class PaneStatusManager {
         }
     }
 
-    /// Returns the most recently updated status among all panes in all tabs of the space.
-    func latestStatus(in space: SpaceModel) -> PaneStatus? {
+    /// Returns the most recently updated status among all panes in the session.
+    func latestStatus(in session: Session) -> PaneStatus? {
         var latest: PaneStatus?
-        for tab in space.allTabs {
-            for paneID in tab.paneViewModel.splitTree.allLeaves() {
-                guard let status = statuses[paneID] else { continue }
-                if latest == nil || status.sequence > latest!.sequence {
-                    latest = status
-                }
+        for paneID in session.allPaneIDs {
+            guard let status = statuses[paneID] else { continue }
+            if latest == nil || status.sequence > latest!.sequence {
+                latest = status
             }
         }
         return latest
@@ -90,12 +88,12 @@ final class PaneStatusManager {
     }
 
     /// The highest-priority (needsAttention first) non-inactive session among
-    /// the tab's panes — both the winning pane and its state — or nil when no
-    /// pane has an active session. Single source of truth for the per-tab
-    /// sidebar row (dot + which pane drives its branch/status).
-    func topSessionPane(in tab: TabModel) -> (paneID: UUID, state: ClaudeSessionState)? {
+    /// the session's panes — both the winning pane and its state — or nil when no
+    /// pane has an active session. Single source of truth for the sidebar row
+    /// (dot + which pane drives its branch/status).
+    func topSessionPane(in session: Session) -> (paneID: UUID, state: ClaudeSessionState)? {
         var top: (paneID: UUID, state: ClaudeSessionState)?
-        for paneID in tab.paneViewModel.splitTree.allLeaves() {
+        for paneID in session.allPaneIDs {
             guard let state = sessionStates[paneID], state != .inactive else { continue }
             // `>` compares by priority (needsAttention is greatest).
             if top == nil || state > top!.state {
@@ -105,31 +103,26 @@ final class PaneStatusManager {
         return top
     }
 
-    /// The highest-priority non-inactive session state among the tab's panes, or
-    /// nil when no pane has an active session. Drives the single dot on a per-tab
+    /// The highest-priority non-inactive session state among the session's panes,
+    /// or nil when no pane has an active session. Drives the single dot on the
     /// sidebar row.
-    func aggregateSessionState(in tab: TabModel) -> ClaudeSessionState? {
-        topSessionPane(in: tab)?.state
+    func aggregateSessionState(in session: Session) -> ClaudeSessionState? {
+        topSessionPane(in: session)?.state
     }
 
-    /// Whether any pane under this tab is currently in the given state.
-    func hasSessionState(_ state: ClaudeSessionState, in tab: TabModel) -> Bool {
-        for paneID in tab.paneViewModel.splitTree.allLeaves() {
-            if sessionStates[paneID] == state { return true }
-        }
-        return false
+    /// Whether any pane under this session is currently in the given state.
+    func hasSessionState(_ state: ClaudeSessionState, in session: Session) -> Bool {
+        session.allPaneIDs.contains { sessionStates[$0] == state }
     }
 
-    /// Returns all (paneID, state) pairs in the space with non-nil, non-inactive state,
-    /// sorted by priority (highest first).
-    func sessionStates(in space: SpaceModel) -> [(paneID: UUID, state: ClaudeSessionState)] {
+    /// Returns all (paneID, state) pairs in the session with non-nil, non-inactive
+    /// state, sorted by priority (highest first).
+    func sessionStates(in session: Session) -> [(paneID: UUID, state: ClaudeSessionState)] {
         var result: [(paneID: UUID, state: ClaudeSessionState)] = []
-        for tab in space.allTabs {
-            for paneID in tab.paneViewModel.splitTree.allLeaves() {
-                guard let state = sessionStates[paneID],
-                      state != .inactive else { continue }
-                result.append((paneID: paneID, state: state))
-            }
+        for paneID in session.allPaneIDs {
+            guard let state = sessionStates[paneID],
+                  state != .inactive else { continue }
+            result.append((paneID: paneID, state: state))
         }
         return result.sorted { $0.state > $1.state }
     }

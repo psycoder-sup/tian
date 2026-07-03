@@ -104,7 +104,201 @@ enum SessionStateMigrator {
             dict["workspaces"] = workspaces
             return dict
         },
+        // v6 → v7: Flatten Workspace → Space → Section → Tab into a flat list
+        // of Sessions. Each surviving Claude tab becomes a Session; the active
+        // Claude tab's Session inherits the space's active Terminal tab as its
+        // attached terminal panel. Reader tabs and non-active Terminal tabs are
+        // dropped. See `migrateV6ToV7` for the per-space rules.
+        6: { json in try SessionStateMigrator.migrateV6ToV7(json) },
     ]
+
+    // MARK: - v6 → v7 Migration
+
+    /// Rewrites every workspace, replacing its `spaces` list with a flat
+    /// `sessions` list and renaming `activeSpaceId` → `activeSessionId`.
+    private static func migrateV6ToV7(_ json: [String: Any]) throws -> [String: Any] {
+        var dict = json
+        guard var workspaces = dict["workspaces"] as? [[String: Any]] else {
+            return dict
+        }
+        for wi in workspaces.indices {
+            var workspace = workspaces[wi]
+
+            let spaces = (workspace["spaces"] as? [[String: Any]]) ?? []
+            var sessions: [[String: Any]] = []
+            for space in spaces {
+                sessions.append(contentsOf: sessionsFromSpace(space))
+            }
+            workspace["sessions"] = sessions
+
+            // Key renames on the workspace itself.
+            if let activeSpaceId = workspace["activeSpaceId"] {
+                workspace["activeSessionId"] = activeSpaceId
+            }
+            workspace.removeValue(forKey: "activeSpaceId")
+            workspace.removeValue(forKey: "spaces")
+
+            workspaces[wi] = workspace
+        }
+        dict["workspaces"] = workspaces
+        return dict
+    }
+
+    /// Expands one v6 space into its flat list of v7 sessions.
+    private static func sessionsFromSpace(_ space: [String: Any]) -> [[String: Any]] {
+        let spaceId = space["id"] as? String ?? UUID().uuidString
+        // v7 sessions carry an optional `customName` (nil = auto-derived name).
+        // The primary session inherits the space's name, except the pre-flatten
+        // "default" placeholder, which maps to nil so it auto-names instead.
+        let primaryCustomName: Any = {
+            if let name = space["name"] as? String, name != "default" { return name }
+            return NSNull()
+        }()
+        let defaultWorkingDirectory = space["defaultWorkingDirectory"] ?? NSNull()
+        let worktreePath = space["worktreePath"] ?? NSNull()
+        let parentSessionID = space["parentSpaceID"] ?? NSNull()
+        let dockPosition = space["dockPosition"] as? String ?? "right"
+        let splitRatio = space["splitRatio"] as? Double ?? 0.7
+        let spaceTerminalVisible = space["terminalVisible"] as? Bool ?? false
+        let focusedSectionKind = space["focusedSectionKind"] as? String ?? "claude"
+
+        // Terminal tree = the terminal section's active tab (fallback: first).
+        var terminalRoot: Any = NSNull()
+        var terminalFocusedPaneId: Any = NSNull()
+        if let terminalSection = space["terminalSection"] as? [String: Any],
+           let terminalTabs = terminalSection["tabs"] as? [[String: Any]],
+           !terminalTabs.isEmpty {
+            let activeTerminalTabId = terminalSection["activeTabId"] as? String
+            let selected = terminalTabs.first { ($0["id"] as? String) == activeTerminalTabId }
+                ?? terminalTabs[0]
+            if let root = selected["root"] as? [String: Any] {
+                terminalRoot = root
+                terminalFocusedPaneId = selected["activePaneId"] ?? NSNull()
+            }
+        }
+        let hasTerminal = !(terminalRoot is NSNull)
+        let terminalVisible = spaceTerminalVisible && hasTerminal
+        // Focus can't rest on an absent terminal.
+        let focusedArea = hasTerminal ? focusedSectionKind : "claude"
+
+        // Builds a session dict, copying the space-level fields shared by all
+        // sessions carved out of this space.
+        func makeSession(
+            id: String,
+            customName: Any,
+            claudePane: Any,
+            terminalRoot: Any,
+            terminalFocusedPaneId: Any,
+            terminalVisible: Bool,
+            focusedArea: String
+        ) -> [String: Any] {
+            [
+                "id": id,
+                "customName": customName,
+                "defaultWorkingDirectory": defaultWorkingDirectory,
+                "worktreePath": worktreePath,
+                "claudePane": claudePane,
+                "terminalRoot": terminalRoot,
+                "terminalFocusedPaneId": terminalFocusedPaneId,
+                "terminalVisible": terminalVisible,
+                "dockPosition": dockPosition,
+                "splitRatio": splitRatio,
+                "focusedArea": focusedArea,
+                "parentSessionID": parentSessionID,
+            ]
+        }
+
+        // Claude tabs, minus reader tabs (markdown/image readers aren't persisted in v7).
+        let claudeSection = space["claudeSection"] as? [String: Any]
+        let claudeTabs = ((claudeSection?["tabs"] as? [[String: Any]]) ?? [])
+            .filter { !isReaderTab($0) }
+
+        // Rule 5: a space with no surviving Claude tab becomes one session with
+        // an empty (null) Claude pane, keeping the space's terminal tree.
+        guard !claudeTabs.isEmpty else {
+            return [makeSession(
+                id: spaceId,
+                customName: primaryCustomName,
+                claudePane: NSNull(),
+                terminalRoot: terminalRoot,
+                terminalFocusedPaneId: terminalFocusedPaneId,
+                terminalVisible: terminalVisible,
+                focusedArea: focusedArea
+            )]
+        }
+
+        // The primary session comes from the ACTIVE claude tab (fallback: first).
+        let activeClaudeTabId = claudeSection?["activeTabId"] as? String
+        let primaryTabId: String
+        if let active = claudeTabs.first(where: { ($0["id"] as? String) == activeClaudeTabId }),
+           let id = active["id"] as? String {
+            primaryTabId = id
+        } else {
+            primaryTabId = claudeTabs[0]["id"] as? String ?? ""
+        }
+
+        var sessions: [[String: Any]] = []
+        for tab in claudeTabs {
+            let tabId = tab["id"] as? String ?? UUID().uuidString
+            let claudePane: Any = (tab["root"] as? [String: Any])
+                .flatMap { claudeLeaf(fromRoot: $0) } ?? NSNull()
+
+            if tabId == primaryTabId {
+                // Primary: id = space.id (preserves activeSpaceId + parentSpaceID
+                // referential integrity), gets the terminal tree.
+                sessions.append(makeSession(
+                    id: spaceId,
+                    customName: primaryCustomName,
+                    claudePane: claudePane,
+                    terminalRoot: terminalRoot,
+                    terminalFocusedPaneId: terminalFocusedPaneId,
+                    terminalVisible: terminalVisible,
+                    focusedArea: focusedArea
+                ))
+            } else {
+                // Sibling: flat peer (never nested under the primary), no terminal.
+                // Carry the tab's own custom name as-is; a nil name auto-derives.
+                let siblingCustomName: Any = tab["name"] as? String ?? NSNull()
+                sessions.append(makeSession(
+                    id: tabId,
+                    customName: siblingCustomName,
+                    claudePane: claudePane,
+                    terminalRoot: NSNull(),
+                    terminalFocusedPaneId: NSNull(),
+                    terminalVisible: false,
+                    focusedArea: "claude"
+                ))
+            }
+        }
+        return sessions
+    }
+
+    /// A tab that renders a file (markdown or image reader) rather than a
+    /// terminal. Reader tabs are dropped by the v7 migration.
+    private static func isReaderTab(_ tab: [String: Any]) -> Bool {
+        (tab["markdownFilePath"] as? String) != nil || (tab["imageFilePath"] as? String) != nil
+    }
+
+    /// The Claude pane leaf for a claude tab's root node. A claude tab's root
+    /// should always be a single `.pane`; defensively, a `.split` collapses to
+    /// its depth-first first leaf. Strips the node's `"type"` discriminator so
+    /// the result is a clean `PaneLeafState` dict.
+    private static func claudeLeaf(fromRoot root: [String: Any]) -> [String: Any]? {
+        guard let leaf = firstLeafNode(root) else { return nil }
+        var stripped = leaf
+        stripped.removeValue(forKey: "type")
+        return stripped
+    }
+
+    /// Depth-first first `"pane"` node within a possibly-split pane node dict.
+    private static func firstLeafNode(_ node: [String: Any]) -> [String: Any]? {
+        guard let type = node["type"] as? String else { return nil }
+        if type == "pane" { return node }
+        if type == "split", let first = node["first"] as? [String: Any] {
+            return firstLeafNode(first)
+        }
+        return nil
+    }
 
     // MARK: - Errors
 

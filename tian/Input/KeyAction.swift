@@ -3,16 +3,11 @@ import AppKit
 /// Actions that can be triggered by keyboard shortcuts.
 /// In M6, these will be mapped to user-configurable key bindings.
 enum KeyAction: Hashable {
-    // Tab navigation
-    case nextTab
-    case previousTab
-    case goToTab(Int) // 1-indexed
-    case newTab
-
-    // Space navigation
-    case nextSpace
-    case previousSpace
-    case newSpace
+    // Session navigation
+    case newSession
+    case nextSession
+    case previousSession
+    case goToSession(Int) // 1-indexed into hierarchicalOrder()
 
     // Workspace navigation
     case nextWorkspace
@@ -23,9 +18,9 @@ enum KeyAction: Hashable {
     case toggleSidebar
     case focusSidebar
 
-    // Sections (space-sections feature)
-    case toggleTerminalSection
-    case cycleSectionFocus
+    // Session panes (Claude / terminal areas)
+    case toggleTerminalPanel
+    case cycleFocusArea
 
     // Debug
     case toggleDebugOverlay
