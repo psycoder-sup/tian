@@ -7,10 +7,10 @@ struct SetupProgressTests {
 
     @Test func equality_byAllFields() {
         let workspaceID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let a = SetupProgress(
             workspaceID: workspaceID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             phase: .setup,
             totalCommands: 3,
             currentIndex: 1,
@@ -27,7 +27,7 @@ struct SetupProgressTests {
     @Test func startingValue_hasNegativeIndexAndNoFailure() {
         let progress = SetupProgress.starting(
             workspaceID: UUID(),
-            spaceID: UUID(),
+            sessionID: UUID(),
             phase: .setup,
             totalCommands: 5
         )
@@ -43,7 +43,7 @@ struct SetupProgressTests {
     @Test func labelPrefix_setup() {
         let progress = SetupProgress.starting(
             workspaceID: UUID(),
-            spaceID: UUID(),
+            sessionID: UUID(),
             phase: .setup,
             totalCommands: 3
         )
@@ -53,7 +53,7 @@ struct SetupProgressTests {
     @Test func labelPrefix_cleanup() {
         let progress = SetupProgress.starting(
             workspaceID: UUID(),
-            spaceID: UUID(),
+            sessionID: UUID(),
             phase: .cleanup,
             totalCommands: 3
         )
@@ -63,17 +63,17 @@ struct SetupProgressTests {
     @Test func labelPrefix_removing() {
         let progress = SetupProgress.removingPlaceholder(
             workspaceID: UUID(),
-            spaceID: UUID()
+            sessionID: UUID()
         )
         #expect(progress.labelPrefix == "Removing...")
     }
 
     @Test func removingPlaceholder_hasCorrectValues() {
         let workspaceID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let progress = SetupProgress.removingPlaceholder(
             workspaceID: workspaceID,
-            spaceID: spaceID
+            sessionID: sessionID
         )
         #expect(progress.phase == .removing)
         #expect(progress.totalCommands == 0)
@@ -81,6 +81,6 @@ struct SetupProgressTests {
         #expect(progress.currentCommand == nil)
         #expect(progress.lastFailedIndex == nil)
         #expect(progress.workspaceID == workspaceID)
-        #expect(progress.spaceID == spaceID)
+        #expect(progress.sessionID == sessionID)
     }
 }

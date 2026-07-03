@@ -1,14 +1,13 @@
 import AppKit
 
 /// Presents a native NSAlert for close confirmation when running processes are detected
-/// in a pane, tab, or set of tabs.
+/// in a pane or a whole session.
 @MainActor
 enum CloseConfirmationDialog {
 
     enum CloseTarget {
         case pane
-        case tab
-        case tabs(count: Int)
+        case session(paneCount: Int)
     }
 
     /// Checks processCount > 0 and shows a sheet; otherwise runs the action directly.
@@ -59,10 +58,8 @@ enum CloseConfirmationDialog {
         switch target {
         case .pane:
             alert.messageText = "Close Pane?"
-        case .tab:
-            alert.messageText = "Close Tab?"
-        case .tabs(let count):
-            alert.messageText = "Close \(count) Tabs?"
+        case .session:
+            alert.messageText = "Close Session?"
         }
 
         if processCount == 1 {

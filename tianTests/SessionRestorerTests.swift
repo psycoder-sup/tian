@@ -2,6 +2,59 @@ import Testing
 import Foundation
 @testable import tian
 
+// MARK: - Shared v7 fixture builders
+
+/// Builds a single-Claude-pane session record (no terminal panel by default).
+private func makeClaudeSession(
+    id: UUID = UUID(),
+    paneID: UUID = UUID(),
+    name: String = "default",
+    workingDirectory: String = "/tmp",
+    defaultWorkingDirectory: String? = nil,
+    worktreePath: String? = nil,
+    claudePane: PaneLeafState? = nil,
+    terminalRoot: PaneNodeState? = nil,
+    terminalFocusedPaneId: UUID? = nil,
+    terminalVisible: Bool = false,
+    dockPosition: DockPosition = .bottom,
+    splitRatio: Double = 0.7,
+    focusedArea: PaneKind = .claude,
+    parentSessionID: UUID? = nil
+) -> SessionRecord {
+    SessionRecord(
+        id: id,
+        customName: name,
+        defaultWorkingDirectory: defaultWorkingDirectory,
+        worktreePath: worktreePath,
+        claudePane: claudePane ?? PaneLeafState(paneID: paneID, workingDirectory: workingDirectory),
+        terminalRoot: terminalRoot,
+        terminalFocusedPaneId: terminalFocusedPaneId,
+        terminalVisible: terminalVisible,
+        dockPosition: dockPosition,
+        splitRatio: splitRatio,
+        focusedArea: focusedArea,
+        parentSessionID: parentSessionID
+    )
+}
+
+private func makeWorkspaceState(
+    id: UUID = UUID(),
+    name: String = "ws",
+    activeSessionId: UUID,
+    defaultWorkingDirectory: String? = "/tmp",
+    sessions: [SessionRecord]
+) -> WorkspaceState {
+    WorkspaceState(
+        id: id,
+        name: name,
+        activeSessionId: activeSessionId,
+        defaultWorkingDirectory: defaultWorkingDirectory,
+        sessions: sessions,
+        windowFrame: nil,
+        isFullscreen: nil
+    )
+}
+
 // MARK: - Decode Tests
 
 struct SessionRestorerDecodeTests {
@@ -9,41 +62,17 @@ struct SessionRestorerDecodeTests {
         workspaceCount: Int = 1,
         activeWorkspaceIndex: Int = 0
     ) -> SessionState {
-        let workspaces = (0..<workspaceCount).map { i in
-            let paneID = UUID()
-            let tabID = UUID()
-            let spaceID = UUID()
-            return WorkspaceState(
-                id: UUID(),
+        let workspaces = (0..<workspaceCount).map { i -> WorkspaceState in
+            let sessionID = UUID()
+            return makeWorkspaceState(
                 name: "Workspace \(i + 1)",
-                activeSpaceId: spaceID,
-                defaultWorkingDirectory: "/tmp",
-                spaces: [
-                    SpaceState(
-                        id: spaceID,
-                        name: "default",
-                        activeTabId: tabID,
-                        defaultWorkingDirectory: nil,
-                        tabs: [
-                            TabState(
-                                id: tabID,
-                                name: "Tab 1",
-                                activePaneId: paneID,
-                                root: .pane(PaneLeafState(
-                                    paneID: paneID,
-                                    workingDirectory: "/tmp"
-                                ))
-                            )
-                        ]
-                    )
-                ],
-                windowFrame: nil,
-                isFullscreen: nil
+                activeSessionId: sessionID,
+                sessions: [makeClaudeSession(id: sessionID)]
             )
         }
 
         return SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: workspaces[activeWorkspaceIndex].id,
             workspaces: workspaces
@@ -78,46 +107,36 @@ struct SessionRestorerDecodeTests {
         }
     }
 
-    @Test func decodeWithSplitTree() throws {
+    @Test func decodeWithTerminalSplitTree() throws {
+        // The Claude side is a single leaf; the terminal panel holds the split.
         let paneA = UUID()
         let paneB = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
                     name: "default",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneA,
-                                    root: .split(PaneSplitState(
-                                        direction: "horizontal",
-                                        ratio: 0.6,
-                                        first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
-                                        second: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp"))
-                                    ))
-                                )
-                            ]
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            terminalRoot: .split(PaneSplitState(
+                                direction: "horizontal",
+                                ratio: 0.6,
+                                first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
+                                second: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp"))
+                            )),
+                            terminalFocusedPaneId: paneA,
+                            terminalVisible: true,
+                            focusedArea: .terminal
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
@@ -127,7 +146,7 @@ struct SessionRestorerDecodeTests {
         let data = try encoder.encode(state)
         let decoded = try SessionRestorer.decode(from: data)
 
-        if case .split(let split) = decoded.workspaces[0].spaces[0].tabs[0].root {
+        if case .split(let split) = decoded.workspaces[0].sessions[0].terminalRoot {
             #expect(split.ratio == 0.6)
             #expect(split.direction == "horizontal")
         } else {
@@ -141,7 +160,7 @@ struct SessionRestorerDecodeTests {
 struct SessionRestorerValidationTests {
     @Test func emptyWorkspacesThrows() {
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: UUID(),
             workspaces: []
@@ -152,21 +171,13 @@ struct SessionRestorerValidationTests {
         }
     }
 
-    @Test func emptySpacesThrows() {
+    @Test func emptySessionsThrows() {
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: UUID(),
             workspaces: [
-                WorkspaceState(
-                    id: UUID(),
-                    name: "ws",
-                    activeSpaceId: UUID(),
-                    defaultWorkingDirectory: nil,
-                    spaces: [],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(activeSessionId: UUID(), sessions: [])
             ]
         )
 
@@ -175,82 +186,49 @@ struct SessionRestorerValidationTests {
         }
     }
 
-    @Test func emptyClaudeTabsThrows() {
-        // v4 — only an empty Claude section is a hard error; Terminal may
-        // legitimately be empty. Construct a state with an empty Claude
-        // section directly.
-        let spaceID = UUID()
-        let emptyClaude = SectionState(id: UUID(), kind: .claude, activeTabId: nil, tabs: [])
-        let emptyTerminal = SectionState(id: UUID(), kind: .terminal, activeTabId: nil, tabs: [])
+    @Test func nilClaudePaneIsAllowed() throws {
+        // v7 — a nil Claude pane is fully legal at the persistence layer
+        // (validation keeps the session and its nil pane). It is re-seeded as a
+        // fresh Claude pane only later, when the live model is built.
+        let sessionID = UUID()
         let state = SessionState(
-            version: 4,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: UUID(),
             workspaces: [
-                WorkspaceState(
-                    id: UUID(),
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: nil,
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "space",
+                makeWorkspaceState(
+                    activeSessionId: sessionID,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "empty",
                             defaultWorkingDirectory: nil,
-                            claudeSection: emptyClaude,
-                            terminalSection: emptyTerminal,
+                            claudePane: nil,
                             terminalVisible: false,
-                            dockPosition: .right,
+                            dockPosition: .bottom,
                             splitRatio: 0.7,
-                            focusedSectionKind: .claude
+                            focusedArea: .claude
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
 
-        #expect(throws: SessionRestorer.RestoreError.self) {
-            try SessionRestorer.validate(state)
-        }
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions.count == 1)
+        #expect(validated.workspaces[0].sessions[0].claudePane == nil)
     }
 
     @Test func staleActiveWorkspaceIdIsFixed() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: UUID(), // stale — does not match any workspace
             workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(id: wsID, activeSessionId: sessionID, sessions: [makeClaudeSession(id: sessionID)])
             ]
         )
 
@@ -258,170 +236,253 @@ struct SessionRestorerValidationTests {
         #expect(validated.activeWorkspaceId == wsID)
     }
 
-    @Test func staleActiveSpaceIdIsFixed() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+    @Test func staleActiveSessionIdIsFixed() throws {
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: UUID(), // stale
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    activeSessionId: UUID(), // stale
+                    sessions: [makeClaudeSession(id: sessionID)]
                 )
             ]
         )
 
         let validated = try SessionRestorer.validate(state)
-        #expect(validated.workspaces[0].activeSpaceId == spaceID)
+        #expect(validated.workspaces[0].activeSessionId == sessionID)
     }
 
-    @Test func staleActiveTabIdIsFixed() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+    @Test func staleTerminalFocusedPaneIdIsFixedToFirstLeaf() throws {
+        let paneA = UUID()
+        let paneB = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: UUID(), // stale
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            terminalRoot: .split(PaneSplitState(
+                                direction: "horizontal",
+                                ratio: 0.5,
+                                first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
+                                second: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp"))
+                            )),
+                            terminalFocusedPaneId: UUID(), // stale — not in the tree
+                            terminalVisible: true,
+                            focusedArea: .terminal
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
 
         let validated = try SessionRestorer.validate(state)
-        #expect(validated.workspaces[0].spaces[0].activeTabId == tabID)
+        // Falls back to the depth-first first leaf.
+        #expect(validated.workspaces[0].sessions[0].terminalFocusedPaneId == paneA)
     }
 
-    @Test func staleActivePaneIdIsFixed() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+    @Test func terminalVisibleCoercedFalseWhenNoTerminal() throws {
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: UUID(), // stale
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            terminalRoot: nil,
+                            terminalVisible: true, // impossible without a terminal
+                            focusedArea: .claude
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
 
         let validated = try SessionRestorer.validate(state)
-        #expect(validated.workspaces[0].spaces[0].tabs[0].activePaneId == paneID)
+        #expect(validated.workspaces[0].sessions[0].terminalVisible == false)
+    }
+
+    @Test func focusedAreaCoercedToClaudeWhenNoTerminal() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            terminalRoot: nil,
+                            focusedArea: .terminal // can't focus an absent terminal
+                        )
+                    ]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions[0].focusedArea == .claude)
+    }
+
+    @Test func staleWorktreePathIsNulledOut() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+        let nonExistentPath = "/tmp/tian-wt-nonexistent-\(UUID().uuidString)"
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, name: "stale-feature", worktreePath: nonExistentPath)]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions[0].worktreePath == nil)
+    }
+
+    @Test func validWorktreePathIsPreserved() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+        let worktreeDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-wt-valid-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: worktreeDir) }
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, name: "valid-feature", worktreePath: worktreeDir.path)]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions[0].worktreePath == worktreeDir.path)
+    }
+
+    @Test func danglingParentSessionIDIsDropped() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [
+                        // parentSessionID points at a session not in the workspace.
+                        makeClaudeSession(id: sessionID, parentSessionID: UUID())
+                    ]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions[0].parentSessionID == nil)
+    }
+
+    @Test func selfParentSessionIDIsDropped() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, parentSessionID: sessionID)]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        #expect(validated.workspaces[0].sessions[0].parentSessionID == nil)
+    }
+
+    @Test func validParentSessionIDIsPreserved() throws {
+        let parentID = UUID()
+        let childID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: parentID,
+                    sessions: [
+                        makeClaudeSession(id: parentID, name: "orchestrator"),
+                        makeClaudeSession(id: childID, name: "impl", parentSessionID: parentID)
+                    ]
+                )
+            ]
+        )
+
+        let validated = try SessionRestorer.validate(state)
+        let child = validated.workspaces[0].sessions.first { $0.id == childID }
+        #expect(child?.parentSessionID == parentID)
     }
 
     @Test func missingWorkingDirectoryFallsBackToHome() throws {
         let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
         let home = ProcessInfo.processInfo.environment["HOME"] ?? "~"
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: "/nonexistent/path/that/does/not/exist",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID,
-                                        workingDirectory: "/also/nonexistent"
-                                    ))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    sessions: [makeClaudeSession(id: sessionID, paneID: paneID, workingDirectory: "/also/nonexistent")]
                 )
             ]
         )
@@ -429,109 +490,47 @@ struct SessionRestorerValidationTests {
         let validated = try SessionRestorer.validate(state)
         // Workspace default dir should be nil (nonexistent)
         #expect(validated.workspaces[0].defaultWorkingDirectory == nil)
-        // Pane working directory should fall back to $HOME
-        if case .pane(let leaf) = validated.workspaces[0].spaces[0].tabs[0].root {
-            #expect(leaf.workingDirectory == home)
-        } else {
-            Issue.record("Expected pane leaf")
-        }
+        // Claude pane working directory should fall back to $HOME
+        #expect(validated.workspaces[0].sessions[0].claudePane?.workingDirectory == home)
     }
 
     @Test func existingWorkingDirectoryIsPreserved() throws {
         let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
+                    activeSessionId: sessionID,
                     defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID,
-                                        workingDirectory: "/tmp"
-                                    ))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    sessions: [makeClaudeSession(id: sessionID, paneID: paneID, workingDirectory: "/tmp")]
                 )
             ]
         )
 
         let validated = try SessionRestorer.validate(state)
         #expect(validated.workspaces[0].defaultWorkingDirectory == "/tmp")
-        if case .pane(let leaf) = validated.workspaces[0].spaces[0].tabs[0].root {
-            #expect(leaf.workingDirectory == "/tmp")
-        } else {
-            Issue.record("Expected pane leaf")
-        }
+        #expect(validated.workspaces[0].sessions[0].claudePane?.workingDirectory == "/tmp")
     }
 }
 
 // MARK: - Load Tests (File I/O)
 
 struct SessionRestorerLoadTests {
-    private func tempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tian-restorer-test-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }
-
     private func sampleState() -> SessionState {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
         return SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(timeIntervalSince1970: 1000000),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "default",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(id: wsID, name: "default", activeSessionId: sessionID, sessions: [makeClaudeSession(id: sessionID)])
             ]
         )
     }
@@ -599,38 +598,19 @@ struct WindowFrameOffscreenTests {
 struct SessionRestorerBuildTests {
     @Test func buildSingleWorkspace() throws {
         let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
                     name: "my-workspace",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "my-space",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, paneID: paneID, name: "my-session")]
                 )
             ]
         )
@@ -645,13 +625,73 @@ struct SessionRestorerBuildTests {
         #expect(ws.name == "my-workspace")
         #expect(ws.defaultWorkingDirectory?.path == "/tmp")
 
-        let space = ws.spaceCollection.spaces[0]
-        #expect(space.id == spaceID)
-        #expect(space.name == "my-space")
+        let session = ws.sessionCollection.sessions[0]
+        #expect(session.id == sessionID)
+        #expect(session.customName == "my-session")
+        #expect(session.claudePane != nil)
+        #expect(session.claudePaneID == paneID)
+    }
 
-        let tab = space.tabs[0]
-        #expect(tab.id == tabID)
-        #expect(tab.paneViewModel.splitTree.focusedPaneID == paneID)
+    @Test func buildSetsWorktreePathOnSession() throws {
+        let sessionID = UUID()
+        let wsID = UUID()
+        let worktreeDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-wt-build-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: worktreeDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: worktreeDir) }
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, name: "feature", worktreePath: worktreeDir.path)]
+                )
+            ]
+        )
+
+        let collection = SessionRestorer.buildWorkspaceCollection(from: state)
+        let session = collection.workspaces[0].sessionCollection.sessions[0]
+        #expect(session.worktreePath == worktreeDir)
+    }
+
+    @Test func buildNilClaudePaneSeedsFreshClaudePane() {
+        let sessionID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: sessionID,
+                    sessions: [
+                        SessionRecord(
+                            id: sessionID,
+                            customName: "empty",
+                            defaultWorkingDirectory: nil,
+                            claudePane: nil,
+                            terminalVisible: false,
+                            dockPosition: .bottom,
+                            splitRatio: 0.7,
+                            focusedArea: .claude
+                        )
+                    ]
+                )
+            ]
+        )
+
+        let collection = SessionRestorer.buildWorkspaceCollection(from: state)
+        let session = collection.workspaces[0].sessionCollection.sessions[0]
+        // A nil persisted Claude pane is re-seeded as a fresh, live Claude pane
+        // (rather than restoring the removed empty-Claude placeholder state).
+        #expect(session.claudePane != nil)
+        #expect(session.hasLiveClaudePane)
     }
 
     @Test func buildMultipleWorkspaces() {
@@ -659,37 +699,12 @@ struct SessionRestorerBuildTests {
         let ws2ID = UUID()
 
         func makeWorkspace(id: UUID, name: String) -> WorkspaceState {
-            let paneID = UUID()
-            let tabID = UUID()
-            let spaceID = UUID()
-            return WorkspaceState(
-                id: id,
-                name: name,
-                activeSpaceId: spaceID,
-                defaultWorkingDirectory: "/tmp",
-                spaces: [
-                    SpaceState(
-                        id: spaceID,
-                        name: "default",
-                        activeTabId: tabID,
-                        defaultWorkingDirectory: nil,
-                        tabs: [
-                            TabState(
-                                id: tabID,
-                                name: "Tab 1",
-                                activePaneId: paneID,
-                                root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                            )
-                        ]
-                    )
-                ],
-                windowFrame: nil,
-                isFullscreen: nil
-            )
+            let sessionID = UUID()
+            return makeWorkspaceState(id: id, name: name, activeSessionId: sessionID, sessions: [makeClaudeSession(id: sessionID)])
         }
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: ws2ID,
             workspaces: [makeWorkspace(id: ws1ID, name: "first"), makeWorkspace(id: ws2ID, name: "second")]
@@ -703,109 +718,68 @@ struct SessionRestorerBuildTests {
         #expect(collection.workspaces[1].name == "second")
     }
 
-    @Test func buildWithSplitPanes() {
+    @Test func buildWithTerminalSplitPanes() {
+        let claudePaneID = UUID()
         let paneA = UUID()
         let paneB = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneB,
-                                    root: .split(PaneSplitState(
-                                        direction: "horizontal",
-                                        ratio: 0.6,
-                                        first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
-                                        second: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp"))
-                                    ))
-                                )
-                            ]
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            paneID: claudePaneID,
+                            terminalRoot: .split(PaneSplitState(
+                                direction: "horizontal",
+                                ratio: 0.6,
+                                first: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
+                                second: .pane(PaneLeafState(paneID: paneB, workingDirectory: "/tmp"))
+                            )),
+                            terminalFocusedPaneId: paneB,
+                            terminalVisible: true,
+                            focusedArea: .terminal
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
 
         let collection = SessionRestorer.buildWorkspaceCollection(from: state)
-        let tab = collection.workspaces[0].spaceCollection.spaces[0].tabs[0]
+        let session = collection.workspaces[0].sessionCollection.sessions[0]
 
-        #expect(tab.paneViewModel.splitTree.leafCount == 2)
-        #expect(tab.paneViewModel.splitTree.focusedPaneID == paneB)
-        #expect(tab.paneViewModel.surface(for: paneA) != nil)
-        #expect(tab.paneViewModel.surface(for: paneB) != nil)
+        #expect(session.claudePane?.splitTree.leafCount == 1)
+        let terminalPanel = session.terminalPanel
+        #expect(terminalPanel?.splitTree.leafCount == 2)
+        #expect(terminalPanel?.splitTree.focusedPaneID == paneB)
+        #expect(terminalPanel?.surface(for: paneA) != nil)
+        #expect(terminalPanel?.surface(for: paneB) != nil)
     }
 
-    @Test func buildPreservesActiveIDs() {
-        let paneID = UUID()
-        let tab1ID = UUID()
-        let tab2ID = UUID()
-        let space1ID = UUID()
-        let space2ID = UUID()
+    @Test func buildPreservesActiveSessionID() {
+        let session1ID = UUID()
+        let session2ID = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: space2ID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: space1ID,
-                            name: "Space 1",
-                            activeTabId: tab1ID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tab1ID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        ),
-                        SpaceState(
-                            id: space2ID,
-                            name: "Space 2",
-                            activeTabId: tab2ID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tab2ID,
-                                    name: "Tab 1",
-                                    activePaneId: UUID(),
-                                    root: .pane(PaneLeafState(paneID: UUID(), workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    activeSessionId: session2ID,
+                    sessions: [
+                        makeClaudeSession(id: session1ID, name: "Session 1"),
+                        makeClaudeSession(id: session2ID, name: "Session 2")
+                    ]
                 )
             ]
         )
@@ -813,8 +787,34 @@ struct SessionRestorerBuildTests {
         let collection = SessionRestorer.buildWorkspaceCollection(from: state)
         let ws = collection.workspaces[0]
 
-        #expect(ws.spaceCollection.activeSpaceID == space2ID)
-        #expect(ws.spaceCollection.spaces.count == 2)
+        #expect(ws.sessionCollection.activeSessionID == session2ID)
+        #expect(ws.sessionCollection.sessions.count == 2)
+    }
+
+    @Test func buildPreservesParentSessionID() {
+        let parentID = UUID()
+        let childID = UUID()
+        let wsID = UUID()
+
+        let state = SessionState(
+            version: SessionSerializer.currentVersion,
+            savedAt: Date(),
+            activeWorkspaceId: wsID,
+            workspaces: [
+                makeWorkspaceState(
+                    id: wsID,
+                    activeSessionId: parentID,
+                    sessions: [
+                        makeClaudeSession(id: parentID, name: "orchestrator"),
+                        makeClaudeSession(id: childID, name: "impl", parentSessionID: parentID)
+                    ]
+                )
+            ]
+        )
+
+        let collection = SessionRestorer.buildWorkspaceCollection(from: state)
+        let child = collection.workspaces[0].sessionCollection.sessions.first { $0.id == childID }
+        #expect(child?.parentSessionID == parentID)
     }
 }
 
@@ -859,39 +859,14 @@ struct SessionRestorerMetricsTests {
     // MARK: - Helpers
 
     private static func makeCleanState() -> SessionState {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
         return SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(id: wsID, activeSessionId: sessionID, sessions: [makeClaudeSession(id: sessionID)])
             ]
         )
     }
@@ -911,49 +886,21 @@ struct SessionRestorerMetricsTests {
         _ = try SessionRestorer.validate(Self.makeCleanState(), metrics: &metrics)
 
         #expect(metrics.workspaceCount == 1)
-        #expect(metrics.spaceCount == 1)
-        // v4: legacy fixture helper synthesises one Claude tab + one
-        // Terminal tab, so the validator counts both sections' tabs
-        // + panes.
-        #expect(metrics.tabCount == 2)
-        #expect(metrics.paneCount == 2)
+        #expect(metrics.sessionCount == 1)
+        // A clean session has one Claude leaf and no terminal panel.
+        #expect(metrics.paneCount == 1)
     }
 
     // MARK: - Stale ID Counting
 
     @Test func staleWorkspaceIdIsCounted() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: UUID(), // stale
             workspaces: [
-                WorkspaceState(
-                    id: UUID(),
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(activeSessionId: sessionID, sessions: [makeClaudeSession(id: sessionID)])
             ]
         )
 
@@ -963,122 +910,44 @@ struct SessionRestorerMetricsTests {
         #expect(metrics.totalStaleIdFixes == 1)
     }
 
-    @Test func staleSpaceIdIsCounted() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+    @Test func staleSessionIdIsCounted() throws {
+        let sessionID = UUID()
         let wsID = UUID()
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "ws",
-                    activeSpaceId: UUID(), // stale
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
+                makeWorkspaceState(id: wsID, activeSessionId: UUID(), sessions: [makeClaudeSession(id: sessionID)])
             ]
         )
 
         var metrics = RestoreMetrics()
         _ = try SessionRestorer.validate(state, metrics: &metrics)
-        #expect(metrics.staleSpaceIdFixes == 1)
+        #expect(metrics.staleSessionIdFixes == 1)
     }
 
-    @Test func staleTabIdIsCounted() throws {
-        let paneID = UUID()
-        let spaceID = UUID()
+    @Test func staleTerminalPaneIdIsCounted() throws {
+        let paneA = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: UUID(), // stale
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: UUID(),
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
+                    activeSessionId: sessionID,
+                    sessions: [
+                        makeClaudeSession(
+                            id: sessionID,
+                            terminalRoot: .pane(PaneLeafState(paneID: paneA, workingDirectory: "/tmp")),
+                            terminalFocusedPaneId: UUID(), // stale
+                            terminalVisible: true,
+                            focusedArea: .terminal
                         )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
-                )
-            ]
-        )
-
-        var metrics = RestoreMetrics()
-        _ = try SessionRestorer.validate(state, metrics: &metrics)
-        #expect(metrics.staleTabIdFixes == 1)
-    }
-
-    @Test func stalePaneIdIsCounted() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
-        let wsID = UUID()
-        let state = SessionState(
-            version: 1,
-            savedAt: Date(),
-            activeWorkspaceId: wsID,
-            workspaces: [
-                WorkspaceState(
-                    id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: UUID(), // stale
-                                    root: .pane(PaneLeafState(paneID: paneID, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    ]
                 )
             ]
         )
@@ -1091,41 +960,17 @@ struct SessionRestorerMetricsTests {
     // MARK: - Directory Fallback Counting
 
     @Test func missingDirectoryIsCounted() throws {
-        let paneID = UUID()
-        let tabID = UUID()
-        let spaceID = UUID()
+        let sessionID = UUID()
         let wsID = UUID()
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: spaceID,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: spaceID,
-                            name: "default",
-                            activeTabId: tabID,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tabID,
-                                    name: "Tab 1",
-                                    activePaneId: paneID,
-                                    root: .pane(PaneLeafState(
-                                        paneID: paneID,
-                                        workingDirectory: "/nonexistent/path/that/does/not/exist"
-                                    ))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                    activeSessionId: sessionID,
+                    sessions: [makeClaudeSession(id: sessionID, workingDirectory: "/nonexistent/path/that/does/not/exist")]
                 )
             ]
         )
@@ -1138,58 +983,37 @@ struct SessionRestorerMetricsTests {
     // MARK: - Multi-Entity Counting
 
     @Test func multipleEntitiesAreCounted() throws {
-        let pane1 = UUID(), pane2 = UUID(), pane3 = UUID()
-        let tab1 = UUID(), tab2 = UUID()
-        let space1 = UUID(), space2 = UUID()
+        let claudePane1 = UUID(), termA = UUID(), termB = UUID()
+        let claudePane2 = UUID()
+        let session1 = UUID(), session2 = UUID()
         let wsID = UUID()
 
         let state = SessionState(
-            version: 1,
+            version: SessionSerializer.currentVersion,
             savedAt: Date(),
             activeWorkspaceId: wsID,
             workspaces: [
-                WorkspaceState(
+                makeWorkspaceState(
                     id: wsID,
-                    name: "ws",
-                    activeSpaceId: space1,
-                    defaultWorkingDirectory: "/tmp",
-                    spaces: [
-                        SpaceState(
-                            id: space1,
-                            name: "space1",
-                            activeTabId: tab1,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tab1,
-                                    name: "Tab 1",
-                                    activePaneId: pane1,
-                                    root: .split(PaneSplitState(
-                                        direction: "horizontal",
-                                        ratio: 0.5,
-                                        first: .pane(PaneLeafState(paneID: pane1, workingDirectory: "/tmp")),
-                                        second: .pane(PaneLeafState(paneID: pane2, workingDirectory: "/tmp"))
-                                    ))
-                                )
-                            ]
+                    activeSessionId: session1,
+                    sessions: [
+                        // Session 1: one Claude leaf + a two-pane terminal panel = 3 panes.
+                        makeClaudeSession(
+                            id: session1,
+                            paneID: claudePane1,
+                            terminalRoot: .split(PaneSplitState(
+                                direction: "horizontal",
+                                ratio: 0.5,
+                                first: .pane(PaneLeafState(paneID: termA, workingDirectory: "/tmp")),
+                                second: .pane(PaneLeafState(paneID: termB, workingDirectory: "/tmp"))
+                            )),
+                            terminalFocusedPaneId: termA,
+                            terminalVisible: true,
+                            focusedArea: .terminal
                         ),
-                        SpaceState(
-                            id: space2,
-                            name: "space2",
-                            activeTabId: tab2,
-                            defaultWorkingDirectory: nil,
-                            tabs: [
-                                TabState(
-                                    id: tab2,
-                                    name: "Tab 2",
-                                    activePaneId: pane3,
-                                    root: .pane(PaneLeafState(paneID: pane3, workingDirectory: "/tmp"))
-                                )
-                            ]
-                        )
-                    ],
-                    windowFrame: nil,
-                    isFullscreen: nil
+                        // Session 2: one Claude leaf = 1 pane.
+                        makeClaudeSession(id: session2, paneID: claudePane2)
+                    ]
                 )
             ]
         )
@@ -1198,10 +1022,8 @@ struct SessionRestorerMetricsTests {
         _ = try SessionRestorer.validate(state, metrics: &metrics)
 
         #expect(metrics.workspaceCount == 1)
-        #expect(metrics.spaceCount == 2)
-        // v4: legacy helper synthesises a Claude tab per Space (2 spaces).
-        #expect(metrics.tabCount == 4)
-        #expect(metrics.paneCount == 5)
+        #expect(metrics.sessionCount == 2)
+        #expect(metrics.paneCount == 4)
         #expect(metrics.totalStaleIdFixes == 0)
     }
 
@@ -1210,9 +1032,8 @@ struct SessionRestorerMetricsTests {
     @Test func totalStaleIdFixesAggregatesAll() {
         var metrics = RestoreMetrics()
         metrics.staleWorkspaceIdFixes = 1
-        metrics.staleSpaceIdFixes = 2
-        metrics.staleTabIdFixes = 3
+        metrics.staleSessionIdFixes = 2
         metrics.stalePaneIdFixes = 4
-        #expect(metrics.totalStaleIdFixes == 10)
+        #expect(metrics.totalStaleIdFixes == 7)
     }
 }

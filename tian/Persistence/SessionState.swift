@@ -10,14 +10,19 @@ struct SessionState: Codable, Sendable, Equatable {
     let workspaces: [WorkspaceState]
 }
 
-// MARK: - Workspace State
+// MARK: - Workspace State (v7)
+//
+// v7 flattens the Workspace → Space → Section → Tab hierarchy into a flat list
+// of Sessions. `spaces` becomes `sessions`, `activeSpaceId` becomes
+// `activeSessionId`. The v6 shape is rewritten by
+// `SessionStateMigrator.migrations[6]`.
 
 struct WorkspaceState: Codable, Sendable, Equatable {
     let id: UUID
     let name: String
-    let activeSpaceId: UUID
+    let activeSessionId: UUID
     let defaultWorkingDirectory: String?
-    let spaces: [SpaceState]
+    let sessions: [SessionRecord]
     let windowFrame: WindowFrame?
     let isFullscreen: Bool?
     /// Added in schema v5. Optional so v4 records decode without migration.
@@ -25,15 +30,17 @@ struct WorkspaceState: Codable, Sendable, Equatable {
     let inspectPanelVisible: Bool?
     let inspectPanelWidth: Double?
     /// Added in schema v6. Optional so v5 records decode without migration.
-    /// Default applied at runtime: activeTab = .files.
+    /// Default applied at runtime: activeTab = .files. This is the inspect
+    /// panel's selected tab (files / diff / branch), unrelated to the removed
+    /// terminal tab bar.
     let activeTab: String?
 
     init(
         id: UUID,
         name: String,
-        activeSpaceId: UUID,
+        activeSessionId: UUID,
         defaultWorkingDirectory: String?,
-        spaces: [SpaceState],
+        sessions: [SessionRecord],
         windowFrame: WindowFrame?,
         isFullscreen: Bool?,
         inspectPanelVisible: Bool? = nil,
@@ -42,9 +49,9 @@ struct WorkspaceState: Codable, Sendable, Equatable {
     ) {
         self.id = id
         self.name = name
-        self.activeSpaceId = activeSpaceId
+        self.activeSessionId = activeSessionId
         self.defaultWorkingDirectory = defaultWorkingDirectory
-        self.spaces = spaces
+        self.sessions = sessions
         self.windowFrame = windowFrame
         self.isFullscreen = isFullscreen
         self.inspectPanelVisible = inspectPanelVisible
@@ -62,81 +69,66 @@ struct WindowFrame: Codable, Sendable, Equatable {
     let height: Double
 }
 
-// MARK: - Space State (v4)
+// MARK: - Session Record (v7)
 //
-// v4 replaces the flat `tabs: [TabState]` + `activeTabId` pair with two
-// sections (Claude + Terminal) plus layout metadata. The v3 shape is
-// rewritten by `SessionStateMigrator.migrations[3]`.
+// A Session is one Claude pane plus an optional attached terminal panel. The
+// Claude side is a single leaf (`claudePane`); a nil value (an old placeholder
+// record, or a v6→v7 terminal-only space) is re-seeded as a fresh Claude pane on
+// restore. The terminal side is a full split tree (`terminalRoot`), nil when no
+// terminal panel exists yet. Readers are not persisted, so there are no reader
+// records here.
 
-struct SpaceState: Codable, Sendable, Equatable {
+struct SessionRecord: Codable, Sendable, Equatable {
     let id: UUID
-    let name: String
+    /// User-assigned name, or `nil` for the auto-derived name. Optional so a
+    /// pre-rename v7 file (which carried a non-optional `name` key) decodes as
+    /// `nil` → auto. Was `name` in the initial v7 shape.
+    let customName: String?
     let defaultWorkingDirectory: String?
     let worktreePath: String?
-    let claudeSection: SectionState
-    let terminalSection: SectionState
+    /// The single Claude pane leaf. `nil` when the session had no live Claude
+    /// process at save time; on restore this is re-seeded as a fresh Claude pane.
+    let claudePane: PaneLeafState?
+    /// The attached terminal panel's split tree, or `nil` when no terminal
+    /// panel has been created.
+    let terminalRoot: PaneNodeState?
+    /// Focused pane within `terminalRoot`; `nil` when there is no terminal.
+    let terminalFocusedPaneId: UUID?
     let terminalVisible: Bool
     let dockPosition: DockPosition
     let splitRatio: Double
-    let focusedSectionKind: SectionKind
-    /// Orchestrator → implementer link (sidebar nesting). Optional + defaulted
-    /// so older session JSON (missing the key) decodes as nil — no migration
-    /// or version bump needed. See `SpaceModel.parentSpaceID`.
-    let parentSpaceID: UUID?
+    /// Which area (claude / terminal) had focus. Was `focusedSectionKind`.
+    let focusedArea: PaneKind
+    /// Orchestrator → implementer link (sidebar nesting). Was `parentSpaceID`.
+    let parentSessionID: UUID?
 
     init(
         id: UUID,
-        name: String,
+        customName: String? = nil,
         defaultWorkingDirectory: String?,
         worktreePath: String? = nil,
-        claudeSection: SectionState,
-        terminalSection: SectionState,
+        claudePane: PaneLeafState?,
+        terminalRoot: PaneNodeState? = nil,
+        terminalFocusedPaneId: UUID? = nil,
         terminalVisible: Bool,
         dockPosition: DockPosition,
         splitRatio: Double,
-        focusedSectionKind: SectionKind,
-        parentSpaceID: UUID? = nil
+        focusedArea: PaneKind,
+        parentSessionID: UUID? = nil
     ) {
         self.id = id
-        self.name = name
+        self.customName = customName
         self.defaultWorkingDirectory = defaultWorkingDirectory
         self.worktreePath = worktreePath
-        self.claudeSection = claudeSection
-        self.terminalSection = terminalSection
+        self.claudePane = claudePane
+        self.terminalRoot = terminalRoot
+        self.terminalFocusedPaneId = terminalFocusedPaneId
         self.terminalVisible = terminalVisible
         self.dockPosition = dockPosition
         self.splitRatio = splitRatio
-        self.focusedSectionKind = focusedSectionKind
-        self.parentSpaceID = parentSpaceID
+        self.focusedArea = focusedArea
+        self.parentSessionID = parentSessionID
     }
-}
-
-// MARK: - Section State (v4)
-
-struct SectionState: Codable, Sendable, Equatable {
-    let id: UUID
-    let kind: SectionKind
-    let activeTabId: UUID?
-    let tabs: [TabState]
-}
-
-// MARK: - Tab State (v4)
-
-struct TabState: Codable, Sendable, Equatable {
-    let id: UUID
-    let name: String?
-    let activePaneId: UUID
-    let root: PaneNodeState
-    /// Required in v4 — migration sets it explicitly on every tab, and
-    /// freshly-created tabs set it from their owning section (NG5).
-    let sectionKind: SectionKind
-    /// Absolute path when this tab is a markdown reader (renders a file
-    /// instead of a terminal). Optional → decodes as nil for older sessions,
-    /// and `var`-with-default keeps the memberwise init omittable.
-    var markdownFilePath: String? = nil
-    /// Absolute path when this tab is an image reader (renders a file instead
-    /// of a terminal). Optional/with-default for the same reasons as above.
-    var imageFilePath: String? = nil
 }
 
 // MARK: - Pane Node State
@@ -202,6 +194,22 @@ extension PaneNodeState: Codable {
         case .split(let split):
             try container.encode("split", forKey: .type)
             try split.encode(to: encoder)
+        }
+    }
+}
+
+// MARK: - PaneNodeState Traversal
+
+extension PaneNodeState {
+    /// The depth-first first leaf (split → first). Used to collapse a stray
+    /// Claude split down to its single leaf, and as the fallback focus target
+    /// for a restored terminal tree.
+    var firstLeaf: PaneLeafState {
+        switch self {
+        case .pane(let leaf):
+            return leaf
+        case .split(let split):
+            return split.first.firstLeaf
         }
     }
 }

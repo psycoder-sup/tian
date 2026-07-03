@@ -10,17 +10,14 @@ enum SessionRestorer {
 
     enum RestoreError: Error, CustomStringConvertible {
         case emptyWorkspaces
-        case emptySpaces(workspaceName: String)
-        case emptyTabs(spaceName: String, kind: SectionKind)
+        case emptySessions(workspaceName: String)
 
         var description: String {
             switch self {
             case .emptyWorkspaces:
                 "Session state contains no workspaces"
-            case .emptySpaces(let name):
-                "Workspace '\(name)' contains no spaces"
-            case .emptyTabs(let name, let kind):
-                "Space '\(name)' has no tabs in \(kind) section"
+            case .emptySessions(let name):
+                "Workspace '\(name)' contains no sessions"
             }
         }
     }
@@ -93,88 +90,109 @@ enum SessionRestorer {
         }
 
         let validatedWorkspaces = try state.workspaces.map { workspace -> WorkspaceState in
-            guard !workspace.spaces.isEmpty else {
-                throw RestoreError.emptySpaces(workspaceName: workspace.name)
+            guard !workspace.sessions.isEmpty else {
+                throw RestoreError.emptySessions(workspaceName: workspace.name)
             }
 
-            // IDs of every Space in this workspace, for validating parent links.
-            // Validation never drops individual Spaces (empty workspaces throw),
-            // so the original ID set matches the restored set.
-            let workspaceSpaceIDs = Set(workspace.spaces.map { $0.id })
+            // IDs of every Session in this workspace, for validating parent
+            // links. Validation never drops individual Sessions (empty
+            // workspaces throw), so the original ID set matches the restored one.
+            let workspaceSessionIDs = Set(workspace.sessions.map { $0.id })
 
-            let validatedSpaces = try workspace.spaces.map { space -> SpaceState in
-                // FR-25 — Claude section must have ≥1 tab; Terminal may be empty.
-                guard !space.claudeSection.tabs.isEmpty else {
-                    throw RestoreError.emptyTabs(spaceName: space.name, kind: .claude)
+            let validatedSessions = workspace.sessions.map { session -> SessionRecord in
+                // A nil Claude pane is legal — it persists the empty-claude
+                // placeholder state, so there is no "claude must exist" invariant.
+                let validatedClaude: PaneLeafState? = session.claudePane.map { claude in
+                    let resolved = resolveWorkingDirectories(
+                        in: .pane(claude),
+                        fallback: workspace.defaultWorkingDirectory,
+                        metrics: &metrics
+                    )
+                    if case .pane(let leaf) = resolved { return leaf }
+                    return claude
                 }
 
-                let validatedClaudeSection = validateSection(
-                    space.claudeSection,
-                    kind: .claude,
-                    spaceName: space.name,
-                    workspaceDefaultDirectory: workspace.defaultWorkingDirectory,
-                    metrics: &metrics,
-                    allowEmpty: false
-                )
-                let validatedTerminalSection = validateSection(
-                    space.terminalSection,
-                    kind: .terminal,
-                    spaceName: space.name,
-                    workspaceDefaultDirectory: workspace.defaultWorkingDirectory,
-                    metrics: &metrics,
-                    allowEmpty: true
-                )
+                // Resolve the terminal tree's directories and fix its focused
+                // pane id (must reference a leaf that exists in the tree).
+                let validatedTerminalRoot: PaneNodeState?
+                let validatedTerminalFocusedPaneId: UUID?
+                if let root = session.terminalRoot {
+                    let resolvedRoot = resolveWorkingDirectories(
+                        in: root,
+                        fallback: workspace.defaultWorkingDirectory,
+                        metrics: &metrics
+                    )
+                    validatedTerminalRoot = resolvedRoot
+                    if let focus = session.terminalFocusedPaneId,
+                       paneExists(focus, in: resolvedRoot) {
+                        validatedTerminalFocusedPaneId = focus
+                    } else {
+                        if session.terminalFocusedPaneId != nil {
+                            metrics.stalePaneIdFixes += 1
+                        }
+                        validatedTerminalFocusedPaneId = resolvedRoot.firstLeaf.paneID
+                    }
+                } else {
+                    validatedTerminalRoot = nil
+                    validatedTerminalFocusedPaneId = nil
+                }
+
+                // Terminal can't be visible or focused when it doesn't exist.
+                let hasTerminal = validatedTerminalRoot != nil
+                let terminalVisible = session.terminalVisible && hasTerminal
+                let focusedArea: PaneKind = hasTerminal ? session.focusedArea : .claude
 
                 let validatedWorktreePath: String?
-                if let wt = space.worktreePath, resolveDirectory(wt) == nil {
-                    Log.worktree.warning("Worktree path \(wt) no longer exists on disk for Space '\(space.name)'. Removing association.")
+                if let wt = session.worktreePath, resolveDirectory(wt) == nil {
+                    Log.worktree.warning("Worktree path \(wt) no longer exists on disk for Session '\(session.customName ?? "(auto)")'. Removing association.")
                     validatedWorktreePath = nil
                 } else {
-                    validatedWorktreePath = space.worktreePath
+                    validatedWorktreePath = session.worktreePath
                 }
 
                 // Drop a dangling parent link (orchestrator closed, or a stray
                 // self/cross-workspace reference) so the sidebar never renders a
                 // phantom child. Mirrors how a stale worktreePath is nulled above.
-                let validatedParentSpaceID: UUID?
-                if let parent = space.parentSpaceID,
-                   parent == space.id || !workspaceSpaceIDs.contains(parent) {
-                    Log.persistence.warning("Parent Space \(parent) not present in workspace for Space '\(space.name)'. Dropping nesting.")
-                    validatedParentSpaceID = nil
+                let validatedParentSessionID: UUID?
+                if let parent = session.parentSessionID,
+                   parent == session.id || !workspaceSessionIDs.contains(parent) {
+                    Log.persistence.warning("Parent Session \(parent) not present in workspace for Session '\(session.customName ?? "(auto)")'. Dropping nesting.")
+                    validatedParentSessionID = nil
                 } else {
-                    validatedParentSpaceID = space.parentSpaceID
+                    validatedParentSessionID = session.parentSessionID
                 }
 
-                return SpaceState(
-                    id: space.id,
-                    name: space.name,
-                    defaultWorkingDirectory: resolveDirectory(space.defaultWorkingDirectory),
+                return SessionRecord(
+                    id: session.id,
+                    customName: session.customName,
+                    defaultWorkingDirectory: resolveDirectory(session.defaultWorkingDirectory),
                     worktreePath: validatedWorktreePath,
-                    claudeSection: validatedClaudeSection,
-                    terminalSection: validatedTerminalSection,
-                    terminalVisible: space.terminalVisible,
-                    dockPosition: space.dockPosition,
-                    splitRatio: space.splitRatio,
-                    focusedSectionKind: space.focusedSectionKind,
-                    parentSpaceID: validatedParentSpaceID
+                    claudePane: validatedClaude,
+                    terminalRoot: validatedTerminalRoot,
+                    terminalFocusedPaneId: validatedTerminalFocusedPaneId,
+                    terminalVisible: terminalVisible,
+                    dockPosition: session.dockPosition,
+                    splitRatio: session.splitRatio,
+                    focusedArea: focusedArea,
+                    parentSessionID: validatedParentSessionID
                 )
             }
-            metrics.spaceCount += validatedSpaces.count
+            metrics.sessionCount += validatedSessions.count
 
-            let spaceIdValid = validatedSpaces.contains(where: { $0.id == workspace.activeSpaceId })
-            if !spaceIdValid {
-                metrics.staleSpaceIdFixes += 1
+            let sessionIdValid = validatedSessions.contains(where: { $0.id == workspace.activeSessionId })
+            if !sessionIdValid {
+                metrics.staleSessionIdFixes += 1
             }
-            let fixedActiveSpaceId = spaceIdValid
-                ? workspace.activeSpaceId
-                : validatedSpaces[0].id
+            let fixedActiveSessionId = sessionIdValid
+                ? workspace.activeSessionId
+                : validatedSessions[0].id
 
             return WorkspaceState(
                 id: workspace.id,
                 name: workspace.name,
-                activeSpaceId: fixedActiveSpaceId,
+                activeSessionId: fixedActiveSessionId,
                 defaultWorkingDirectory: resolveDirectory(workspace.defaultWorkingDirectory),
-                spaces: validatedSpaces,
+                sessions: validatedSessions,
                 windowFrame: workspace.windowFrame,
                 isFullscreen: workspace.isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelVisible,
@@ -206,29 +224,50 @@ enum SessionRestorer {
     @MainActor
     static func buildWorkspaceCollection(from state: SessionState) -> WorkspaceCollection {
         let workspaces = state.workspaces.map { ws -> Workspace in
-            let spaces = ws.spaces.map { sp -> SpaceModel in
-                let claudeSection = buildSection(from: sp.claudeSection)
-                let terminalSection = buildSection(from: sp.terminalSection)
-                let space = SpaceModel(
-                    id: sp.id,
-                    name: sp.name,
-                    claudeSection: claudeSection,
-                    terminalSection: terminalSection,
-                    terminalVisible: sp.terminalVisible,
-                    dockPosition: sp.dockPosition,
-                    splitRatio: sp.splitRatio,
-                    focusedSectionKind: sp.focusedSectionKind,
-                    defaultWorkingDirectory: sp.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
-                    worktreePath: sp.worktreePath
+            let sessions = ws.sessions.map { rec -> Session in
+                // Every restored session gets a live Claude pane. A nil persisted
+                // claudePane (e.g. an old placeholder record, or a v6→v7 terminal-
+                // only space) seeds a *fresh* Claude leaf — no `--resume`, so it
+                // launches plain `claude` — rather than restoring the removed
+                // empty-claude placeholder state.
+                let claudeLeaf = rec.claudePane ?? PaneLeafState(
+                    paneID: UUID(),
+                    workingDirectory: rec.defaultWorkingDirectory
+                        ?? ws.defaultWorkingDirectory
+                        ?? "~",
+                    restoreCommand: nil,
+                    claudeSessionState: nil
                 )
-                space.parentSpaceID = sp.parentSpaceID
-                return space
+                let claudePVM = PaneViewModel.fromState(
+                    .pane(claudeLeaf), focusedPaneID: claudeLeaf.paneID, kind: .claude
+                )
+                let terminalPVM = rec.terminalRoot.map { root in
+                    PaneViewModel.fromState(
+                        root,
+                        focusedPaneID: rec.terminalFocusedPaneId ?? root.firstLeaf.paneID,
+                        kind: .terminal
+                    )
+                }
+                let session = Session(
+                    id: rec.id,
+                    customName: rec.customName,
+                    claudePane: claudePVM,
+                    terminalPanel: terminalPVM,
+                    terminalVisible: rec.terminalVisible,
+                    dockPosition: rec.dockPosition,
+                    splitRatio: rec.splitRatio,
+                    focusedArea: rec.focusedArea,
+                    defaultWorkingDirectory: rec.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
+                    worktreePath: rec.worktreePath
+                )
+                session.parentSessionID = rec.parentSessionID
+                return session
             }
 
             let wdURL = ws.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) }
-            let spaceCollection = SpaceCollection(
-                spaces: spaces,
-                activeSpaceID: ws.activeSpaceId,
+            let sessionCollection = SessionCollection(
+                sessions: sessions,
+                activeSessionID: ws.activeSessionId,
                 workspaceDefaultDirectory: wdURL
             )
 
@@ -243,7 +282,7 @@ enum SessionRestorer {
                 id: ws.id,
                 name: ws.name,
                 defaultWorkingDirectory: wdURL,
-                spaceCollection: spaceCollection,
+                sessionCollection: sessionCollection,
                 inspectPanelState: inspectPanelState,
                 inspectTabState: inspectTabState
             )
@@ -252,86 +291,6 @@ enum SessionRestorer {
         return WorkspaceCollection(
             workspaces: workspaces,
             activeWorkspaceID: state.activeWorkspaceId
-        )
-    }
-
-    // MARK: - Section Helpers
-
-    private static func validateSection(
-        _ section: SectionState,
-        kind: SectionKind,
-        spaceName: String,
-        workspaceDefaultDirectory: String?,
-        metrics: inout RestoreMetrics,
-        allowEmpty: Bool
-    ) -> SectionState {
-        let validatedTabs = section.tabs.map { tab -> TabState in
-            let paneIdValid = paneExists(tab.activePaneId, in: tab.root)
-            if !paneIdValid {
-                metrics.stalePaneIdFixes += 1
-            }
-            let fixedActivePaneId = paneIdValid
-                ? tab.activePaneId
-                : firstLeafId(in: tab.root)
-            return TabState(
-                id: tab.id,
-                name: tab.name,
-                activePaneId: fixedActivePaneId,
-                root: resolveWorkingDirectories(in: tab.root, fallback: workspaceDefaultDirectory, metrics: &metrics),
-                sectionKind: kind
-            )
-        }
-        metrics.tabCount += validatedTabs.count
-
-        let fixedActiveTabId: UUID?
-        if validatedTabs.isEmpty {
-            if !allowEmpty {
-                Log.persistence.warning("Section \(kind) for Space '\(spaceName)' unexpectedly empty")
-            }
-            fixedActiveTabId = nil
-        } else {
-            if let candidate = section.activeTabId,
-               validatedTabs.contains(where: { $0.id == candidate }) {
-                fixedActiveTabId = candidate
-            } else {
-                if section.activeTabId != nil {
-                    metrics.staleTabIdFixes += 1
-                }
-                fixedActiveTabId = validatedTabs[0].id
-            }
-        }
-
-        return SectionState(
-            id: section.id,
-            kind: kind,
-            activeTabId: fixedActiveTabId,
-            tabs: validatedTabs
-        )
-    }
-
-    @MainActor
-    private static func buildSection(from state: SectionState) -> SectionModel {
-        let tabs = state.tabs.map { tab -> TabModel in
-            // Markdown reader tabs restore surface-less — never rebuild a
-            // terminal surface (which would spawn a shell/claude process).
-            if let markdownFilePath = tab.markdownFilePath {
-                let pvm = PaneViewModel.makeEmpty(sectionKind: state.kind)
-                return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind, markdownFilePath: markdownFilePath)
-            }
-            // Image reader tabs likewise restore surface-less.
-            if let imageFilePath = tab.imageFilePath {
-                let pvm = PaneViewModel.makeEmpty(sectionKind: state.kind)
-                return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind, imageFilePath: imageFilePath)
-            }
-            let pvm = PaneViewModel.fromState(tab.root, focusedPaneID: tab.activePaneId, sectionKind: state.kind)
-            return TabModel(id: tab.id, customName: tab.name, paneViewModel: pvm, sectionKind: state.kind)
-        }
-        let fallbackActiveTabID = tabs.first?.id ?? UUID()
-        return SectionModel(
-            id: state.id,
-            kind: state.kind,
-            tabs: tabs,
-            activeTabID: state.activeTabId ?? fallbackActiveTabID
         )
     }
 
@@ -391,15 +350,6 @@ enum SessionRestorer {
             return leaf.paneID == paneID
         case .split(let split):
             return paneExists(paneID, in: split.first) || paneExists(paneID, in: split.second)
-        }
-    }
-
-    private static func firstLeafId(in node: PaneNodeState) -> UUID {
-        switch node {
-        case .pane(let leaf):
-            return leaf.paneID
-        case .split(let split):
-            return firstLeafId(in: split.first)
         }
     }
 }

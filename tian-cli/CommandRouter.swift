@@ -128,13 +128,13 @@ struct WorkspaceList: ParsableCommand {
         try handleListResponse(
             response,
             arrayKey: "workspaces",
-            headers: ["ID", "NAME", "SPACES", "ACTIVE"],
+            headers: ["ID", "NAME", "SESSIONS", "ACTIVE"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
                     obj["name"]?.stringValue ?? "",
-                    obj["spaceCount"]?.intValue.map(String.init) ?? "",
+                    obj["sessionCount"]?.intValue.map(String.init) ?? "",
                     obj["active"]?.boolValue == true ? "yes" : "",
                 ]
             },
@@ -179,34 +179,34 @@ struct WorkspaceFocus: ParsableCommand {
     }
 }
 
-// MARK: - Space
+// MARK: - Session
 
-struct SpaceGroup: ParsableCommand {
+struct SessionGroup: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "space",
-        abstract: "Manage spaces within a workspace.",
+        commandName: "session",
+        abstract: "Manage sessions within a workspace.",
         subcommands: [
-            SpaceCreate.self,
-            SpaceList.self,
-            SpaceClose.self,
-            SpaceFocus.self,
+            SessionCreate.self,
+            SessionList.self,
+            SessionClose.self,
+            SessionFocus.self,
         ]
     )
 }
 
-struct SpaceCreate: ParsableCommand {
+struct SessionCreate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "create",
-        abstract: "Create a new space."
+        abstract: "Create a new session."
     )
 
-    @Argument(help: "Optional name for the new space.")
+    @Argument(help: "Optional name for the new session.")
     var name: String?
 
     @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
     var workspace: String?
 
-    @Flag(name: .long, help: "Create the space in the background without switching to it.")
+    @Flag(name: .long, help: "Create the session in the background without switching to it.")
     var background: Bool = false
 
     func run() throws {
@@ -214,15 +214,15 @@ struct SpaceCreate: ParsableCommand {
         if let name { params["name"] = .string(name) }
         if let workspace { params["workspaceId"] = .string(workspace) }
         if background { params["background"] = .bool(true) }
-        let response = try sendRequest(command: "space.create", params: params)
+        let response = try sendRequest(command: "session.create", params: params)
         try handleCreateResponse(response)
     }
 }
 
-struct SpaceList: ParsableCommand {
+struct SessionList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List spaces in a workspace."
+        abstract: "List sessions in a workspace."
     )
 
     @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
@@ -234,140 +234,17 @@ struct SpaceList: ParsableCommand {
     func run() throws {
         var params: [String: IPCValue] = [:]
         if let workspace { params["workspaceId"] = .string(workspace) }
-        let response = try sendRequest(command: "space.list", params: params)
+        let response = try sendRequest(command: "session.list", params: params)
         try handleListResponse(
             response,
-            arrayKey: "spaces",
-            headers: ["ID", "NAME", "TABS", "ACTIVE"],
+            arrayKey: "sessions",
+            headers: ["ID", "NAME", "STATE", "PANES", "ACTIVE"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
                     obj["name"]?.stringValue ?? "",
-                    obj["tabCount"]?.intValue.map(String.init) ?? "",
-                    obj["active"]?.boolValue == true ? "yes" : "",
-                ]
-            },
-            activeKey: "active",
-            format: format
-        )
-    }
-}
-
-struct SpaceClose: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "close",
-        abstract: "Close a space."
-    )
-
-    @Argument(help: "Space ID (UUID).")
-    var id: String
-
-    @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
-    var workspace: String?
-
-    @Flag(name: .long, help: "Force close even if processes are running.")
-    var force: Bool = false
-
-    func run() throws {
-        var params: [String: IPCValue] = ["id": .string(id)]
-        if let workspace { params["workspaceId"] = .string(workspace) }
-        if force { params["force"] = .bool(true) }
-        let response = try sendRequest(command: "space.close", params: params)
-        try handleVoidResponse(response)
-    }
-}
-
-struct SpaceFocus: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "focus",
-        abstract: "Focus a space."
-    )
-
-    @Argument(help: "Space ID (UUID).")
-    var id: String
-
-    @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
-    var workspace: String?
-
-    func run() throws {
-        var params: [String: IPCValue] = ["id": .string(id)]
-        if let workspace { params["workspaceId"] = .string(workspace) }
-        let response = try sendRequest(command: "space.focus", params: params)
-        try handleVoidResponse(response)
-    }
-}
-
-// MARK: - Tab
-
-struct TabGroup: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "tab",
-        abstract: "Manage tabs within a space.",
-        subcommands: [
-            TabCreate.self,
-            TabList.self,
-            TabClose.self,
-            TabFocus.self,
-        ]
-    )
-}
-
-struct TabCreate: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "create",
-        abstract: "Create a new tab."
-    )
-
-    @Option(name: .long, help: "Space ID (defaults to current space).")
-    var space: String?
-
-    @Option(name: .long, help: "Working directory for the new tab.")
-    var directory: String?
-
-    @Flag(name: .long, help: "Create the tab in the background without switching to it.")
-    var background: Bool = false
-
-    func run() throws {
-        var params: [String: IPCValue] = [:]
-        if let space { params["spaceId"] = .string(space) }
-        if let directory { params["directory"] = .string(directory) }
-        if background { params["background"] = .bool(true) }
-        let response = try sendRequest(command: "tab.create", params: params)
-        try handleCreateResponse(response)
-    }
-}
-
-struct TabList: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "list",
-        abstract: "List tabs in a space."
-    )
-
-    @Option(name: .long, help: "Space ID (defaults to current space).")
-    var space: String?
-
-    @Option(name: .long, help: "Filter by section: claude or terminal (defaults to both).")
-    var section: String?
-
-    @Option(name: .long, help: "Output format.")
-    var format: OutputFormat = .table
-
-    func run() throws {
-        var params: [String: IPCValue] = [:]
-        if let space { params["spaceId"] = .string(space) }
-        if let section { params["section"] = .string(section) }
-        let response = try sendRequest(command: "tab.list", params: params)
-        try handleListResponse(
-            response,
-            arrayKey: "tabs",
-            headers: ["ID", "SECTION", "TITLE", "PANES", "ACTIVE"],
-            rowBuilder: { item in
-                guard case .object(let obj) = item else { return [] }
-                return [
-                    obj["id"]?.stringValue ?? "",
-                    obj["section"]?.stringValue ?? "",
-                    obj["title"]?.stringValue ?? "",
+                    obj["claudeState"]?.stringValue ?? "",
                     obj["paneCount"]?.intValue.map(String.init) ?? "",
                     obj["active"]?.boolValue == true ? "yes" : "",
                 ]
@@ -378,38 +255,46 @@ struct TabList: ParsableCommand {
     }
 }
 
-struct TabClose: ParsableCommand {
+struct SessionClose: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "close",
-        abstract: "Close a tab."
+        abstract: "Close a session."
     )
 
-    @Argument(help: "Tab ID (UUID). Defaults to current tab.")
-    var id: String?
+    @Argument(help: "Session ID (UUID).")
+    var id: String
+
+    @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
+    var workspace: String?
 
     @Flag(name: .long, help: "Force close even if processes are running.")
     var force: Bool = false
 
     func run() throws {
-        var params: [String: IPCValue] = [:]
-        if let id { params["id"] = .string(id) }
+        var params: [String: IPCValue] = ["id": .string(id)]
+        if let workspace { params["workspaceId"] = .string(workspace) }
         if force { params["force"] = .bool(true) }
-        let response = try sendRequest(command: "tab.close", params: params)
+        let response = try sendRequest(command: "session.close", params: params)
         try handleVoidResponse(response)
     }
 }
 
-struct TabFocus: ParsableCommand {
+struct SessionFocus: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "focus",
-        abstract: "Focus a tab by ID or 1-based index."
+        abstract: "Focus a session."
     )
 
-    @Argument(help: "Tab ID (UUID) or 1-based index (1-9).")
-    var target: String
+    @Argument(help: "Session ID (UUID).")
+    var id: String
+
+    @Option(name: .long, help: "Workspace ID (defaults to current workspace).")
+    var workspace: String?
 
     func run() throws {
-        let response = try sendRequest(command: "tab.focus", params: ["target": .string(target)])
+        var params: [String: IPCValue] = ["id": .string(id)]
+        if let workspace { params["workspaceId"] = .string(workspace) }
+        let response = try sendRequest(command: "session.focus", params: params)
         try handleVoidResponse(response)
     }
 }
@@ -419,7 +304,7 @@ struct TabFocus: ParsableCommand {
 struct PaneGroup: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pane",
-        abstract: "Manage panes within a tab.",
+        abstract: "Manage panes within a session.",
         subcommands: [
             PaneSplit.self,
             PaneList.self,
@@ -461,28 +346,32 @@ struct PaneSplit: ParsableCommand {
 struct PaneList: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list",
-        abstract: "List panes in a tab."
+        abstract: "List panes in a session."
     )
 
-    @Option(name: .long, help: "Tab ID (defaults to current tab).")
-    var tab: String?
+    @Option(name: .long, help: "Session ID (defaults to current session).")
+    var session: String?
+
+    @Option(name: .long, help: "Filter by pane kind: claude or terminal (defaults to both).")
+    var kind: String?
 
     @Option(name: .long, help: "Output format.")
     var format: OutputFormat = .table
 
     func run() throws {
         var params: [String: IPCValue] = [:]
-        if let tab { params["tabId"] = .string(tab) }
+        if let session { params["sessionId"] = .string(session) }
+        if let kind { params["kind"] = .string(kind) }
         let response = try sendRequest(command: "pane.list", params: params)
         try handleListResponse(
             response,
             arrayKey: "panes",
-            headers: ["ID", "SECTION", "DIRECTORY", "STATE", "SESSION", "LABEL", "FOCUSED"],
+            headers: ["ID", "KIND", "DIRECTORY", "STATE", "SESSION", "LABEL", "FOCUSED"],
             rowBuilder: { item in
                 guard case .object(let obj) = item else { return [] }
                 return [
                     obj["id"]?.stringValue ?? "",
-                    obj["section"]?.stringValue ?? "",
+                    obj["kind"]?.stringValue ?? "",
                     obj["workingDirectory"]?.stringValue ?? "",
                     obj["state"]?.stringValue ?? "",
                     obj["sessionState"]?.stringValue ?? "",
@@ -673,7 +562,7 @@ struct StatusSet: ParsableCommand {
     @Option(name: .long, help: "Status label text.")
     var label: String?
 
-    @Option(name: .long, help: "Claude session state (active, busy, idle, needs_attention, inactive).")
+    @Option(name: .long, help: "Claude session state (active, busy, idle, needs_attention, failed, inactive).")
     var state: String?
 
     func run() throws {
@@ -737,7 +626,7 @@ struct NotifyCommand: ParsableCommand {
 struct WorktreeGroup: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "worktree",
-        abstract: "Manage worktree-backed spaces.",
+        abstract: "Manage worktree-backed sessions.",
         subcommands: [
             WorktreeCreate.self,
             WorktreeRemove.self,
@@ -748,7 +637,7 @@ struct WorktreeGroup: ParsableCommand {
 struct WorktreeCreate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "create",
-        abstract: "Create a new worktree-backed space."
+        abstract: "Create a new worktree-backed session."
     )
 
     @Argument(help: "Branch name for the worktree.")
@@ -760,7 +649,7 @@ struct WorktreeCreate: ParsableCommand {
     @Option(name: .long, help: "Base git ref (branch/tag/commit) to create the branch from. Defaults to current HEAD.")
     var base: String?
 
-    @Flag(name: .long, help: "Create the space in the background without switching to it.")
+    @Flag(name: .long, help: "Create the session in the background without switching to it.")
     var background: Bool = false
 
     @Option(name: .long, help: "Override repo root path.")
@@ -769,7 +658,7 @@ struct WorktreeCreate: ParsableCommand {
     @Option(name: .long, help: "Target workspace UUID.")
     var workspace: String?
 
-    @Option(name: .long, help: "Output: id (space id), ids (space tab pane), or json.")
+    @Option(name: .long, help: "Output: id (session id), ids (session claude-pane terminal-pane), or json.")
     var format: WorktreeCreateOutput = .id
 
     func run() throws {
@@ -781,16 +670,16 @@ struct WorktreeCreate: ParsableCommand {
         if let workspace { params["workspaceId"] = .string(workspace) }
         let response = try sendRequest(command: "worktree.create", params: params, timeout: 600)
         if response.ok {
-            let spaceId = response.result?["space_id"]?.stringValue ?? ""
-            let tabId = response.result?["tab_id"]?.stringValue ?? ""
-            let paneId = response.result?["pane_id"]?.stringValue ?? ""
+            let sessionId = response.result?["session_id"]?.stringValue ?? ""
+            let claudePaneId = response.result?["claude_pane_id"]?.stringValue ?? ""
+            let terminalPaneId = response.result?["terminal_pane_id"]?.stringValue ?? ""
             let existed = response.result?["existed"]?.boolValue ?? false
-            CommandContext.lastCreateId = spaceId
+            CommandContext.lastCreateId = sessionId
             switch format {
             case .id:
-                print(spaceId)
+                print(sessionId)
             case .ids:
-                print([spaceId, tabId, paneId].joined(separator: " "))
+                print([sessionId, claudePaneId, terminalPaneId].joined(separator: " "))
             case .json:
                 if let result = response.result {
                     print(OutputFormatter.formatJSON(.object(result)))
@@ -798,8 +687,8 @@ struct WorktreeCreate: ParsableCommand {
             }
             if existed {
                 let note = background
-                    ? "Note: Worktree space already exists (left in background).\n"
-                    : "Note: Focused existing worktree space.\n"
+                    ? "Note: Worktree session already exists (left in background).\n"
+                    : "Note: Focused existing worktree session.\n"
                 FileHandle.standardError.write(Data(note.utf8))
             }
         } else if let error = response.error {
@@ -819,11 +708,11 @@ enum WorktreeCreateOutput: String, ExpressibleByArgument, CaseIterable {
 struct WorktreeRemove: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "remove",
-        abstract: "Remove a worktree-backed space and its git worktree."
+        abstract: "Remove a worktree-backed session and its git worktree."
     )
 
-    @Argument(help: "Space ID (UUID) of the worktree space to remove.")
-    var spaceId: String
+    @Argument(help: "Session ID (UUID) of the worktree session to remove.")
+    var sessionId: String
 
     @Flag(name: .long, help: "Force removal even with uncommitted changes.")
     var force: Bool = false
@@ -832,7 +721,7 @@ struct WorktreeRemove: ParsableCommand {
     var deleteBranch: Bool = false
 
     func run() throws {
-        var params: [String: IPCValue] = ["spaceId": .string(spaceId)]
+        var params: [String: IPCValue] = ["sessionId": .string(sessionId)]
         if force { params["force"] = .bool(true) }
         if deleteBranch { params["deleteBranch"] = .bool(true) }
         let response = try sendRequest(command: "worktree.remove", params: params, timeout: 30)
@@ -857,7 +746,7 @@ struct WorktreeRemove: ParsableCommand {
             print("No branch deleted (worktree had no branch checked out).")
         }
         // Otherwise (reason nil, no branch): removal was preempted or not a
-        // worktree space — nothing branch-related to report.
+        // worktree session — nothing branch-related to report.
     }
 }
 
@@ -876,7 +765,7 @@ struct GitGroup: ParsableCommand {
 struct GitRefresh: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "refresh",
-        abstract: "Evict the PR cache and refresh git status for the current Space.",
+        abstract: "Evict the PR cache and refresh git status for the current session.",
         discussion: "Intended to run after commands that change PR or branch state without modifying local refs (e.g. `gh pr create` against an already-pushed branch), so the sidebar badge updates without waiting for the cache TTL."
     )
 

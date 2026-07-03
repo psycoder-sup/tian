@@ -15,9 +15,9 @@ struct WorkspaceSnapshot: Sendable, Codable {
     let activeTab: String?
 }
 
-/// The top-level organizational unit in tian's 4-level hierarchy
-/// (Workspace > Space > Tab > Pane). Each workspace maps to a project
-/// and owns a collection of spaces.
+/// The top-level organizational unit in tian's flattened hierarchy
+/// (Workspace > Session). Each workspace maps to a project and owns a
+/// collection of sessions.
 @MainActor @Observable
 final class Workspace: Identifiable {
     let id: UUID
@@ -26,28 +26,28 @@ final class Workspace: Identifiable {
     let createdAt: Date
 
     /// Remembers the last "Create worktree" checkbox state in the unified
-    /// space-creation modal. Transient — not persisted in `WorkspaceSnapshot`,
+    /// session-creation modal. Transient — not persisted in `WorkspaceSnapshot`,
     /// resets on app relaunch.
     var lastCreateWorktreeChoice: Bool?
 
-    let spaceCollection: SpaceCollection
+    let sessionCollection: SessionCollection
 
     /// Inspect panel visibility and width for this workspace's window.
     let inspectPanelState: InspectPanelState
 
     /// Workspace-scoped file tree view model for the inspect panel.
     /// Kept alive for the workspace lifetime so reopening the rail is
-    /// instant — only `setRoot(_:)` is re-called when the active space
+    /// instant — only `setRoot(_:)` is re-called when the active session
     /// changes. Torn down via `cleanup()` on workspace close.
     let inspectFileTreeViewModel: InspectFileTreeViewModel
 
     /// Holds the inspect panel's active tab + per-tab view-models
     /// (Diff / Branch). Lives above SwiftUI so the active tab survives
-    /// space switches and the view-models survive panel hide/show.
+    /// session switches and the view-models survive panel hide/show.
     /// Persisted via `WorkspaceSnapshot.activeTab`.
     let inspectTabState: InspectTabState
 
-    /// Called when the workspace's last space is closed.
+    /// Called when the workspace's last session is closed.
     var onEmpty: (() -> Void)?
 
     // MARK: - Init
@@ -82,21 +82,27 @@ final class Workspace: Identifiable {
         let workingDir = defaultWorkingDirectory?.path
             ?? ProcessInfo.processInfo.environment["HOME"]
             ?? "~"
-        self.spaceCollection = SpaceCollection(workingDirectory: workingDir)
-        self.spaceCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
-        self.spaceCollection.propagateWorkspaceID(id)
+        self.sessionCollection = SessionCollection(
+            sessions: [],
+            activeSessionID: nil,
+            workspaceDefaultDirectory: defaultWorkingDirectory
+        )
+        self.sessionCollection.propagateWorkspaceID(id)
+        // Seed the workspace's first session (a fresh Claude session). No custom
+        // name — it uses its auto-derived name (Claude title / directory leaf).
+        self.sessionCollection.createSession(workingDirectory: workingDir)
 
-        self.spaceCollection.onEmpty = { [weak self] in
+        self.sessionCollection.onEmpty = { [weak self] in
             self?.onEmpty?()
         }
     }
 
-    /// Restore a workspace with a pre-built SpaceCollection.
+    /// Restore a workspace with a pre-built SessionCollection.
     init(
         id: UUID,
         name: String,
         defaultWorkingDirectory: URL?,
-        spaceCollection: SpaceCollection,
+        sessionCollection: SessionCollection,
         inspectPanelState: InspectPanelState = InspectPanelState(),
         inspectTabState: InspectTabState = InspectTabState()
     ) {
@@ -107,26 +113,26 @@ final class Workspace: Identifiable {
         self.inspectPanelState = inspectPanelState
         self.inspectTabState = inspectTabState
         self.inspectFileTreeViewModel = InspectFileTreeViewModel()
-        self.spaceCollection = spaceCollection
-        self.spaceCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
-        self.spaceCollection.propagateWorkspaceID(id)
+        self.sessionCollection = sessionCollection
+        self.sessionCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
+        self.sessionCollection.propagateWorkspaceID(id)
 
-        self.spaceCollection.onEmpty = { [weak self] in
+        self.sessionCollection.onEmpty = { [weak self] in
             self?.onEmpty?()
         }
     }
 
-    /// Updates the default working directory and propagates to all spaces.
+    /// Updates the default working directory and propagates to all sessions.
     func setDefaultWorkingDirectory(_ url: URL?) {
         defaultWorkingDirectory = url
-        spaceCollection.propagateWorkspaceDefault(url)
+        sessionCollection.propagateWorkspaceDefault(url)
     }
 
     // MARK: - Convenience Accessors
 
-    var spaces: [SpaceModel] { spaceCollection.spaces }
-    var activeSpaceID: UUID { spaceCollection.activeSpaceID }
-    var activeSpace: SpaceModel? { spaceCollection.activeSpace }
+    var sessions: [Session] { sessionCollection.sessions }
+    var activeSessionID: UUID? { sessionCollection.activeSessionID }
+    var activeSession: Session? { sessionCollection.activeSession }
 
     // MARK: - Lifecycle
 
@@ -134,32 +140,33 @@ final class Workspace: Identifiable {
         inspectFileTreeViewModel.teardown()
         inspectTabState.diffViewModel.teardown()
         inspectTabState.branchViewModel.teardown()
-        for space in spaceCollection.spaces {
-            for tab in space.claudeSection.tabs {
-                tab.cleanup()
-            }
-            for tab in space.terminalSection.tabs {
-                tab.cleanup()
-            }
+        for session in sessionCollection.sessions {
+            session.allPanes.forEach { $0.cleanup() }
         }
     }
 
     // MARK: - Inspect Panel
 
     /// Resolves the root directory the inspect panel should display for the
-    /// given space. Per FR-10, the chain is space-level configured working
+    /// given session. Per FR-10, the chain is session-level configured working
     /// directory → workspace's default working directory. Worktree-backed
-    /// spaces (FR-10's "linked worktree") use `worktreePath` as their
-    /// space-level directory. Returns `nil` when neither level has a
+    /// sessions (FR-10's "linked worktree") use `worktreePath` as their
+    /// session-level directory. Returns `nil` when neither level has a
     /// configured directory — the panel renders the FR-18 empty state in
     /// that case (no `$HOME` fallback).
-    func inspectPanelRoot(for space: SpaceModel?) -> URL? {
-        guard let space else { return defaultWorkingDirectory }
-        if let worktreePath = space.worktreePath {
+    func inspectPanelRoot(for session: Session?) -> URL? {
+        guard let session else { return defaultWorkingDirectory }
+        // Prefer the worktree the Claude pane is actively working in, so the
+        // panel follows Claude after an EnterWorktree without waiting on a
+        // persisted `worktreePath`.
+        if let root = session.claudeWorktreeRoot {
+            return root
+        }
+        if let worktreePath = session.worktreePath {
             return worktreePath
         }
-        if let spaceDir = space.defaultWorkingDirectory {
-            return spaceDir
+        if let sessionDir = session.defaultWorkingDirectory {
+            return sessionDir
         }
         return defaultWorkingDirectory
     }

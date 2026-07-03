@@ -38,17 +38,11 @@ final class IPCCommandHandler {
         case "workspace.close":  return handleWorkspaceClose(request)
         case "workspace.focus":  return handleWorkspaceFocus(request)
 
-        // Space
-        case "space.create": return handleSpaceCreate(request)
-        case "space.list":   return handleSpaceList(request)
-        case "space.close":  return handleSpaceClose(request)
-        case "space.focus":  return handleSpaceFocus(request)
-
-        // Tab
-        case "tab.create": return handleTabCreate(request)
-        case "tab.list":   return handleTabList(request)
-        case "tab.close":  return handleTabClose(request)
-        case "tab.focus":  return handleTabFocus(request)
+        // Session
+        case "session.create": return handleSessionCreate(request)
+        case "session.list":   return handleSessionList(request)
+        case "session.close":  return handleSessionClose(request)
+        case "session.focus":  return handleSessionFocus(request)
 
         // Pane
         case "pane.split": return handlePaneSplit(request)
@@ -83,7 +77,7 @@ final class IPCCommandHandler {
 
     private func handleWorkspaceCreate(_ request: IPCRequest) -> IPCResponse {
         guard let name = stringParam("name", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: name")
+            return missingParameter("name")
         }
 
         guard let collection = resolveCollection() else {
@@ -107,7 +101,7 @@ final class IPCCommandHandler {
             .object([
                 "id": .string(workspace.id.uuidString),
                 "name": .string(workspace.name),
-                "spaceCount": .int(workspace.spaceCollection.spaces.count),
+                "sessionCount": .int(workspace.sessionCollection.sessions.count),
                 "active": .bool(workspace.id == collection.activeWorkspaceID),
             ])
         }
@@ -117,10 +111,10 @@ final class IPCCommandHandler {
 
     private func handleWorkspaceClose(_ request: IPCRequest) -> IPCResponse {
         guard let idStr = stringParam("id", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: id")
+            return missingParameter("id")
         }
         guard let id = UUID(uuidString: idStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(idStr)")
+            return invalidUUID(idStr)
         }
 
         guard let (collection, workspace) = resolveWorkspace(id: id) else {
@@ -128,8 +122,8 @@ final class IPCCommandHandler {
         }
 
         let force = optionalBool("force", from: request.params)
-        let tabs = workspace.spaceCollection.spaces.flatMap(\.allTabs)
-        if let error = checkProcessSafety(force: force, tabs: tabs) { return error }
+        let panes = workspace.sessionCollection.sessions.flatMap(\.allPanes)
+        if let error = checkProcessSafety(force: force, panes: panes) { return error }
 
         collection.removeWorkspace(id: id)
         return .success()
@@ -137,10 +131,10 @@ final class IPCCommandHandler {
 
     private func handleWorkspaceFocus(_ request: IPCRequest) -> IPCResponse {
         guard let idStr = stringParam("id", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: id")
+            return missingParameter("id")
         }
         guard let id = UUID(uuidString: idStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(idStr)")
+            return invalidUUID(idStr)
         }
 
         guard let (collection, _) = resolveWorkspace(id: id) else {
@@ -151,9 +145,9 @@ final class IPCCommandHandler {
         return .success()
     }
 
-    // MARK: - Space Commands
+    // MARK: - Session Commands
 
-    private func handleSpaceCreate(_ request: IPCRequest) -> IPCResponse {
+    private func handleSessionCreate(_ request: IPCRequest) -> IPCResponse {
         let workspaceIdStr = stringParam("workspaceId", from: request.params)
 
         guard let (_, workspace) = resolveWorkspaceFromParamOrEnv(workspaceIdStr, env: request.env) else {
@@ -161,68 +155,68 @@ final class IPCCommandHandler {
         }
 
         let background = optionalBool("background", from: request.params)
-        let space = workspace.spaceCollection.createSpace(focusOnCreate: !background)
-        if let name = stringParam("name", from: request.params) {
-            space.name = name
-        }
+        let name = stringParam("name", from: request.params)
+        let session = workspace.sessionCollection.createSession(name: name, focusOnCreate: !background)
 
-        return .success(["id": .string(space.id.uuidString)])
+        return .success(["id": .string(session.id.uuidString)])
     }
 
-    private func handleSpaceList(_ request: IPCRequest) -> IPCResponse {
+    private func handleSessionList(_ request: IPCRequest) -> IPCResponse {
         let workspaceIdStr = stringParam("workspaceId", from: request.params)
 
         guard let (_, workspace) = resolveWorkspaceFromParamOrEnv(workspaceIdStr, env: request.env) else {
             return .failure(code: 1, message: "Workspace not found: \(workspaceIdStr ?? request.env.workspaceId)")
         }
 
-        let items: [IPCValue] = workspace.spaceCollection.spaces.map { space in
-            .object([
-                "id": .string(space.id.uuidString),
-                "name": .string(space.name),
-                "tabCount": .int(space.tabs.count),
-                "active": .bool(space.id == workspace.spaceCollection.activeSpaceID),
+        let items: [IPCValue] = workspace.sessionCollection.sessions.map { session in
+            let claudeState = statusManager.aggregateSessionState(in: session)
+            return .object([
+                "id": .string(session.id.uuidString),
+                "name": .string(session.displayName),
+                "claudeState": claudeState.map { .string($0.rawValue) } ?? .null,
+                "paneCount": .int(session.allPanes.reduce(0) { $0 + $1.splitTree.leafCount }),
+                "active": .bool(session.id == workspace.sessionCollection.activeSessionID),
             ])
         }
 
-        return .success(["spaces": .array(items)])
+        return .success(["sessions": .array(items)])
     }
 
-    private func handleSpaceClose(_ request: IPCRequest) -> IPCResponse {
+    private func handleSessionClose(_ request: IPCRequest) -> IPCResponse {
         guard let idStr = stringParam("id", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: id")
+            return missingParameter("id")
         }
         guard let id = UUID(uuidString: idStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(idStr)")
+            return invalidUUID(idStr)
         }
 
         let workspaceIdStr = stringParam("workspaceId", from: request.params)
-        guard let (workspace, space) = resolveSpace(id: id, workspaceId: workspaceIdStr.flatMap(UUID.init)) else {
-            return .failure(code: 1, message: "Space not found: \(idStr)")
+        guard let (workspace, session) = resolveSession(id: id, workspaceId: workspaceIdStr.flatMap(UUID.init)) else {
+            return .failure(code: 1, message: "Session not found: \(idStr)")
         }
 
         let force = optionalBool("force", from: request.params)
-        if let error = checkProcessSafety(force: force, tabs: space.allTabs) { return error }
+        if let error = checkProcessSafety(force: force, panes: session.allPanes) { return error }
 
-        workspace.spaceCollection.removeSpace(id: id)
+        workspace.sessionCollection.removeSession(id: id)
         return .success()
     }
 
-    private func handleSpaceFocus(_ request: IPCRequest) -> IPCResponse {
+    private func handleSessionFocus(_ request: IPCRequest) -> IPCResponse {
         guard let idStr = stringParam("id", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: id")
+            return missingParameter("id")
         }
         guard let id = UUID(uuidString: idStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(idStr)")
+            return invalidUUID(idStr)
         }
 
         let workspaceIdStr = stringParam("workspaceId", from: request.params)
-        guard let (workspace, _) = resolveSpace(id: id, workspaceId: workspaceIdStr.flatMap(UUID.init)) else {
-            return .failure(code: 1, message: "Space not found: \(idStr)")
+        guard let (workspace, _) = resolveSession(id: id, workspaceId: workspaceIdStr.flatMap(UUID.init)) else {
+            return .failure(code: 1, message: "Session not found: \(idStr)")
         }
 
-        // Activate the space and its parent workspace
-        workspace.spaceCollection.activateSpace(id: id)
+        // Activate the session and its parent workspace
+        workspace.sessionCollection.activateSession(id: id)
         if let collection = resolveCollection() {
             collection.activateWorkspace(id: workspace.id)
         }
@@ -230,113 +224,20 @@ final class IPCCommandHandler {
         return .success()
     }
 
-    // MARK: - Tab Commands
-
-    private func handleTabCreate(_ request: IPCRequest) -> IPCResponse {
-        let spaceIdStr = stringParam("spaceId", from: request.params)
-
-        guard let (_, space) = resolveSpaceFromParamOrEnv(spaceIdStr, env: request.env) else {
-            return .failure(code: 1, message: "Space not found: \(spaceIdStr ?? request.env.spaceId)")
-        }
-
-        let directory = stringParam("directory", from: request.params) ?? "~"
-        let background = optionalBool("background", from: request.params)
-        let tab = space.createTab(workingDirectory: directory, focusOnCreate: !background)
-        return .success(["id": .string(tab.id.uuidString)])
-    }
-
-    private func handleTabList(_ request: IPCRequest) -> IPCResponse {
-        let spaceIdStr = stringParam("spaceId", from: request.params)
-
-        guard let (_, space) = resolveSpaceFromParamOrEnv(spaceIdStr, env: request.env) else {
-            return .failure(code: 1, message: "Space not found: \(spaceIdStr ?? request.env.spaceId)")
-        }
-
-        // Optional section filter; default lists both the Claude and Terminal sections.
-        let kindFilter: SectionKind?
-        switch stringParam("section", from: request.params) {
-        case nil: kindFilter = nil
-        case "claude": kindFilter = .claude
-        case "terminal": kindFilter = .terminal
-        case let other?:
-            return .failure(code: 1, message: "Invalid section: \(other) (expected claude or terminal)")
-        }
-
-        let tabs = space.allTabs.filter { kindFilter == nil || $0.sectionKind == kindFilter }
-        let items: [IPCValue] = tabs.map { tab in
-            let sectionActiveTabID = tab.sectionKind == .claude
-                ? space.claudeSection.activeTabID
-                : space.terminalSection.activeTabID
-            return .object([
-                "id": .string(tab.id.uuidString),
-                "section": .string(tab.sectionKind.rawValue),
-                "name": tab.customName.map { .string($0) } ?? .null,
-                "title": .string(tab.title),
-                "paneCount": .int(tab.paneViewModel.splitTree.leafCount),
-                "active": .bool(tab.id == sectionActiveTabID),
-            ])
-        }
-
-        return .success(["tabs": .array(items)])
-    }
-
-    private func handleTabClose(_ request: IPCRequest) -> IPCResponse {
-        let idStr = stringParam("id", from: request.params) ?? request.env.tabId
-        guard let id = UUID(uuidString: idStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(idStr)")
-        }
-
-        guard let (space, tab) = resolveTab(id: id, spaceId: nil) else {
-            return .failure(code: 1, message: "Tab not found: \(idStr)")
-        }
-
-        let force = optionalBool("force", from: request.params)
-        if let error = checkProcessSafety(force: force, tabs: [tab]) { return error }
-
-        space.removeTab(id: id)
-        return .success()
-    }
-
-    private func handleTabFocus(_ request: IPCRequest) -> IPCResponse {
-        guard let target = stringParam("target", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: target")
-        }
-
-        // Try as UUID first
-        if let uuid = UUID(uuidString: target) {
-            guard let (space, tab) = resolveTab(id: uuid, spaceId: nil) else {
-                return .failure(code: 1, message: "Tab not found: \(target)")
-            }
-            space.activate(tab: tab)
-            return .success()
-        }
-
-        // Try as 1-based index
-        if let index = Int(target) {
-            // Resolve the space from env
-            guard let spaceId = UUID(uuidString: request.env.spaceId) else {
-                return .failure(code: 1, message: "Invalid space ID in environment.")
-            }
-            guard let (_, space) = resolveSpace(id: spaceId, workspaceId: nil) else {
-                return .failure(code: 1, message: "Space not found from environment.")
-            }
-            space.goToTab(index: index)
-            return .success()
-        }
-
-        return .failure(code: 1, message: "Invalid target: \(target). Provide a UUID or 1-based index.")
-    }
-
     // MARK: - Pane Commands
 
     private func handlePaneSplit(_ request: IPCRequest) -> IPCResponse {
         let paneIdStr = stringParam("paneId", from: request.params) ?? request.env.paneId
         guard let paneId = UUID(uuidString: paneIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(paneIdStr)")
+            return invalidUUID(paneIdStr)
         }
 
-        guard let (_, paneViewModel, _) = resolvePane(id: paneId, tabId: nil) else {
+        guard let (_, paneViewModel, _) = resolvePane(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
+        }
+
+        guard paneViewModel.allowsSplits else {
+            return .failure(code: 1, message: "Claude pane cannot be split.")
         }
 
         let directionStr = stringParam("direction", from: request.params) ?? "vertical"
@@ -357,39 +258,47 @@ final class IPCCommandHandler {
     }
 
     private func handlePaneList(_ request: IPCRequest) -> IPCResponse {
-        let tabIdStr = stringParam("tabId", from: request.params) ?? request.env.tabId
-        guard let tabId = UUID(uuidString: tabIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(tabIdStr)")
+        let sessionIdStr = stringParam("sessionId", from: request.params)
+        guard let (_, session) = resolveSessionFromParamOrEnv(sessionIdStr, env: request.env) else {
+            return .failure(code: 1, message: "Session not found: \(sessionIdStr ?? request.env.sessionId)")
         }
 
-        guard let (_, tab) = resolveTab(id: tabId, spaceId: nil) else {
-            return .failure(code: 1, message: "Tab not found: \(tabIdStr)")
+        // Optional kind filter; default lists both the Claude pane and the Terminal panel.
+        let kindFilter: PaneKind?
+        switch stringParam("kind", from: request.params) {
+        case nil: kindFilter = nil
+        case "claude": kindFilter = .claude
+        case "terminal": kindFilter = .terminal
+        case let other?:
+            return .failure(code: 1, message: "Invalid kind: \(other) (expected claude or terminal)")
         }
 
-        let pvm = tab.paneViewModel
-        let leaves = pvm.splitTree.allLeafInfo()
-        let focusedID = pvm.splitTree.focusedPaneID
+        let panes = session.allPanes.filter { kindFilter == nil || $0.kind == kindFilter }
+        var items: [IPCValue] = []
+        for pvm in panes {
+            let focusedID = pvm.splitTree.focusedPaneID
+            for (paneID, wd) in pvm.splitTree.allLeafInfo() {
+                let stateStr: String
+                switch pvm.paneState(for: paneID) {
+                case .running: stateStr = "running"
+                case .exited: stateStr = "exited"
+                case .spawnFailed: stateStr = "spawn-failed"
+                }
 
-        let items: [IPCValue] = leaves.map { (paneID, wd) in
-            let stateStr: String
-            switch pvm.paneState(for: paneID) {
-            case .running: stateStr = "running"
-            case .exited: stateStr = "exited"
-            case .spawnFailed: stateStr = "spawn-failed"
+                let sessionState = statusManager.sessionState(for: paneID)
+                let label = statusManager.statuses[paneID]?.label
+                let focused = paneID == focusedID && session.effectiveFocusedArea == pvm.kind
+
+                items.append(.object([
+                    "id": .string(paneID.uuidString),
+                    "kind": .string(pvm.kind.rawValue),
+                    "workingDirectory": .string(wd),
+                    "state": .string(stateStr),
+                    "sessionState": sessionState.map { .string($0.rawValue) } ?? .null,
+                    "label": label.map { .string($0) } ?? .null,
+                    "focused": .bool(focused),
+                ]))
             }
-
-            let sessionState = statusManager.sessionState(for: paneID)
-            let label = statusManager.statuses[paneID]?.label
-
-            return .object([
-                "id": .string(paneID.uuidString),
-                "section": .string(tab.sectionKind.rawValue),
-                "workingDirectory": .string(wd),
-                "state": .string(stateStr),
-                "sessionState": sessionState.map { .string($0.rawValue) } ?? .null,
-                "label": label.map { .string($0) } ?? .null,
-                "focused": .bool(paneID == focusedID),
-            ])
         }
 
         return .success(["panes": .array(items)])
@@ -398,10 +307,10 @@ final class IPCCommandHandler {
     private func handlePaneClose(_ request: IPCRequest) -> IPCResponse {
         let paneIdStr = stringParam("paneId", from: request.params) ?? request.env.paneId
         guard let paneId = UUID(uuidString: paneIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(paneIdStr)")
+            return invalidUUID(paneIdStr)
         }
 
-        guard let (_, paneViewModel, _) = resolvePane(id: paneId, tabId: nil) else {
+        guard let (_, paneViewModel, _) = resolvePane(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
         }
 
@@ -411,15 +320,15 @@ final class IPCCommandHandler {
 
     private func handlePaneFocus(_ request: IPCRequest) -> IPCResponse {
         guard let target = stringParam("target", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: target")
+            return missingParameter("target")
         }
 
         let sourcePaneIdStr = stringParam("paneId", from: request.params) ?? request.env.paneId
         guard let sourcePaneId = UUID(uuidString: sourcePaneIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(sourcePaneIdStr)")
+            return invalidUUID(sourcePaneIdStr)
         }
 
-        guard let (_, paneViewModel, _) = resolvePane(id: sourcePaneId, tabId: nil) else {
+        guard let (_, paneViewModel, _) = resolvePane(id: sourcePaneId) else {
             return .failure(code: 1, message: "Pane not found: \(sourcePaneIdStr)")
         }
 
@@ -456,9 +365,9 @@ final class IPCCommandHandler {
     ) -> IPCResponse {
         let paneIdStr = stringParam("paneId", from: request.params) ?? request.env.paneId
         guard let paneId = UUID(uuidString: paneIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(paneIdStr)")
+            return invalidUUID(paneIdStr)
         }
-        guard let (_, paneViewModel, _) = resolvePane(id: paneId, tabId: nil) else {
+        guard let (_, paneViewModel, _) = resolvePane(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
         }
         guard let surface = paneViewModel.realizeSurface(for: paneId) else {
@@ -469,7 +378,7 @@ final class IPCCommandHandler {
 
     private func handlePaneSend(_ request: IPCRequest) -> IPCResponse {
         guard let text = stringParam("text", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: text")
+            return missingParameter("text")
         }
         return withLiveSurface(for: request) { surface, _ in
             surface.injectText(text, submit: request.params["enter"]?.boolValue ?? true)
@@ -522,14 +431,14 @@ final class IPCCommandHandler {
 
     private func handleSetRestoreCommand(_ request: IPCRequest) -> IPCResponse {
         guard let command = stringParam("command", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: command")
+            return missingParameter("command")
         }
 
         guard let paneId = UUID(uuidString: request.env.paneId) else {
-            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+            return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
-        guard let (_, paneViewModel, _) = resolvePane(id: paneId, tabId: nil) else {
+        guard let (_, paneViewModel, _) = resolvePane(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
         }
 
@@ -544,20 +453,20 @@ final class IPCCommandHandler {
     private func handlePaneSetDirectory(_ request: IPCRequest) -> IPCResponse {
         guard let directory = stringParam("directory", from: request.params),
               !directory.isEmpty else {
-            return .failure(code: 1, message: "Missing required parameter: directory")
+            return missingParameter("directory")
         }
 
         let paneIdStr = stringParam("paneId", from: request.params).flatMap { $0.isEmpty ? nil : $0 }
             ?? request.env.paneId
         guard let paneId = UUID(uuidString: paneIdStr) else {
-            return .failure(code: 1, message: "Invalid pane UUID: \(paneIdStr)")
+            return invalidUUID(paneIdStr, label: "pane UUID")
         }
 
-        guard let space = resolvePaneSpace(id: paneId) else {
+        guard let session = resolvePaneSession(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(paneIdStr)")
         }
 
-        space.gitContext.setPaneDirectory(paneID: paneId, directory: directory)
+        session.gitContext.setPaneDirectory(paneID: paneId, directory: directory)
         return .success()
     }
 
@@ -587,10 +496,10 @@ final class IPCCommandHandler {
         }
 
         guard let paneId = UUID(uuidString: request.env.paneId) else {
-            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+            return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
-        guard resolvePane(id: paneId, tabId: nil) != nil else {
+        guard resolvePane(id: paneId) != nil else {
             return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
         }
 
@@ -606,7 +515,7 @@ final class IPCCommandHandler {
 
     private func handleStatusClear(_ request: IPCRequest) -> IPCResponse {
         guard let paneId = UUID(uuidString: request.env.paneId) else {
-            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+            return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
         statusManager.clearStatus(paneID: paneId)
@@ -617,11 +526,11 @@ final class IPCCommandHandler {
 
     private func handleNotify(_ request: IPCRequest) async -> IPCResponse {
         guard let message = stringParam("message", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: message")
+            return missingParameter("message")
         }
 
         guard let paneId = UUID(uuidString: request.env.paneId) else {
-            return .failure(code: 1, message: "Invalid pane UUID: \(request.env.paneId)")
+            return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
         let title = stringParam("title", from: request.params)
@@ -654,7 +563,7 @@ final class IPCCommandHandler {
 
     private func handleWorktreeCreate(_ request: IPCRequest) async -> IPCResponse {
         guard let branchName = stringParam("branchName", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: branchName")
+            return missingParameter("branchName")
         }
 
         let existing = optionalBool("existing", from: request.params)
@@ -678,29 +587,27 @@ final class IPCCommandHandler {
             )
         }
 
-        // The calling pane's Space is the creator (orchestrator). Used to nest
-        // the new worktree Space under it in the sidebar. Absent/malformed env
-        // (e.g. invoked outside a tian pane) leaves it nil → top-level Space.
-        let creatorSpaceID = UUID(uuidString: request.env.spaceId)
+        // The calling pane's Session is the creator (orchestrator). Used to nest
+        // the new worktree Session under it in the sidebar. Absent/malformed env
+        // (e.g. invoked outside a tian pane) leaves it nil → top-level Session.
+        let creatorSessionID = UUID(uuidString: request.env.sessionId)
 
         do {
-            let result = try await worktreeOrchestrator.createWorktreeSpace(
+            let result = try await worktreeOrchestrator.createWorktreeSession(
                 branchName: branchName,
                 existingBranch: existing,
                 base: base,
                 repoPath: path,
                 workspaceID: resolvedWorkspace?.id,
                 background: background,
-                creatorSpaceID: creatorSpaceID
+                creatorSessionID: creatorSessionID
             )
             var out: [String: IPCValue] = [
-                "space_id": .string(result.spaceID.uuidString),
+                "session_id": .string(result.sessionID.uuidString),
                 "existed": .bool(result.existed),
             ]
-            if let tabID = result.tabID { out["tab_id"] = .string(tabID.uuidString) }
-            if let paneID = result.paneID { out["pane_id"] = .string(paneID.uuidString) }
-            if let claudeTabID = result.claudeTabID { out["claude_tab_id"] = .string(claudeTabID.uuidString) }
             if let claudePaneID = result.claudePaneID { out["claude_pane_id"] = .string(claudePaneID.uuidString) }
+            if let terminalPaneID = result.terminalPaneID { out["terminal_pane_id"] = .string(terminalPaneID.uuidString) }
             return .success(out)
         } catch let error as WorktreeError {
             return .failure(code: 1, message: error.description)
@@ -710,19 +617,19 @@ final class IPCCommandHandler {
     }
 
     private func handleWorktreeRemove(_ request: IPCRequest) async -> IPCResponse {
-        guard let spaceIdStr = stringParam("spaceId", from: request.params) else {
-            return .failure(code: 1, message: "Missing required parameter: spaceId")
+        guard let sessionIdStr = stringParam("sessionId", from: request.params) else {
+            return missingParameter("sessionId")
         }
-        guard let spaceID = UUID(uuidString: spaceIdStr) else {
-            return .failure(code: 1, message: "Invalid UUID: \(spaceIdStr)")
+        guard let sessionID = UUID(uuidString: sessionIdStr) else {
+            return invalidUUID(sessionIdStr)
         }
 
         let force = optionalBool("force", from: request.params)
         let deleteBranch = optionalBool("deleteBranch", from: request.params)
 
         do {
-            let result = try await worktreeOrchestrator.removeWorktreeSpace(
-                spaceID: spaceID,
+            let result = try await worktreeOrchestrator.removeWorktreeSession(
+                sessionID: sessionID,
                 force: force,
                 deleteBranch: deleteBranch
             )
@@ -745,18 +652,18 @@ final class IPCCommandHandler {
 
     // MARK: - Git Commands
 
-    /// Evicts the PR cache for every repo in the calling pane's Space and
+    /// Evicts the PR cache for every repo in the calling pane's Session and
     /// refreshes git status. Used by external tooling (e.g. a Claude
     /// PostToolUse hook after `gh pr create`) to update the sidebar badge
     /// without waiting for the 60s PR-cache TTL — `gh pr create` against an
     /// already-pushed branch makes no local file change, so the
     /// FSEvents-based eviction path doesn't fire.
     private func handleGitRefresh(_ request: IPCRequest) -> IPCResponse {
-        guard let spaceID = UUID(uuidString: request.env.spaceId),
-              let (_, space) = resolveSpace(id: spaceID, workspaceId: nil) else {
-            return .failure(code: 1, message: "Space not found from environment.")
+        guard let sessionID = UUID(uuidString: request.env.sessionId),
+              let (_, session) = resolveSession(id: sessionID, workspaceId: nil) else {
+            return .failure(code: 1, message: "Session not found from environment.")
         }
-        space.gitContext.refreshPR()
+        session.gitContext.refreshPR()
         return .success()
     }
 
@@ -775,7 +682,7 @@ final class IPCCommandHandler {
         return nil
     }
 
-    private func resolveSpace(id: UUID, workspaceId: UUID?) -> (Workspace, SpaceModel)? {
+    private func resolveSession(id: UUID, workspaceId: UUID?) -> (Workspace, Session)? {
         for collection in windowCoordinator.allWorkspaceCollections {
             let workspaces = if let workspaceId {
                 collection.workspaces.filter { $0.id == workspaceId }
@@ -783,44 +690,23 @@ final class IPCCommandHandler {
                 collection.workspaces
             }
             for workspace in workspaces {
-                if let space = workspace.spaceCollection.spaces.first(where: { $0.id == id }) {
-                    return (workspace, space)
+                if let session = workspace.sessionCollection.sessions.first(where: { $0.id == id }) {
+                    return (workspace, session)
                 }
             }
         }
         return nil
     }
 
-    private func resolveTab(id: UUID, spaceId: UUID?) -> (SpaceModel, TabModel)? {
+    /// Walks workspaces → sessions → each session's panes, returning the owning
+    /// session and pane view model for the leaf `id`.
+    private func resolvePane(id: UUID) -> (Session, PaneViewModel, UUID)? {
         for collection in windowCoordinator.allWorkspaceCollections {
             for workspace in collection.workspaces {
-                let spaces = if let spaceId {
-                    workspace.spaceCollection.spaces.filter { $0.id == spaceId }
-                } else {
-                    workspace.spaceCollection.spaces
-                }
-                for space in spaces {
-                    if let tab = space.allTabs.first(where: { $0.id == id }) {
-                        return (space, tab)
-                    }
-                }
-            }
-        }
-        return nil
-    }
-
-    private func resolvePane(id: UUID, tabId: UUID?) -> (TabModel, PaneViewModel, UUID)? {
-        for collection in windowCoordinator.allWorkspaceCollections {
-            for workspace in collection.workspaces {
-                for space in workspace.spaceCollection.spaces {
-                    let tabs = if let tabId {
-                        space.allTabs.filter { $0.id == tabId }
-                    } else {
-                        space.allTabs
-                    }
-                    for tab in tabs {
-                        if tab.paneViewModel.splitTree.root.containsLeaf(paneID: id) {
-                            return (tab, tab.paneViewModel, id)
+                for session in workspace.sessionCollection.sessions {
+                    for pvm in session.allPanes {
+                        if pvm.splitTree.root.containsLeaf(paneID: id) {
+                            return (session, pvm, id)
                         }
                     }
                 }
@@ -829,17 +715,15 @@ final class IPCCommandHandler {
         return nil
     }
 
-    /// Finds the Space that owns a given pane. Used by commands that must reach
-    /// the pane's `SpaceGitContext` (resolved from the pane, not `env.spaceId`,
-    /// so an explicit `--pane` in another space still targets the right context).
-    private func resolvePaneSpace(id: UUID) -> SpaceModel? {
+    /// Finds the Session that owns a given pane. Used by commands that must reach
+    /// the pane's `SessionGitContext` (resolved from the pane, not `env.sessionId`,
+    /// so an explicit `--pane` in another session still targets the right context).
+    private func resolvePaneSession(id: UUID) -> Session? {
         for collection in windowCoordinator.allWorkspaceCollections {
             for workspace in collection.workspaces {
-                for space in workspace.spaceCollection.spaces {
-                    if space.allTabs.contains(where: {
-                        $0.paneViewModel.splitTree.root.containsLeaf(paneID: id)
-                    }) {
-                        return space
+                for session in workspace.sessionCollection.sessions {
+                    if session.allPanes.contains(where: { $0.splitTree.root.containsLeaf(paneID: id) }) {
+                        return session
                     }
                 }
             }
@@ -860,14 +744,15 @@ final class IPCCommandHandler {
         return resolveWorkspace(id: id)
     }
 
-    /// Resolves space from an explicit param UUID string, or falls back to env.
-    private func resolveSpaceFromParamOrEnv(
+    /// Resolves session from an explicit param UUID string, or falls back to env.
+    /// An empty param string is treated as absent so it can't shadow a valid env id.
+    private func resolveSessionFromParamOrEnv(
         _ paramIdStr: String?,
         env: IPCEnv
-    ) -> (Workspace, SpaceModel)? {
-        let idStr = paramIdStr ?? env.spaceId
+    ) -> (Workspace, Session)? {
+        let idStr = paramIdStr.flatMap { $0.isEmpty ? nil : $0 } ?? env.sessionId
         guard let id = UUID(uuidString: idStr) else { return nil }
-        return resolveSpace(id: id, workspaceId: nil)
+        return resolveSession(id: id, workspaceId: nil)
     }
 
     // MARK: - Helpers
@@ -876,13 +761,25 @@ final class IPCCommandHandler {
         params[key]?.stringValue
     }
 
+    /// Standard failure for an absent required parameter.
+    private func missingParameter(_ key: String) -> IPCResponse {
+        .failure(code: 1, message: "Missing required parameter: \(key)")
+    }
+
+    /// Standard failure for an unparseable UUID string. `label` names the value
+    /// in the message so each call site keeps its exact wording ("UUID" vs
+    /// "pane UUID") — the two forms are asserted separately in the IPC tests.
+    private func invalidUUID(_ string: String, label: String = "UUID") -> IPCResponse {
+        .failure(code: 1, message: "Invalid \(label): \(string)")
+    }
+
     private func optionalBool(_ key: String, from params: [String: IPCValue]) -> Bool {
         params[key]?.boolValue ?? false
     }
 
-    private func checkProcessSafety(force: Bool, tabs: [TabModel]) -> IPCResponse? {
+    private func checkProcessSafety(force: Bool, panes: [PaneViewModel]) -> IPCResponse? {
         guard !force else { return nil }
-        let count = ProcessDetector.runningProcessCount(in: tabs)
+        let count = ProcessDetector.runningProcessCount(in: panes)
         guard count > 0 else { return nil }
         return .failure(code: 3, message: "\(count) running process\(count == 1 ? "" : "es") detected. Use --force to close anyway.")
     }

@@ -86,9 +86,9 @@ struct SessionMigrationV4ToV5Tests {
         let wsState = WorkspaceState(
             id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
             name: "myWorkspace",
-            activeSpaceId: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+            activeSessionId: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
             defaultWorkingDirectory: nil,
-            spaces: [],
+            sessions: [],
             windowFrame: nil,
             isFullscreen: nil,
             inspectPanelVisible: false,

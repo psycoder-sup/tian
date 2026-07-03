@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// View-model for the Inspect panel's Diff tab. Owns its own scheduler
-/// bucket (independent of `SpaceGitContext.refreshScheduler`) so dev-server
+/// bucket (independent of `SessionGitContext.refreshScheduler`) so dev-server
 /// churn cannot induce `git diff HEAD` storms.
 ///
 /// FR-T18 contract:

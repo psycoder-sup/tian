@@ -1,7 +1,7 @@
 import Foundation
 
-/// Per-Space progress signal published by `WorktreeOrchestrator` while
-/// `[[setup]]` or `[[archive]]` commands run. Drives both the sidebar Space-row indicator
+/// Per-Session progress signal published by `WorktreeOrchestrator` while
+/// `[[setup]]` or `[[archive]]` commands run. Drives both the sidebar session-row indicator
 /// and the bottom-right `SetupProgressCapsule`.
 ///
 /// Lifecycle: `nil` ⇔ no setup/cleanup is in flight. Non-nil from just before the
@@ -22,7 +22,7 @@ struct SetupProgress: Equatable, Sendable {
     }
 
     let workspaceID: UUID
-    let spaceID: UUID
+    let sessionID: UUID
     let phase: Phase
     let totalCommands: Int
     /// 0-based index of the currently executing command. `-1` before the
@@ -36,13 +36,13 @@ struct SetupProgress: Equatable, Sendable {
 
     static func starting(
         workspaceID: UUID,
-        spaceID: UUID,
+        sessionID: UUID,
         phase: Phase,
         totalCommands: Int
     ) -> SetupProgress {
         SetupProgress(
             workspaceID: workspaceID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             phase: phase,
             totalCommands: totalCommands,
             currentIndex: -1,
@@ -56,11 +56,11 @@ struct SetupProgress: Equatable, Sendable {
     /// and `stepText` is unused — UI gates on `phase == .removing`.
     static func removingPlaceholder(
         workspaceID: UUID,
-        spaceID: UUID
+        sessionID: UUID
     ) -> SetupProgress {
         SetupProgress(
             workspaceID: workspaceID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             phase: .removing,
             totalCommands: 0,
             currentIndex: -1,

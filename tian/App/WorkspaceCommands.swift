@@ -13,6 +13,22 @@ struct WorkspaceCommands: Commands {
         CommandGroup(after: .newItem) {
             Divider()
 
+            Button("New Session…") {
+                if let controller = windowCoordinator.controllerForKeyWindow() {
+                    let collection = controller.workspaceCollection
+                    var userInfo: [AnyHashable: Any] = [:]
+                    if let id = collection.activeWorkspaceID {
+                        userInfo[Notification.createSessionWorkspaceIDKey] = id
+                    }
+                    NotificationCenter.default.post(
+                        name: .showCreateSessionInput,
+                        object: collection,
+                        userInfo: userInfo
+                    )
+                }
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+
             Button("New Workspace") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {
                     WorkspaceCreationFlow.createWorkspace(in: controller.workspaceCollection)
@@ -30,16 +46,16 @@ struct WorkspaceCommands: Commands {
 
             Divider()
 
-            Button("Previous Space") {
+            Button("Previous Session") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {
-                    controller.workspaceCollection.previousSpaceGlobal()
+                    controller.workspaceCollection.previousSessionGlobal()
                 }
             }
             .keyboardShortcut(.leftArrow, modifiers: [.command, .shift])
 
-            Button("Next Space") {
+            Button("Next Session") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {
-                    controller.workspaceCollection.nextSpaceGlobal()
+                    controller.workspaceCollection.nextSessionGlobal()
                 }
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command, .shift])

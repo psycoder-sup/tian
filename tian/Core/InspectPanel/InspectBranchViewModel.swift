@@ -2,24 +2,24 @@ import Foundation
 import Observation
 
 /// Object that exposes the `branchGraphDirty` set and lets the Branch
-/// view-model clear a repo's entry after a successful refetch. `SpaceGitContext`
+/// view-model clear a repo's entry after a successful refetch. `SessionGitContext`
 /// is the production conformer; tests can substitute a fake.
 ///
-/// Note: Plan §3 typed `scheduleRefresh(in:)` directly as `SpaceGitContext?`.
+/// Note: Plan §3 typed `scheduleRefresh(in:)` directly as `SessionGitContext?`.
 /// We narrow it to this protocol so tests can drive the dirty-flag handshake
-/// without having to construct a real `SpaceGitContext` (which depends on
+/// without having to construct a real `SessionGitContext` (which depends on
 /// repo discovery, FSEvents, `RefreshScheduler`, etc.). Production wiring is
-/// unchanged — `SpaceGitContext` already exposes both members.
+/// unchanged — `SessionGitContext` already exposes both members.
 @MainActor
 protocol BranchGraphDirtyHost: AnyObject {
     var branchGraphDirty: Set<GitRepoID> { get }
     func clearBranchGraphDirty(repoID: GitRepoID)
 }
 
-extension SpaceGitContext: BranchGraphDirtyHost {}
+extension SessionGitContext: BranchGraphDirtyHost {}
 
 /// View-model for the Inspect panel's Branch tab. Owns its own in-flight
-/// `Task` and coordinates with `SpaceGitContext.branchGraphDirty` (FR-T28).
+/// `Task` and coordinates with `SessionGitContext.branchGraphDirty` (FR-T28).
 ///
 /// Unlike the Diff tab, refresh is NOT debounced on file events. It is driven
 /// by:

@@ -6,15 +6,21 @@ import Foundation
 
 @MainActor
 struct WorkspaceTests {
-    @Test func initCreatesOneSpaceWithOneTab() {
-        // v4: new Spaces seed the Claude section with one Claude tab and
-        // leave the Terminal section empty + hidden. Legacy `space.tabs`
-        // aliases Terminal — so the assertion migrates to the v4 shape.
+    @Test func initCreatesOneSessionWithClaudePane() {
+        // A fresh workspace seeds one session with a live Claude pane and no
+        // terminal panel yet.
         let ws = Workspace(name: "project")
-        #expect(ws.spaces.count == 1)
-        #expect(ws.spaces[0].claudeSection.tabs.count == 1)
-        #expect(ws.spaces[0].terminalSection.tabs.isEmpty)
+        #expect(ws.sessions.count == 1)
+        #expect(ws.sessions[0].hasLiveClaudePane)
+        #expect(ws.sessions[0].terminalPanel == nil)
         #expect(ws.name == "project")
+    }
+
+    @Test func initSeedsFirstSessionWithoutCustomName() {
+        // The seeded first session has no custom name — it uses its auto-derived
+        // name (Claude title / directory leaf) rather than a literal "default".
+        let ws = Workspace(name: "project")
+        #expect(ws.sessions[0].customName == nil)
     }
 
     @Test func initDefaultWorkingDirectoryIsNil() {
@@ -28,23 +34,23 @@ struct WorkspaceTests {
         #expect(ws.defaultWorkingDirectory == dir)
     }
 
-    @Test func convenienceAccessorsDelegateToSpaceCollection() {
+    @Test func convenienceAccessorsDelegateToSessionCollection() {
         let ws = Workspace(name: "project")
-        #expect(ws.spaces.map(\.id) == ws.spaceCollection.spaces.map(\.id))
-        #expect(ws.activeSpaceID == ws.spaceCollection.activeSpaceID)
-        #expect(ws.activeSpace?.id == ws.spaceCollection.activeSpace?.id)
+        #expect(ws.sessions.map(\.id) == ws.sessionCollection.sessions.map(\.id))
+        #expect(ws.activeSessionID == ws.sessionCollection.activeSessionID)
+        #expect(ws.activeSession?.id == ws.sessionCollection.activeSession?.id)
     }
 
-    @Test func onEmptyFiredWhenLastSpaceExplicitlyClosed() async {
-        // v4: ws.onEmpty fires when the last Space is removed. Space
-        // removal now requires an explicit user close (requestSpaceClose),
-        // not a pane-exit cascade.
+    @Test func onEmptyFiredWhenLastSessionExplicitlyClosed() async {
+        // `ws.onEmpty` fires when the last session is removed. Session removal
+        // requires an explicit user close (requestSessionClose), not a
+        // pane-exit cascade.
         let ws = Workspace(name: "project")
         var fired = false
         ws.onEmpty = { fired = true }
 
-        let space = ws.spaceCollection.spaces[0]
-        await space.requestSpaceClose()
+        let session = ws.sessionCollection.sessions[0]
+        await session.requestSessionClose()
 
         #expect(fired)
     }
@@ -62,7 +68,7 @@ struct WorkspaceTests {
         let ws = Workspace(name: "test")
         let data = try JSONEncoder().encode(ws.snapshot)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        #expect(dict["spaceCollection"] == nil)
+        #expect(dict["sessionCollection"] == nil)
         #expect(dict["onEmpty"] == nil)
     }
 
@@ -99,8 +105,97 @@ struct WorkspaceTests {
         #expect(restored.id == ws.id)
         #expect(restored.name == "original")
         #expect(restored.defaultWorkingDirectory == dir)
-        #expect(restored.spaces.count == 1)
+        #expect(restored.sessions.count == 1)
     }
+
+    // MARK: - Inspect panel root
+
+    /// With no live Claude worktree, `inspectPanelRoot` walks the fallback chain:
+    /// session worktreePath → session default → workspace default → nil session
+    /// yields the workspace default.
+    @Test func inspectPanelRootFallsBackThroughWorktreeAndDefaults() {
+        let ws = Workspace(
+            name: "project",
+            defaultWorkingDirectory: URL(fileURLWithPath: "/tmp/ws")
+        )
+        let withWorktree = Session(
+            customName: "s", claudePane: nil, terminalPanel: nil,
+            defaultWorkingDirectory: URL(fileURLWithPath: "/tmp/sess"),
+            worktreePath: "/tmp/wt"
+        )
+        #expect(ws.inspectPanelRoot(for: withWorktree)?.path == "/tmp/wt")
+
+        let withoutWorktree = Session(
+            customName: "s", claudePane: nil, terminalPanel: nil,
+            defaultWorkingDirectory: URL(fileURLWithPath: "/tmp/sess")
+        )
+        #expect(ws.inspectPanelRoot(for: withoutWorktree)?.path == "/tmp/sess")
+
+        #expect(ws.inspectPanelRoot(for: nil)?.path == "/tmp/ws")
+    }
+
+    /// The Claude pane's live worktree takes precedence over every other root, so
+    /// the inspect panel follows Claude after an EnterWorktree.
+    @Test func inspectPanelRootPrefersClaudeWorktreeRoot() async throws {
+        let repo = try makeTempGitRepo()
+        defer { try? FileManager.default.removeItem(atPath: repo) }
+
+        let ws = Workspace(
+            name: "project",
+            defaultWorkingDirectory: URL(fileURLWithPath: "/tmp/ws")
+        )
+        let session = Session(customName: "s", workingDirectory: repo)
+        let paneID = try #require(session.claudePaneID)
+        try await pollUntil(timeout: 5.0) {
+            session.gitContext.paneWorktreeRoot[paneID] != nil
+        }
+
+        let expected = try #require(session.claudeWorktreeRoot).path
+        #expect(ws.inspectPanelRoot(for: session)?.path == expected)
+    }
+
+    // MARK: - Git test helpers
+
+    private func pollUntil(timeout: Double, condition: @MainActor () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        Issue.record("Timed out waiting for condition after \(timeout)s")
+    }
+
+    private func makeTempGitRepo() throws -> String {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tian-test-\(UUID().uuidString)")
+            .path
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try runGitSync(["init"], in: dir)
+        try runGitSync(["config", "user.email", "test@test.com"], in: dir)
+        try runGitSync(["config", "user.name", "Test"], in: dir)
+        let readmePath = (dir as NSString).appendingPathComponent("README.md")
+        try "# Test".write(toFile: readmePath, atomically: true, encoding: .utf8)
+        try runGitSync(["add", "."], in: dir)
+        try runGitSync(["commit", "-m", "Initial commit"], in: dir)
+        return dir
+    }
+
+    private func runGitSync(_ args: [String], in dir: String) throws {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/git")
+        process.arguments = args
+        process.currentDirectoryURL = URL(filePath: dir)
+        let stderr = Pipe()
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let msg = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            throw WorkspaceTestError.git("git \(args.joined(separator: " ")) failed: \(msg)")
+        }
+    }
+
+    private enum WorkspaceTestError: Error { case git(String) }
 }
 
 // MARK: - WorkspaceCollection Tests
@@ -123,7 +218,7 @@ struct WorkspaceCollectionTests {
         #expect(collection.workspaces.isEmpty)
         #expect(collection.activeWorkspaceID == nil)
         #expect(collection.activeWorkspace == nil)
-        #expect(collection.activeSpaceCollection == nil)
+        #expect(collection.activeSessionCollection == nil)
     }
 
     @Test func emptyCollectionCreateWorkspaceActivates() {
@@ -345,80 +440,87 @@ struct WorkspaceCollectionTests {
         #expect(collection.activeWorkspace?.id == ws.id)
     }
 
-    @Test func activeSpaceCollectionReturnsCorrectCollection() {
+    @Test func activeSessionCollectionReturnsCorrectCollection() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
-        #expect(collection.activeSpaceCollection === ws.spaceCollection)
+        #expect(collection.activeSessionCollection === ws.sessionCollection)
     }
 
     // MARK: - Cascading Close
 
-    @Test func explicitCloseCascadesFromSpaceToOnEmpty() async {
-        // v4: closing the last pane no longer cascades to Space close.
-        // Explicit `requestSpaceClose` fires onSpaceClose → removeSpace,
-        // which in turn cascades upward to the workspace collection
-        // when the last workspace's last space goes away.
+    @Test func explicitCloseCascadesFromSessionToOnEmpty() async {
+        // Closing the last pane no longer cascades to session close. An explicit
+        // `requestSessionClose` fires onSessionClose → removeSession, which in
+        // turn cascades upward to the workspace collection when the last
+        // workspace's last session goes away.
         let collection = WorkspaceCollection()
         var emptyCalled = false
         collection.onEmpty = { emptyCalled = true }
         let ws = collection.workspaces[0]
-        let space = ws.spaceCollection.spaces[0]
+        let session = ws.sessionCollection.sessions[0]
 
-        await space.requestSpaceClose()
+        await session.requestSessionClose()
 
-        #expect(ws.spaceCollection.spaces.isEmpty)
+        #expect(ws.sessionCollection.sessions.isEmpty)
         #expect(collection.workspaces.isEmpty)
         #expect(emptyCalled)
     }
 
-    @Test func cascadeStopsWhenTabsRemain() {
-        // v4: fresh Space has 0 Terminal tabs; seed 2 Terminal tabs so
-        // closing one leaves a Terminal tab behind.
+    @Test func terminalPaneCloseDoesNotCascade() throws {
+        // Closing the last terminal pane drops the panel; the session and the
+        // owning workspace both stay alive.
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
-        let space = ws.spaceCollection.spaces[0]
-        space.createTab()  // 1 Terminal tab
-        space.createTab()  // 2 Terminal tabs
-        let tab1 = space.tabs[0]
-        let paneID = tab1.paneViewModel.splitTree.focusedPaneID
+        let session = ws.sessionCollection.sessions[0]
+        session.showTerminal()
 
-        tab1.paneViewModel.closePane(paneID: paneID)
+        let panel = try #require(session.terminalPanel)
+        panel.closePane(paneID: panel.splitTree.focusedPaneID)
 
-        // Closing tab1's only pane removes that tab; 1 Terminal tab remains
-        // and the Space stays alive regardless of Claude section content.
-        #expect(space.tabs.count == 1)
+        #expect(session.terminalPanel == nil)
+        #expect(ws.sessionCollection.sessions.count == 1)
         #expect(collection.workspaces.count == 1)
     }
 
-    @Test func cascadeStopsWhenSpacesRemain() {
+    @Test func claudePaneCloseClosesSessionAndCascades() throws {
+        // Closing the Claude pane now closes the whole session (the Claude
+        // process already exited). As the workspace's last session, this cascades
+        // up and removes the workspace too.
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
-        ws.spaceCollection.createSpace()
-        let space1 = ws.spaceCollection.spaces[0]
-        space1.createTab()  // v4: seed a Terminal tab so the test has one to close
-        let tab = space1.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = ws.sessionCollection.sessions[0]
 
-        tab.paneViewModel.closePane(paneID: paneID)
+        let claude = try #require(session.claudePane)
+        claude.closePane(paneID: claude.splitTree.focusedPaneID)
 
-        // v4: Space stays alive when Terminal auto-hides.
-        #expect(ws.spaceCollection.spaces.count == 2)
+        #expect(ws.sessionCollection.sessions.isEmpty)
+        #expect(collection.workspaces.isEmpty)
+    }
+
+    @Test func cascadeStopsWhenSessionsRemain() async {
+        // Explicitly closing one session when another remains leaves the
+        // workspace (and collection) alive.
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        ws.sessionCollection.createSession()  // 2 sessions
+        let session0 = ws.sessionCollection.sessions[0]
+
+        await session0.requestSessionClose()
+
+        #expect(ws.sessionCollection.sessions.count == 1)
         #expect(collection.workspaces.count == 1)
     }
 
-    @Test func cascadeStopsWhenWorkspacesRemain() {
+    @Test func cascadeStopsWhenWorkspacesRemain() async {
+        // Closing workspace 1's last session removes that workspace, but the
+        // collection is not emptied because a second workspace remains.
         let collection = WorkspaceCollection()
         let ws1 = collection.workspaces[0]
         collection.createWorkspace(name: "second")
-        let space = ws1.spaceCollection.spaces[0]
-        space.createTab()  // v4: seed a Terminal tab so the test has one to close
-        let tab = space.tabs[0]
-        let paneID = tab.paneViewModel.splitTree.focusedPaneID
+        let session = ws1.sessionCollection.sessions[0]
 
-        tab.paneViewModel.closePane(paneID: paneID)
+        await session.requestSessionClose()
 
-        // v4: closing the pane auto-hides Terminal; neither the Space nor
-        // the owning Workspace are removed.
-        #expect(collection.workspaces.count == 2)
+        #expect(collection.workspaces.count == 1)
     }
 }

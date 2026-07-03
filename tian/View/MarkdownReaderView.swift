@@ -1,27 +1,27 @@
 import SwiftUI
 import MarkdownUI
 
-/// Read-only markdown viewer rendered inside a tab (in place of a terminal
-/// surface). Opened from the Inspect Panel's Files tab by double-clicking a
-/// `.md` / `.markdown` file. Loads the file's contents and renders them with
-/// MarkdownUI; shows an inline error if the file can't be read.
+/// Read-only markdown viewer rendered inside the session's reader overlay (in
+/// place of the Claude region). Opened from the Inspect Panel's Files tab by
+/// double-clicking a `.md` / `.markdown` file. Loads the file's contents and
+/// renders them with MarkdownUI; shows an inline error if the file can't be read.
 ///
 /// Live-reloads: while open it polls the file's modification date and reloads
 /// when it changes on disk (handles editor saves, including atomic replaces).
 ///
-/// A markdown tab has no terminal surface, so it can't intercept Cmd+W the way
-/// `TerminalSurfaceView` does. A focus-gated hidden button supplies that
-/// shortcut so Cmd+W closes the tab instead of falling through to "close
+/// A markdown reader has no terminal surface, so it can't intercept Cmd+W the
+/// way `TerminalSurfaceView` does. A focus-gated hidden button supplies that
+/// shortcut so Cmd+W closes the overlay instead of falling through to "close
 /// window" (which would quit the app).
 struct MarkdownReaderView: View {
-    /// Tab-lived store holding the pre-parsed content. Persists across tab
-    /// switches, so re-activating this view renders already-parsed content
+    /// Store holding the pre-parsed content. Persists while the overlay is up,
+    /// so a background-color refresh or re-layout renders already-parsed content
     /// instead of re-reading and re-parsing the file.
     let document: MarkdownDocument
-    /// True only when this tab's section owns focus in the active space — gates
-    /// the Cmd+W shortcut so background readers don't steal it.
+    /// True only when the Claude region owns focus — gates the Cmd+W shortcut so
+    /// a background reader doesn't steal it.
     var isFocused: Bool = false
-    /// Closes this reader tab (wired to `SectionModel.removeTab`).
+    /// Closes the reader overlay (wired to `SessionReaderState.close`).
     var onClose: () -> Void = {}
 
     var body: some View {

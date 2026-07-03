@@ -76,6 +76,10 @@ struct TerminalContentView: NSViewRepresentable {
         }
 
         func terminalSurfaceViewRequestSplit(_ view: TerminalSurfaceView, direction: SplitDirection) {
+            // Only splittable panes split (Claude panes never do).
+            // performKeyEquivalent already consumed the chord (so it won't leak
+            // to the shell); the model guard is the backstop, the beep is the UX.
+            guard viewModel.allowsSplits else { NSSound.beep(); return }
             viewModel.splitPane(direction: direction)
         }
 

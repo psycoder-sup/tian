@@ -6,81 +6,54 @@ import Foundation
 struct DefaultWorkingDirectoryTests {
     // MARK: - Workspace Default Propagation
 
-    @Test func workspaceDefaultPropagatedToSpaceCollection() {
+    @Test func workspaceDefaultPropagatedToSessionCollection() {
         let dir = URL(filePath: "/tmp/project")
         let ws = Workspace(name: "test", defaultWorkingDirectory: dir)
-        #expect(ws.spaceCollection.workspaceDefaultDirectory == dir)
+        #expect(ws.sessionCollection.workspaceDefaultDirectory == dir)
     }
 
-    @Test func workspaceDefaultPropagatedToInitialSpace() {
+    @Test func workspaceDefaultPropagatedToInitialSession() {
         let dir = URL(filePath: "/tmp/project")
         let ws = Workspace(name: "test", defaultWorkingDirectory: dir)
-        #expect(ws.spaces[0].workspaceDefaultDirectory == dir)
+        #expect(ws.sessions[0].workspaceDefaultDirectory == dir)
     }
 
-    @Test func setDefaultWorkingDirectoryPropagatesToAllSpaces() {
+    @Test func setDefaultWorkingDirectoryPropagatesToAllSessions() {
         let ws = Workspace(name: "test")
-        ws.spaceCollection.createSpace()
-        ws.spaceCollection.createSpace()
-        #expect(ws.spaces.count == 3)
+        ws.sessionCollection.createSession()
+        ws.sessionCollection.createSession()
+        #expect(ws.sessions.count == 3)
 
         let dir = URL(filePath: "/tmp/new-project")
         ws.setDefaultWorkingDirectory(dir)
 
         #expect(ws.defaultWorkingDirectory == dir)
-        #expect(ws.spaceCollection.workspaceDefaultDirectory == dir)
-        for space in ws.spaces {
-            #expect(space.workspaceDefaultDirectory == dir)
+        #expect(ws.sessionCollection.workspaceDefaultDirectory == dir)
+        for session in ws.sessions {
+            #expect(session.workspaceDefaultDirectory == dir)
         }
     }
 
-    @Test func clearDefaultWorkingDirectoryPropagatesToAllSpaces() {
+    @Test func clearDefaultWorkingDirectoryPropagatesToAllSessions() {
         let dir = URL(filePath: "/tmp/project")
         let ws = Workspace(name: "test", defaultWorkingDirectory: dir)
-        ws.spaceCollection.createSpace()
+        ws.sessionCollection.createSession()
 
         ws.setDefaultWorkingDirectory(nil)
 
         #expect(ws.defaultWorkingDirectory == nil)
-        #expect(ws.spaceCollection.workspaceDefaultDirectory == nil)
-        for space in ws.spaces {
-            #expect(space.workspaceDefaultDirectory == nil)
+        #expect(ws.sessionCollection.workspaceDefaultDirectory == nil)
+        for session in ws.sessions {
+            #expect(session.workspaceDefaultDirectory == nil)
         }
     }
 
-    @Test func newSpaceInheritsWorkspaceDefault() {
+    @Test func newSessionInheritsWorkspaceDefault() {
         let dir = URL(filePath: "/tmp/project")
         let ws = Workspace(name: "test", defaultWorkingDirectory: dir)
-        ws.spaceCollection.createSpace()
-        let newSpace = ws.spaces.last!
-        #expect(newSpace.workspaceDefaultDirectory == dir)
-    }
-
-    // MARK: - SpaceCollection resolveWorkingDirectory
-
-    @Test func resolveWorkingDirectoryUsesWorkspaceDefault() {
-        let collection = SpaceCollection()
-        collection.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-        // No active surface, so sourcePaneDirectory will be nil
-        // Should fall through to workspace default
-        let wd = collection.resolveWorkingDirectory()
-        #expect(wd == "/tmp/workspace")
-    }
-
-    @Test func resolveWorkingDirectoryUsesSpaceDefault() {
-        let collection = SpaceCollection()
-        collection.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-        collection.activeSpace?.defaultWorkingDirectory = URL(filePath: "/tmp/space")
-        let wd = collection.resolveWorkingDirectory()
-        #expect(wd == "/tmp/space")
-    }
-
-    @Test func resolveWorkingDirectorySpaceOverridesWorkspace() {
-        let collection = SpaceCollection()
-        collection.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-        collection.activeSpace?.defaultWorkingDirectory = URL(filePath: "/tmp/space")
-        let wd = collection.resolveWorkingDirectory()
-        #expect(wd == "/tmp/space")
+        ws.sessionCollection.createSession()
+        let newSession = ws.sessions.last!
+        #expect(newSession.workspaceDefaultDirectory == dir)
     }
 
     // MARK: - PaneViewModel directoryFallback
@@ -89,75 +62,64 @@ struct DefaultWorkingDirectoryTests {
         let pvm = PaneViewModel()
         pvm.directoryFallback = { "/tmp/fallback" }
         // PaneViewModel doesn't expose resolveWorkingDirectory directly,
-        // but we can verify the property is set
+        // but we can verify the property is set.
         #expect(pvm.directoryFallback != nil)
         #expect(pvm.directoryFallback?() == "/tmp/fallback")
     }
 
-    // MARK: - SpaceModel Directory Fallback Wiring
+    // MARK: - Session Directory Fallback Wiring
 
-    @Test func spaceModelWiresDirectoryFallbackToInitialTab() {
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
-        space.defaultWorkingDirectory = URL(filePath: "/tmp/space")
-        space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-        // The fallback closure should resolve to space default
-        let fallback = tab.paneViewModel.directoryFallback?()
-        #expect(fallback == "/tmp/space")
+    @Test func sessionWiresDirectoryFallbackToClaudePane() throws {
+        let session = Session(customName: "test", workingDirectory: "~")
+        session.defaultWorkingDirectory = URL(filePath: "/tmp/session")
+        session.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
+        // The fallback closure should resolve to the session default.
+        let claude = try #require(session.claudePane)
+        #expect(claude.directoryFallback?() == "/tmp/session")
     }
 
-    @Test func spaceModelWiresDirectoryFallbackToNewTabs() {
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
-        space.defaultWorkingDirectory = URL(filePath: "/tmp/space")
-        space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-
-        space.createTab()
-        let newTab = space.tabs.last!
-        let fallback = newTab.paneViewModel.directoryFallback?()
-        #expect(fallback == "/tmp/space")
+    @Test func sessionWiresDirectoryFallbackToTerminalPanel() throws {
+        let session = Session(customName: "test", workingDirectory: "~")
+        session.defaultWorkingDirectory = URL(filePath: "/tmp/session")
+        session.showTerminal()
+        let panel = try #require(session.terminalPanel)
+        #expect(panel.directoryFallback?() == "/tmp/session")
     }
 
-    @Test func spaceModelFallbackReturnsNilWhenNoDefaultsSet() {
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
-        // No defaults set
-        let fallback = tab.paneViewModel.directoryFallback?()
-        #expect(fallback == nil)
+    @Test func sessionFallbackReturnsNilWhenNoDefaultsSet() throws {
+        let session = Session(customName: "test", workingDirectory: "~")
+        // No defaults set.
+        let claude = try #require(session.claudePane)
+        #expect(claude.directoryFallback?() == nil)
     }
 
-    @Test func spaceModelFallbackUsesWorkspaceDefaultWhenNoSpaceDefault() {
-        let tab = TabModel()
-        let space = SpaceModel(name: "test", initialTab: tab)
-        space.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
-        let fallback = tab.paneViewModel.directoryFallback?()
-        #expect(fallback == "/tmp/workspace")
+    @Test func sessionFallbackUsesWorkspaceDefaultWhenNoSessionDefault() throws {
+        let session = Session(customName: "test", workingDirectory: "~")
+        session.workspaceDefaultDirectory = URL(filePath: "/tmp/workspace")
+        let claude = try #require(session.claudePane)
+        #expect(claude.directoryFallback?() == "/tmp/workspace")
     }
 
     // MARK: - End-to-End Hierarchy
 
-    @Test func endToEndWorkspaceToSpaceToTab() {
+    @Test func endToEndWorkspaceToSessionToPane() throws {
         let dir = URL(filePath: "/tmp/project")
         let ws = Workspace(name: "test", defaultWorkingDirectory: dir)
 
-        // The initial tab should have a fallback that resolves to workspace default
-        let space = ws.spaces[0]
-        // v4: fresh Space has 0 Terminal tabs; the seeded Claude tab
-        // carries the directory fallback.
-        let tab = space.claudeSection.tabs[0]
-        let fallback = tab.paneViewModel.directoryFallback?()
-        #expect(fallback == "/tmp/project")
+        // The seeded session's Claude pane carries a fallback that resolves to
+        // the workspace default (inherited as the session default at create time).
+        let session = ws.sessions[0]
+        let claude = try #require(session.claudePane)
+        #expect(claude.directoryFallback?() == "/tmp/project")
     }
 
-    @Test func endToEndSpaceDefaultOverridesWorkspace() {
+    @Test func endToEndSessionDefaultOverridesWorkspace() throws {
         let wsDir = URL(filePath: "/tmp/workspace")
         let ws = Workspace(name: "test", defaultWorkingDirectory: wsDir)
-        let space = ws.spaces[0]
-        space.defaultWorkingDirectory = URL(filePath: "/tmp/space-override")
+        let session = ws.sessions[0]
+        session.defaultWorkingDirectory = URL(filePath: "/tmp/session-override")
 
-        // v4: fresh Space has 0 Terminal tabs; use the seeded Claude tab.
-        let tab = space.claudeSection.tabs[0]
-        let fallback = tab.paneViewModel.directoryFallback?()
-        #expect(fallback == "/tmp/space-override")
+        let claude = try #require(session.claudePane)
+        #expect(claude.directoryFallback?() == "/tmp/session-override")
     }
 }

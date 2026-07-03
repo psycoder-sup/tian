@@ -2,10 +2,10 @@ import AppKit
 import Foundation
 import os
 
-/// Central coordinator for worktree Space creation and cleanup.
+/// Central coordinator for worktree Session creation and cleanup.
 ///
 /// Drives the end-to-end flow: git worktree creation, config parsing,
-/// Space/pane setup, shell readiness, setup commands, and layout application.
+/// Session/pane setup, shell readiness, setup commands, and layout application.
 @MainActor @Observable
 final class WorktreeOrchestrator {
 
@@ -14,20 +14,19 @@ final class WorktreeOrchestrator {
     private let workspaceProvider: any WorkspaceProviding
 
     /// Populated while `[[setup]]` commands run for a freshly-created
-    /// worktree Space. `nil` means no setup is in flight. Drives the
-    /// sidebar Space-row progress UI and the bottom-right capsule.
+    /// worktree Session. `nil` means no setup is in flight. Drives the
+    /// sidebar session-row progress UI and the bottom-right capsule.
     var setupProgress: SetupProgress?
 
     /// Set to true when the user cancels the in-flight setup or archive
     /// command loop. Reset at the top of each create/remove flow.
     var commandsCancelled: Bool = false
 
-    /// True while a `removeWorktreeSpace` invocation is between its first
+    /// True while a `removeWorktreeSession` invocation is between its first
     /// line and its final cleanup. Concurrent removal of a *different*
-    /// Space is rejected with `WorktreeError.closeInFlight`. Concurrent
-    /// removal of the *same* Space is filtered out at the UI layer by
-    /// `SidebarSpaceRowMutationGate` (which hides "Close Space" while
-    /// `setupProgress != nil`).
+    /// Session is rejected with `WorktreeError.closeInFlight`. Concurrent
+    /// removal of the *same* Session is filtered out at the UI layer: the
+    /// session row hides its "Close" affordance while `setupProgress != nil`.
     private(set) var isCloseInFlight: Bool = false
 
     /// Last error surfaced by the orchestrator, for UI binding.
@@ -49,11 +48,11 @@ final class WorktreeOrchestrator {
 
     // MARK: - Creation Flow
 
-    /// Creates a worktree-backed Space with full setup.
+    /// Creates a worktree-backed Session with full setup.
     ///
     /// Implements the 15-step creation flow from the spec (Section 4.1):
     /// resolve repo → parse config → duplicate detection → pre-flight checks →
-    /// create worktree → gitignore → copy files → create Space → shell readiness →
+    /// create worktree → gitignore → copy files → create Session → shell readiness →
     /// setup commands → layout application.
     ///
     /// - Parameters:
@@ -61,14 +60,14 @@ final class WorktreeOrchestrator {
     ///   - existingBranch: If true, checks out an existing branch instead of creating a new one.
     ///   - base: Base git ref (branch/tag/commit) to create the new branch from. If nil,
     ///     the branch is created from current HEAD. Invalid when combined with `existingBranch`.
-    ///   - repoPath: Absolute path to a directory inside the repo. If nil, derived from the active Space.
+    ///   - repoPath: Absolute path to a directory inside the repo. If nil, derived from the active Session.
     ///   - workspaceID: Target workspace ID. If nil, uses the key window's active workspace.
-    ///   - creatorSpaceID: The Space that requested this worktree (the calling pane's
-    ///     Space). Recorded as the new Space's `parentSpaceID` so the sidebar nests it
+    ///   - creatorSessionID: The Session that requested this worktree (the calling pane's
+    ///     Session). Recorded as the new Session's `parentSessionID` so the sidebar nests it
     ///     under its orchestrator. Ignored when the creator lives in a different
     ///     workspace (sidebar is per-window). Capped at two levels in `continueCreation`.
-    /// - Returns: Result containing the Space ID and whether an existing Space was focused.
-    func createWorktreeSpace(
+    /// - Returns: Result containing the Session ID and whether an existing Session was focused.
+    func createWorktreeSession(
         branchName: String,
         existingBranch: Bool = false,
         remoteRef: String? = nil,
@@ -76,7 +75,7 @@ final class WorktreeOrchestrator {
         repoPath: String? = nil,
         workspaceID: UUID? = nil,
         background: Bool = false,
-        creatorSpaceID: UUID? = nil
+        creatorSessionID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
         commandsCancelled = false
 
@@ -94,7 +93,7 @@ final class WorktreeOrchestrator {
         if let repoPath {
             directory = repoPath
         } else if let ws = targetWorkspace {
-            directory = ws.spaceCollection.resolveWorkingDirectory()
+            directory = ws.sessionCollection.resolveWorkingDirectory()
         } else {
             throw WorktreeError.notAGitRepo(directory: "~")
         }
@@ -112,19 +111,17 @@ final class WorktreeOrchestrator {
             .appendingPathComponent(branchName)
             .standardizedFileURL
 
-        if let existingSpace = findExistingSpace(worktreePath: expectedPath) {
+        if let existingSession = findSession(byWorktreePath: expectedPath) {
             let disposition = background ? "leaving it in the background" : "focusing it"
-            Log.worktree.info("Worktree Space already exists for \(expectedPath.path); \(disposition) (Space \(existingSpace.id))")
+            Log.worktree.info("Worktree Session already exists for \(expectedPath.path); \(disposition) (Session \(existingSession.id))")
             if !background {
-                activateSpace(existingSpace)
+                activateSession(existingSession)
             }
             return WorktreeCreateResult(
-                spaceID: existingSpace.id,
+                sessionID: existingSession.id,
                 existed: true,
-                tabID: existingSpace.activeTab?.id,
-                paneID: existingSpace.activeTab?.paneViewModel.splitTree.focusedPaneID,
-                claudeTabID: existingSpace.claudeSection.activeTab?.id,
-                claudePaneID: existingSpace.claudeSection.activeTab?.paneViewModel.splitTree.focusedPaneID
+                claudePaneID: existingSession.claudePaneID,
+                terminalPaneID: existingSession.terminalPanel?.splitTree.focusedPaneID
             )
         }
 
@@ -173,7 +170,7 @@ final class WorktreeOrchestrator {
                 config: config,
                 targetWorkspace: targetWorkspace,
                 background: background,
-                creatorSpaceID: creatorSpaceID
+                creatorSessionID: creatorSessionID
             )
         } catch {
             try? await WorktreeService.removeWorktree(
@@ -185,36 +182,36 @@ final class WorktreeOrchestrator {
 
     // MARK: - Claude Worktree Engine
 
-    /// Creates a Space whose first Claude pane runs `claude --worktree`, then
-    /// detects the worktree Claude created and binds the Space to it.
+    /// Creates a Session whose Claude pane runs `claude --worktree`, then
+    /// detects the worktree Claude created and binds the Session to it.
     ///
-    /// Unlike `createWorktreeSpace` (tian's own `git worktree add` engine), tian
+    /// Unlike `createWorktreeSession` (tian's own `git worktree add` engine), tian
     /// neither picks the name nor runs git here: it launches plain
     /// `claude --worktree` (cwd = repo root) and polls `git worktree list` until
     /// a new `<repo>/.claude/worktrees/<name>` entry appears, then renames the
-    /// Space and binds `defaultWorkingDirectory`/`worktreePath` from the detected
+    /// Session and binds `defaultWorkingDirectory`/`worktreePath` from the detected
     /// path. Because `claude --worktree` registers that dir as a git worktree,
     /// git auto-ignores it — so this path skips the gitignore/copy/setup/layout
-    /// work `createWorktreeSpace` does (it is intentionally lighter).
+    /// work `createWorktreeSession` does (it is intentionally lighter).
     ///
     /// - Parameters:
     ///   - repoPath: Absolute path to a directory inside the repo.
     ///   - workspaceID: Target workspace ID. If nil, uses the key window's active workspace.
-    ///   - creatorSpaceID: The Space that requested this worktree, recorded as the
-    ///     new Space's `parentSpaceID` (two-level cap; same rule as `createWorktreeSpace`).
-    /// - Returns: Result with the created Space/pane IDs.
+    ///   - creatorSessionID: The Session that requested this worktree, recorded as the
+    ///     new Session's `parentSessionID` (two-level cap; same rule as `createWorktreeSession`).
+    /// - Returns: Result with the created Session/pane IDs.
     @discardableResult
-    func createClaudeWorktreeSpace(
+    func createClaudeWorktreeSession(
         repoPath: String,
         workspaceID: UUID? = nil,
-        creatorSpaceID: UUID? = nil
+        creatorSessionID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
         // Step 1: Resolve workspace + git repo root.
         guard let targetWorkspace = resolveWorkspace(workspaceID: workspaceID)
             ?? resolveWorkspace(workspaceID: nil) else {
             throw WorktreeError.gitError(
                 command: "claude --worktree",
-                stderr: "No workspace available to create Space in"
+                stderr: "No workspace available to create Session in"
             )
         }
         let repoRoot = try await WorktreeService.resolveRepoRoot(from: repoPath)
@@ -224,70 +221,67 @@ final class WorktreeOrchestrator {
         // diffing against this set.
         let before = Set(try await WorktreeService.listWorktrees(repoRoot: repoRoot).map(\.path))
 
-        // Step 3: Create the Space and override its seeded Claude pane to run
+        // Step 3: Create the Session and override its seeded Claude pane to run
         // `claude --worktree` (cwd = repo root). Applied synchronously — no
-        // `await` between createSpace and applyCustomLaunchCommand — so the
+        // `await` between createSession and applyCustomLaunchCommand — so the
         // override lands before SwiftUI attaches the surface (the autostart env
-        // is read once at spawn), the same timing guarantee
-        // `createTab(customCommand:)` relies on.
+        // is read once at spawn), the same timing guarantee `createSession`'s
+        // Claude-pane seeding relies on.
         let claudeWorktreeCommand = "claude --worktree"
-        let space = targetWorkspace.spaceCollection.createSpace(
+        let session = targetWorkspace.sessionCollection.createSession(
             name: "Creating worktree…",
             workingDirectory: repoRoot,
             focusOnCreate: true
         )
-        guard let claudeTab = space.claudeSection.activeTab else {
+        guard let claudePane = session.claudePane else {
             throw WorktreeError.gitError(
                 command: "claude --worktree",
-                stderr: "New Space has no Claude tab to launch claude --worktree in"
+                stderr: "New Session has no Claude pane to launch claude --worktree in"
             )
         }
-        let paneViewModel = claudeTab.paneViewModel
-        let paneID = paneViewModel.splitTree.focusedPaneID
-        paneViewModel.applyCustomLaunchCommand(claudeWorktreeCommand, toPaneID: paneID)
-        claudeTab.launchCommand = claudeWorktreeCommand
-        space.defaultWorkingDirectory = URL(filePath: repoRoot)   // until detection rebinds it
+        let paneID = claudePane.splitTree.focusedPaneID
+        claudePane.applyCustomLaunchCommand(claudeWorktreeCommand, toPaneID: paneID)
+        session.claudeLaunchCommand = claudeWorktreeCommand
+        session.defaultWorkingDirectory = URL(filePath: repoRoot)   // until detection rebinds it
 
         // Record the orchestrator → implementer link (two-level cap; same rule
         // as `continueCreation`). Resolve the creator within targetWorkspace only.
-        if let creatorSpaceID,
-           let creator = targetWorkspace.spaceCollection.spaces.first(where: { $0.id == creatorSpaceID }) {
-            space.parentSpaceID = creator.parentSpaceID ?? creator.id
+        if let creatorSessionID,
+           let creator = targetWorkspace.sessionCollection.sessions.first(where: { $0.id == creatorSessionID }) {
+            session.parentSessionID = creator.parentSessionID ?? creator.id
         }
-        Log.worktree.info("claude --worktree: created Space \(space.id); awaiting worktree detection")
+        Log.worktree.info("claude --worktree: created Session \(session.id); awaiting worktree detection")
 
         // Step 4: Poll `git worktree list` until Claude's new worktree appears.
         let detected = await detectClaudeWorktree(repoRoot: repoRoot, before: before)
 
-        // Step 5: Bind the Space to the detected worktree, or fall back on timeout.
+        // Step 5: Bind the Session to the detected worktree, or fall back on timeout.
         if let detected {
             let url = URL(filePath: detected)
-            space.name = url.lastPathComponent
-            space.defaultWorkingDirectory = url
-            space.worktreePath = url
+            session.customName = url.lastPathComponent
+            session.defaultWorkingDirectory = url
+            session.worktreePath = url
             // Reset the pane's launch override so a future restart/restore runs
             // plain `claude`, never spawning a *second* worktree. Safe to do only
             // now: detection succeeding implies the pane already spawned with
             // `claude --worktree` (the worktree only exists once that command ran),
             // so this can't suppress the original creation.
-            paneViewModel.applyCustomLaunchCommand(SectionSpawner.claudeAutostartCommand, toPaneID: paneID)
-            claudeTab.launchCommand = SectionSpawner.claudeAutostartCommand
-            Log.worktree.info("claude --worktree: detected \(detected); bound Space \(space.id) (name: \(url.lastPathComponent))")
+            claudePane.applyCustomLaunchCommand(PaneSpawner.claudeAutostartCommand, toPaneID: paneID)
+            session.claudeLaunchCommand = PaneSpawner.claudeAutostartCommand
+            Log.worktree.info("claude --worktree: detected \(detected); bound Session \(session.id) (name: \(url.lastPathComponent))")
         } else {
-            // Claude is still running — leave the Space in place but give it a
+            // Claude is still running — leave the Session in place but give it a
             // real name. The pane keeps its `claude --worktree` override: we
             // can't prove a worktree was created, so resetting it could be wrong.
-            space.name = "worktree"
-            Log.worktree.warning("claude --worktree: timed out waiting for a worktree under \(repoRoot)/.claude/worktrees; leaving Space \(space.id) running")
+            session.customName = "worktree"
+            Log.worktree.warning("claude --worktree: timed out waiting for a worktree under \(repoRoot)/.claude/worktrees; leaving Session \(session.id) running")
         }
 
         return WorktreeCreateResult(
-            spaceID: space.id,
+            sessionID: session.id,
             existed: false,
-            tabID: space.activeTab?.id,
-            paneID: space.activeTab?.paneViewModel.splitTree.focusedPaneID,
-            claudeTabID: claudeTab.id,
-            claudePaneID: paneID
+            claudePaneID: paneID,
+            terminalPaneID: session.terminalPanel?.splitTree.focusedPaneID
         )
     }
 
@@ -315,10 +309,10 @@ final class WorktreeOrchestrator {
 
     // MARK: - Cleanup Flow
 
-    /// Removes a worktree-backed Space and its git worktree.
+    /// Removes a worktree-backed Session and its git worktree.
     ///
     /// - Parameters:
-    ///   - spaceID: The ID of the Space to remove.
+    ///   - sessionID: The ID of the Session to remove.
     ///   - force: If true, forces removal even with uncommitted changes.
     ///   - workspaceID: Hint for which workspace to search. If nil, searches all.
     ///   - deleteBranch: If true, deletes the branch backing the worktree after
@@ -326,15 +320,15 @@ final class WorktreeOrchestrator {
     ///     unmerged branch is kept (the worktree — the primary action — already
     ///     succeeded); see `WorktreeRemovalResult`.
     @discardableResult
-    func removeWorktreeSpace(
-        spaceID: UUID,
+    func removeWorktreeSession(
+        sessionID: UUID,
         force: Bool = false,
         workspaceID: UUID? = nil,
         deleteBranch: Bool = false
     ) async throws -> WorktreeRemovalResult {
         // In-flight guard (FR-061): reject concurrent close requests for
-        // a *different* Space. Same-Space double-close is prevented at
-        // the UI layer by `SidebarSpaceRowMutationGate`.
+        // a *different* Session. Same-Session double-close is prevented at
+        // the UI layer (the session row hides "Close" while setup is in flight).
         if isCloseInFlight {
             throw WorktreeError.closeInFlight
         }
@@ -354,13 +348,13 @@ final class WorktreeOrchestrator {
             setupProgress = nil
         }
 
-        // Step 1: Find Space
-        guard let (space, spaceCollection) = findSpace(id: spaceID) else { return .none }
+        // Step 1: Find Session
+        guard let (session, sessionCollection) = findSession(id: sessionID) else { return .none }
 
         // Step 2: Check worktreePath
-        guard let worktreeURL = space.worktreePath else {
-            // Not a worktree Space — just close it
-            spaceCollection.removeSpace(id: spaceID)
+        guard let worktreeURL = session.worktreePath else {
+            // Not a worktree Session — just close it
+            sessionCollection.removeSession(id: sessionID)
             return .none
         }
         let worktreePath = worktreeURL.path
@@ -377,11 +371,11 @@ final class WorktreeOrchestrator {
         // Step 4: Parse config from the main worktree.
         let config = parseConfig(repoRoot: mainRepoRoot)
 
-        // Resolve the workspace ID for progress publishing. The Space lives
+        // Resolve the workspace ID for progress publishing. The Session lives
         // in some workspace's collection; find it so the sidebar row picks
         // up `setupProgress`.
         let resolvedWorkspaceID: UUID? = findInHierarchy { _, workspace in
-            workspace.spaceCollection.spaces.contains(where: { $0.id == spaceID })
+            workspace.sessionCollection.sessions.contains(where: { $0.id == sessionID })
                 ? workspace.id
                 : nil
         }
@@ -392,7 +386,7 @@ final class WorktreeOrchestrator {
         if !config.archiveCommands.isEmpty, let wsID = resolvedWorkspaceID {
             setupProgress = SetupProgress.starting(
                 workspaceID: wsID,
-                spaceID: spaceID,
+                sessionID: sessionID,
                 phase: .cleanup,
                 totalCommands: config.archiveCommands.count
             )
@@ -421,7 +415,7 @@ final class WorktreeOrchestrator {
         if let wsID = resolvedWorkspaceID {
             setupProgress = SetupProgress.removingPlaceholder(
                 workspaceID: wsID,
-                spaceID: spaceID
+                sessionID: sessionID
             )
         }
 
@@ -430,8 +424,8 @@ final class WorktreeOrchestrator {
         // Only when deletion is requested, to avoid an extra git call on the
         // common (UI) close path. A `nil` result means detached HEAD (or a
         // transient git error): there is no branch this worktree clearly owns,
-        // so we skip deletion rather than guess from the user-renamable Space
-        // name and risk deleting an unrelated branch (e.g. a Space renamed to
+        // so we skip deletion rather than guess from the user-renamable Session
+        // name and risk deleting an unrelated branch (e.g. a Session renamed to
         // "main").
         let branchToDelete: String? = deleteBranch
             ? (try? await WorktreeService.currentBranch(worktreePath: worktreePath))
@@ -451,8 +445,8 @@ final class WorktreeOrchestrator {
             throw error
         }
 
-        // Worktree is gone — Space must be removed regardless of pruning outcome.
-        defer { spaceCollection.removeSpace(id: spaceID) }
+        // Worktree is gone — Session must be removed regardless of pruning outcome.
+        defer { sessionCollection.removeSession(id: sessionID) }
 
         // Step 6: Prune empty parents (best-effort)
         do {
@@ -535,7 +529,7 @@ final class WorktreeOrchestrator {
         config: WorktreeConfig,
         targetWorkspace: Workspace?,
         background: Bool,
-        creatorSpaceID: UUID? = nil
+        creatorSessionID: UUID? = nil
     ) async throws -> WorktreeCreateResult {
         // Steps 7-8: Ensure .gitignore + resolve main worktree path
         try WorktreeService.ensureGitignore(
@@ -556,52 +550,48 @@ final class WorktreeOrchestrator {
             Log.worktree.info("Copied \(copiedCount) files from main worktree to \(worktreePath)")
         }
 
-        // Step 10: Create Space with single pane (FR-011)
+        // Step 10: Create Session (seeds the Claude pane, FR-011)
         guard let targetWorkspace else {
             throw WorktreeError.gitError(
                 command: "worktree create",
-                stderr: "No workspace available to create Space in"
+                stderr: "No workspace available to create Session in"
             )
         }
-        let newSpace = targetWorkspace.spaceCollection.createSpace(
+        let newSession = targetWorkspace.sessionCollection.createSession(
             workingDirectory: worktreePath,
             focusOnCreate: !background
         )
         let worktreeURL = URL(filePath: worktreePath)
-        newSpace.name = branchName
-        newSpace.defaultWorkingDirectory = worktreeURL
-        newSpace.worktreePath = worktreeURL
+        newSession.customName = branchName
+        newSession.defaultWorkingDirectory = worktreeURL
+        newSession.worktreePath = worktreeURL
 
         // Record the orchestrator → implementer link so the sidebar nests this
-        // Space under its creator. Resolve the creator *within targetWorkspace*
+        // Session under its creator. Resolve the creator *within targetWorkspace*
         // only — the sidebar is per-window, so a cross-workspace creator leaves
-        // parentSpaceID nil (top-level). Two-level cap: if the creator is itself
-        // an implementer (has a parentSpaceID), attach to its parent (the top
+        // parentSessionID nil (top-level). Two-level cap: if the creator is itself
+        // an implementer (has a parentSessionID), attach to its parent (the top
         // orchestrator) rather than the creator, so we never nest 3 deep.
-        if let creatorSpaceID,
-           let creator = targetWorkspace.spaceCollection.spaces.first(where: { $0.id == creatorSpaceID }) {
-            newSpace.parentSpaceID = creator.parentSpaceID ?? creator.id
+        if let creatorSessionID,
+           let creator = targetWorkspace.sessionCollection.sessions.first(where: { $0.id == creatorSessionID }) {
+            newSession.parentSessionID = creator.parentSessionID ?? creator.id
         }
-        Log.worktree.info("Created worktree Space '\(branchName)' (id: \(newSpace.id), parent: \(newSpace.parentSpaceID?.uuidString ?? "none"))")
+        Log.worktree.info("Created worktree Session '\(branchName)' (id: \(newSession.id), parent: \(newSession.parentSessionID?.uuidString ?? "none"))")
 
-        // Step 11: (removed) Setup no longer runs in the interactive pane, so
-        // waiting for shell readiness here is unnecessary. Layout `.pane` commands
-        // still wait for readiness inline before typing.
-        //
-        // v4 space-sections: the Terminal section starts empty on a fresh
-        // Space, so `activeTab` (which aliases the Terminal section) would
-        // be nil. `showTerminal()` is a no-op for visibility and spawns the
-        // first Terminal tab when empty; after this the activeTab force-
-        // unwraps are safe.
-        newSpace.showTerminal(background: background)
-        let initialPaneID = newSpace.activeTab!.paneViewModel.splitTree.focusedPaneID
-        let paneViewModel = newSpace.activeTab!.paneViewModel
+        // Step 11: Spawn the terminal panel. A fresh Session has no terminal
+        // panel; `showTerminal` lazily creates it and makes it visible. Pass
+        // `background: true` so it never steals area-focus from the Claude
+        // pane — the worktree's primary session must stay focused. Layout
+        // `.pane` commands still wait for shell readiness inline before typing.
+        newSession.showTerminal(background: true)
+        let terminalPVM = newSession.terminalPanel
+        let initialPaneID = terminalPVM?.splitTree.focusedPaneID
 
         // Step 12: Run setup commands as background processes (FR-012)
         if !config.setupCommands.isEmpty {
             setupProgress = SetupProgress.starting(
                 workspaceID: targetWorkspace.id,
-                spaceID: newSpace.id,
+                sessionID: newSession.id,
                 phase: .setup,
                 totalCommands: config.setupCommands.count
             )
@@ -617,12 +607,16 @@ final class WorktreeOrchestrator {
         }
         // setupProgress is now guaranteed nil; layout runs cleanly below.
 
-        // Step 13: Apply layout (FR-013, FR-032)
-        if let layout = config.layout {
+        // Step 13: Apply layout to the terminal panel (FR-013, FR-032). The
+        // Claude pane is never a layout target — it forbids splits — so every
+        // split here lands in the splittable terminal panel.
+        if let layout = config.layout,
+           let terminalPVM,
+           let initialPaneID {
             await applyLayout(
                 node: layout,
                 currentPaneID: initialPaneID,
-                paneViewModel: paneViewModel,
+                paneViewModel: terminalPVM,
                 config: config,
                 initialPaneID: initialPaneID
             )
@@ -631,12 +625,10 @@ final class WorktreeOrchestrator {
 
         // Step 15: Return result
         return WorktreeCreateResult(
-            spaceID: newSpace.id,
+            sessionID: newSession.id,
             existed: false,
-            tabID: newSpace.activeTab?.id,
-            paneID: initialPaneID,
-            claudeTabID: newSpace.claudeSection.activeTab?.id,
-            claudePaneID: newSpace.claudeSection.activeTab?.paneViewModel.splitTree.focusedPaneID
+            claudePaneID: newSession.claudePaneID,
+            terminalPaneID: initialPaneID
         )
     }
 
@@ -839,31 +831,31 @@ final class WorktreeOrchestrator {
         return nil
     }
 
-    private func findExistingSpace(worktreePath: URL) -> SpaceModel? {
+    private func findSession(byWorktreePath worktreePath: URL) -> Session? {
         let needle = worktreePath.standardizedFileURL.path
         return findInHierarchy { _, workspace in
-            workspace.spaceCollection.spaces.first {
+            workspace.sessionCollection.sessions.first {
                 $0.worktreePath?.standardizedFileURL.path == needle
             }
         }
     }
 
-    private func activateSpace(_ space: SpaceModel) {
+    private func activateSession(_ session: Session) {
         findInHierarchy { collection, workspace -> Void? in
-            guard workspace.spaceCollection.spaces.contains(where: { $0.id == space.id }) else {
+            guard workspace.sessionCollection.sessions.contains(where: { $0.id == session.id }) else {
                 return nil
             }
             collection.activateWorkspace(id: workspace.id)
-            workspace.spaceCollection.activateSpace(id: space.id)
+            workspace.sessionCollection.activateSession(id: session.id)
             return ()
         }
     }
 
-    private func findSpace(id: UUID) -> (SpaceModel, SpaceCollection)? {
+    private func findSession(id: UUID) -> (Session, SessionCollection)? {
         findInHierarchy { _, workspace in
-            workspace.spaceCollection.spaces
+            workspace.sessionCollection.sessions
                 .first(where: { $0.id == id })
-                .map { ($0, workspace.spaceCollection) }
+                .map { ($0, workspace.sessionCollection) }
         }
     }
 
@@ -1008,4 +1000,3 @@ private final class ResumeOnce: @unchecked Sendable {
         return true
     }
 }
-

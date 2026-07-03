@@ -2,7 +2,7 @@ import Foundation
 
 /// Builds the `TIAN_*` environment dictionary injected into every
 /// spawned terminal shell so the CLI binary can identify its pane,
-/// tab, space, and workspace.
+/// session, and workspace.
 enum EnvironmentBuilder {
 
     /// Returns a dictionary of environment variables for a new pane.
@@ -14,8 +14,7 @@ enum EnvironmentBuilder {
     static func buildPaneEnvironment(
         socketPath: String,
         paneID: UUID,
-        tabID: UUID,
-        spaceID: UUID,
+        sessionID: UUID,
         workspaceID: UUID,
         cliPath: String
     ) -> [String: String] {
@@ -32,8 +31,7 @@ enum EnvironmentBuilder {
         var env: [String: String] = [
             "TIAN_SOCKET": socketPath,
             "TIAN_PANE_ID": paneID.uuidString,
-            "TIAN_TAB_ID": tabID.uuidString,
-            "TIAN_SPACE_ID": spaceID.uuidString,
+            "TIAN_SESSION_ID": sessionID.uuidString,
             "TIAN_WORKSPACE_ID": workspaceID.uuidString,
             "TIAN_CLI_PATH": cliPath,
             "TIAN_RESOURCES_DIR": resourcesDir,

@@ -6,17 +6,17 @@ extension Notification.Name {
     static let toggleSidebar = Notification.Name("toggleSidebar")
     static let focusSidebar = Notification.Name("focusSidebar")
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
-    static let showCreateSpaceInput = Notification.Name("showCreateSpaceInput")
+    static let showCreateSessionInput = Notification.Name("showCreateSessionInput")
 }
 
 extension Notification {
-    static let createSpaceWorkspaceIDKey = "createSpaceWorkspaceID"
+    static let createSessionWorkspaceIDKey = "createSessionWorkspaceID"
 }
 
 struct SidebarContainerView: View {
     let workspaceCollection: WorkspaceCollection
     let worktreeOrchestrator: WorktreeOrchestrator
-    /// Bottom padding applied only to the space-content area so it leaves
+    /// Bottom padding applied only to the session-content area so it leaves
     /// room for an overlapping status bar. The sidebar panel keeps its full
     /// height and visually extends over the status bar on the left.
     var bottomContentInset: CGFloat = 0
@@ -25,21 +25,21 @@ struct SidebarContainerView: View {
     @State private var lastContainerSize: CGSize = .zero
     @State private var nsWindow: NSWindow?
     @State private var announcementsEnabled = false
-    /// In-flight git-status fetch for the inspect panel. Cancelled on space
+    /// In-flight git-status fetch for the inspect panel. Cancelled on session
     /// switch or when a newer repoStatuses change fires — ensures stale results
-    /// from a previous space never land in the current tree (FR-28a).
+    /// from a previous session never land in the current tree (FR-28a).
     @State private var inspectGitStatusTask: Task<Void, Never>?
 
-    private var displayedSpaceCollection: SpaceCollection? {
-        workspaceCollection.activeSpaceCollection
+    private var displayedSessionCollection: SessionCollection? {
+        workspaceCollection.activeSessionCollection
     }
 
     private var activeWorkspace: Workspace? {
         workspaceCollection.activeWorkspace
     }
 
-    private var activeSpace: SpaceModel? {
-        displayedSpaceCollection?.activeSpace
+    private var activeSession: Session? {
+        displayedSessionCollection?.activeSession
     }
 
     /// Leading inset that reserves room for the traffic lights + sidebar
@@ -50,17 +50,17 @@ struct SidebarContainerView: View {
         max(sidebarState.mode.width, 104)
     }
 
-    /// Inset applied to the leading edge of the leftmost section's tab bar
-    /// so the bar doesn't slide under the sidebar toggle / traffic lights.
+    /// Inset applied to the leading edge of the session content so its header
+    /// chrome doesn't slide under the sidebar toggle / traffic lights.
     /// Drops to zero when the sidebar is wide enough to swallow the toggle.
-    private var sectionTabBarLeadingInset: CGFloat {
+    private var windowLeadingInset: CGFloat {
         max(104 - sidebarState.mode.width, 0)
     }
 
-    /// Inset applied to the trailing edge of the rightmost section's tab
-    /// bar so the bar doesn't slide under the inspect-panel rail. Zero
-    /// when the panel is open (rail moves with the panel column).
-    private var sectionTabBarTrailingInset: CGFloat {
+    /// Inset applied to the trailing edge of the session content so its header
+    /// chrome doesn't slide under the inspect-panel rail. Zero when the panel is
+    /// open (rail moves with the panel column).
+    private var windowTrailingInset: CGFloat {
         guard let workspace = activeWorkspace,
               !workspace.inspectPanelState.isVisible else { return 0 }
         return 26
@@ -85,40 +85,32 @@ struct SidebarContainerView: View {
             }
         }
         .onChange(of: workspaceCollection.activeWorkspaceID) { _, _ in
-            if let spaceCollection = displayedSpaceCollection {
-                spaceCollection.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
-            }
             if announcementsEnabled, let name = workspaceCollection.activeWorkspace?.name {
                 AccessibilityNotification.Announcement("Workspace: \(name)").post()
             }
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
         }
-        .onChange(of: displayedSpaceCollection?.activeSpaceID) { _, _ in
-            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.name {
-                AccessibilityNotification.Announcement("Space: \(name)").post()
+        .onChange(of: displayedSessionCollection?.activeSessionID) { _, _ in
+            if announcementsEnabled, let name = displayedSessionCollection?.activeSession?.displayName {
+                AccessibilityNotification.Announcement("Session: \(name)").post()
             }
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
         }
         .modifier(InspectPanelWiringModifier(
-            activeSpace: activeSpace,
+            activeSession: activeSession,
             activeWorkspace: activeWorkspace,
             updateRoot: updateInspectPanelRoot,
             refreshStatus: refreshInspectPanelStatus
         ))
         .modifier(InspectPanelTabsWiringModifier(
-            activeSpace: activeSpace,
+            activeSession: activeSession,
             activeWorkspace: activeWorkspace,
             refreshDiff: refreshInspectPanelDiff,
             refreshBranch: refreshInspectPanelBranch,
             wireDiffCollapsePrune: wireDiffCollapsePrune
         ))
-        .onChange(of: displayedSpaceCollection?.activeSpace?.activeTabID) { _, _ in
-            if announcementsEnabled, let name = displayedSpaceCollection?.activeSpace?.activeTab?.displayName {
-                AccessibilityNotification.Announcement("Tab: \(name)").post()
-            }
-        }
         .task {
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
@@ -143,7 +135,7 @@ struct SidebarContainerView: View {
                 .frame(width: sidebarState.mode.width)
             }
 
-            spaceContentStack
+            sessionContentStack
                 .padding(.leading, sidebarState.mode.width)
                 .padding(.bottom, bottomContentInset)
 
@@ -164,17 +156,17 @@ struct SidebarContainerView: View {
                 panelState: panelState,
                 viewModel: workspace.inspectFileTreeViewModel,
                 tabState: workspace.inspectTabState,
-                spaceName: activeSpace?.name ?? workspace.name,
+                spaceName: activeSession?.displayName ?? workspace.name,
                 onOpenFile: { path in
                     if HtmlFileType.isHtml(path: path) {
                         NSWorkspace.shared.open(URL(fileURLWithPath: path))
                         return
                     }
-                    guard let space = activeSpace else { return }
+                    guard let session = activeSession else { return }
                     if MarkdownFileType.isMarkdown(path: path) {
-                        space.openMarkdownReader(filePath: path)
+                        session.readerState.openMarkdown(filePath: path)
                     } else if ImageFileType.isImage(path: path) {
-                        space.openImageReader(filePath: path)
+                        session.readerState.openImage(filePath: path)
                     }
                 }
             )
@@ -192,17 +184,13 @@ struct SidebarContainerView: View {
     /// Floating inspect-panel toggle. Anchored to the window's top-trailing
     /// corner (overlay on the outer HStack, not on `sidebarAndContent`) so
     /// its absolute position is identical whether the panel is open or
-    /// collapsed. Vertical inset is tuned so the icon's center lines up
-    /// with the section tab bar's button row (tab bar is 48 pt tall →
-    /// button center at y = 24, icon of 22 pt with top inset 13 → center
-    /// at y = 24).
+    /// collapsed.
     @ViewBuilder
     private var inspectToggleOverlay: some View {
         // Single, always-visible toggle anchored at the window's top-trailing
         // corner. When the panel is open it sits visually over the empty
-        // right side of the tab row; when collapsed it floats alone in the
-        // same spot — so the toggle never moves. The tab row no longer hosts
-        // its own hide button.
+        // right side of the header row; when collapsed it floats alone in the
+        // same spot — so the toggle never moves.
         if let workspace = activeWorkspace {
             InspectPanelRail(
                 action: {
@@ -221,33 +209,33 @@ struct SidebarContainerView: View {
 
     /// Inline show/hide-terminal toggle anchored to the bottom-leading
     /// corner so it sits inside the status-bar strip, just to the right of
-    /// the sidebar's visual edge. Hidden when no space is active.
+    /// the sidebar's visual edge. Hidden when no session is active.
     @ViewBuilder
     private var terminalToggleStatusBarOverlay: some View {
-        if let space = activeSpace, bottomContentInset > 0 {
-            TerminalToggleStatusBarButton(space: space)
+        if let session = activeSession, bottomContentInset > 0 {
+            TerminalToggleStatusBarButton(session: session)
                 .padding(.leading, toggleGutterWidth + 4)
                 .frame(height: bottomContentInset)
         }
     }
 
-    /// Re-roots the workspace's inspect file tree to the active space's
+    /// Re-roots the workspace's inspect file tree to the active session's
     /// resolved working directory (FR-10). Called whenever the active
-    /// workspace, active space, or either's working directory changes.
+    /// workspace, active session, or either's working directory changes.
     private func updateInspectPanelRoot() {
         guard let workspace = activeWorkspace else { return }
-        let newRoot = workspace.inspectPanelRoot(for: activeSpace)
+        let newRoot = workspace.inspectPanelRoot(for: activeSession)
         if workspace.inspectFileTreeViewModel.rootDirectory != newRoot {
             workspace.inspectFileTreeViewModel.setRoot(newRoot)
         }
     }
 
-    /// Fetches the full (uncapped) git diff for the active space's root and
+    /// Fetches the full (uncapped) git diff for the active session's root and
     /// pushes the result into the inspect panel view model so file badges
     /// reflect the current git status (FR-19, FR-27).
     ///
     /// FR-22: Directories with no git repo skip the fetch; `updateStatus([])` is
-    /// called to ensure stale badges from a previous space are cleared.
+    /// called to ensure stale badges from a previous session are cleared.
     ///
     /// Cancels any in-flight fetch before launching a new one so stale results
     /// from a slow git invocation never overwrite fresher data (FR-28a).
@@ -255,17 +243,17 @@ struct SidebarContainerView: View {
         guard let workspace = activeWorkspace else { return }
         let viewModel = workspace.inspectFileTreeViewModel
 
-        // Resolved root for the current space — must match what the file tree shows.
-        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+        // Resolved root for the current session — must match what the file tree shows.
+        guard let root = workspace.inspectPanelRoot(for: activeSession) else {
             // No root at all: clear any lingering badges and bail.
             viewModel.updateStatus([])
             return
         }
 
-        // FR-22: if the active space has no pinned git repos, the root is not
+        // FR-22: if the active session has no pinned git repos, the root is not
         // inside a git repo. Skip the fetch and clear any stale badges so the
         // tree renders without badges, matching the "local" context-suffix state.
-        let hasRepo = !(activeSpace?.gitContext.repoStatuses.isEmpty ?? true)
+        let hasRepo = !(activeSession?.gitContext.repoStatuses.isEmpty ?? true)
         guard hasRepo else {
             viewModel.updateStatus([])
             return
@@ -284,22 +272,22 @@ struct SidebarContainerView: View {
     }
 
     /// Schedules a refresh of `InspectDiffViewModel` against the active
-    /// space's working directory. Called on space switch, workspace switch,
+    /// session's working directory. Called on session switch, workspace switch,
     /// and on every `repoStatuses` change (FR-T18 — the view-model handles
     /// debounce + cancel-on-new). Clears state when the directory has no
-    /// resolvable git repo so stale diffs don't survive a space switch.
+    /// resolvable git repo so stale diffs don't survive a session switch.
     private func refreshInspectPanelDiff() {
         guard let workspace = activeWorkspace else { return }
         let diffVM = workspace.inspectTabState.diffViewModel
 
-        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+        guard let root = workspace.inspectPanelRoot(for: activeSession) else {
             diffVM.scheduleRefresh(directory: nil)
             return
         }
         // FR-T19: outside a git repo, the Diff body shows the no-repo
         // placeholder. Clear the view-model so we don't show stale data
-        // when the user moves between repo and non-repo spaces.
-        let hasRepo = !(activeSpace?.gitContext.repoStatuses.isEmpty ?? true)
+        // when the user moves between repo and non-repo sessions.
+        let hasRepo = !(activeSession?.gitContext.repoStatuses.isEmpty ?? true)
         guard hasRepo else {
             diffVM.scheduleRefresh(directory: nil)
             return
@@ -308,28 +296,28 @@ struct SidebarContainerView: View {
     }
 
     /// Schedules a refresh of `InspectBranchViewModel` against the active
-    /// space's working directory + first pinned repo (FR-T28). Called on
-    /// space/workspace switches and whenever `branchGraphDirty` changes for
-    /// the active space. The Branch view-model clears the dirty flag on
+    /// session's working directory + first pinned repo (FR-T28). Called on
+    /// session/workspace switches and whenever `branchGraphDirty` changes for
+    /// the active session. The Branch view-model clears the dirty flag on
     /// successful completion.
     private func refreshInspectPanelBranch() {
         guard let workspace = activeWorkspace else { return }
         let branchVM = workspace.inspectTabState.branchViewModel
 
-        guard let root = workspace.inspectPanelRoot(for: activeSpace) else {
+        guard let root = workspace.inspectPanelRoot(for: activeSession) else {
             branchVM.scheduleRefresh(directory: nil, repoID: nil, in: nil)
             return
         }
         // FR-T19: outside a git repo, render no-repo placeholder.
-        guard let space = activeSpace,
-              let repoID = space.gitContext.pinnedRepoOrder.first else {
+        guard let session = activeSession,
+              let repoID = session.gitContext.pinnedRepoOrder.first else {
             branchVM.scheduleRefresh(directory: nil, repoID: nil, in: nil)
             return
         }
         branchVM.scheduleRefresh(
             directory: root.path,
             repoID: repoID,
-            in: space.gitContext
+            in: session.gitContext
         )
     }
 
@@ -348,20 +336,19 @@ struct SidebarContainerView: View {
         }
     }
 
-    // MARK: - Space Content
+    // MARK: - Session Content
 
     @ViewBuilder
-    private var spaceContentStack: some View {
-        if let spaceCollection = displayedSpaceCollection {
+    private var sessionContentStack: some View {
+        if let sessionCollection = displayedSessionCollection {
             ZStack {
-                ForEach(spaceCollection.spaces) { space in
-                    let isActive = space.id == spaceCollection.activeSpaceID
-                    SpaceContentView(
-                        spaceModel: space,
-                        resolveWorkingDirectory: { spaceCollection.resolveWorkingDirectory() },
+                ForEach(sessionCollection.sessions) { session in
+                    let isActive = session.id == sessionCollection.activeSessionID
+                    SessionContentView(
+                        session: session,
                         isActive: isActive,
-                        windowLeadingInset: sectionTabBarLeadingInset,
-                        windowTrailingInset: sectionTabBarTrailingInset
+                        windowLeadingInset: windowLeadingInset,
+                        windowTrailingInset: windowTrailingInset
                     )
                     .opacity(isActive ? 1 : 0)
                     .allowsHitTesting(isActive)
@@ -384,11 +371,8 @@ struct SidebarContainerView: View {
                     handleContainerSizeChange(lastContainerSize)
                 }
             }
-            .onChange(of: spaceCollection.activeSpace?.activeTabID) { _, _ in
-                handleTabOrSpaceChanged()
-            }
-            .onChange(of: spaceCollection.activeSpaceID) { _, _ in
-                handleTabOrSpaceChanged()
+            .onChange(of: sessionCollection.activeSessionID) { _, _ in
+                handleSessionChanged()
             }
         } else if workspaceCollection.workspaces.isEmpty {
             WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
@@ -397,22 +381,25 @@ struct SidebarContainerView: View {
 
     // MARK: - Focus
 
-    private func handleTabOrSpaceChanged() {
-        displayedSpaceCollection?.activeSpace?.activeTab?.paneViewModel.containerSize = lastContainerSize
+    private func handleSessionChanged() {
         // TerminalContentView.updateNSView already claims first responder when
-        // isTabVisible flips true, but that requires a SwiftUI rerender. Call
-        // explicitly here to cover fast tab/space switches where the rerender
+        // the region becomes visible, but that requires a SwiftUI rerender. Call
+        // explicitly here to cover fast session switches where the rerender
         // order isn't guaranteed.
         returnFocusToActivePane()
     }
 
-    /// Make the active space's focused-section active pane the window's
-    /// first responder. Falls back to Claude when Terminal is hidden or
-    /// empty (see `SpaceModel.effectiveFocusedSection`).
+    /// Make the active session's focused-area active pane the window's first
+    /// responder. Falls back to Claude when Terminal is hidden or empty (see
+    /// `Session.effectiveFocusedPane`). Silently no-ops when the effective pane
+    /// is the empty-Claude placeholder.
     private func returnFocusToActivePane() {
-        guard let space = displayedSpaceCollection?.activeSpace,
-              let tab = space.effectiveFocusedSection.activeTab,
-              let surfaceView = tab.paneViewModel.focusedSurfaceView else { return }
+        guard let session = displayedSessionCollection?.activeSession else { return }
+        // Reader overlay open → don't hand focus to the hidden live Claude
+        // surface behind it; keystrokes must not misroute to the terminal.
+        guard session.readerState.current == nil else { return }
+        guard let pvm = session.effectiveFocusedPane,
+              let surfaceView = pvm.focusedSurfaceView else { return }
         // nsWindow (via WindowAccessor binding) can lag during the first
         // renders; fall back to the surface view's own window.
         guard let window = nsWindow ?? surfaceView.window else { return }
@@ -423,12 +410,11 @@ struct SidebarContainerView: View {
 
     // MARK: - Container Size
 
+    /// Records the latest content size for the sidebar-animation settle. The
+    /// per-region pane `containerSize` writes now happen inside
+    /// `SessionContentView`, which measures its own regions.
     private func handleContainerSizeChange(_ size: CGSize) {
         lastContainerSize = size
-        guard let spaceCollection = displayedSpaceCollection,
-              let space = spaceCollection.activeSpace,
-              let tab = space.activeTab else { return }
-        tab.paneViewModel.containerSize = size
     }
 }
 
@@ -464,23 +450,30 @@ private struct SidebarNotificationModifier: ViewModifier {
 /// ViewModifier so the main body stays within Swift's type-check budget.
 ///
 /// Handles:
-///   - `activeSpace?.defaultWorkingDirectory` changes
-///   - `activeSpace?.worktreePath` changes
+///   - `activeSession?.defaultWorkingDirectory` changes
+///   - `activeSession?.worktreePath` changes
 ///   - `activeWorkspace?.defaultWorkingDirectory` changes
-///   - `activeSpace?.gitContext.repoStatuses` changes (FR-27 badge refresh)
+///   - `activeSession?.gitContext.repoStatuses` changes (FR-27 badge refresh)
 private struct InspectPanelWiringModifier: ViewModifier {
-    let activeSpace: SpaceModel?
+    let activeSession: Session?
     let activeWorkspace: Workspace?
     let updateRoot: () -> Void
     let refreshStatus: () -> Void
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
+            .onChange(of: activeSession?.defaultWorkingDirectory) { _, _ in
                 updateRoot()
                 refreshStatus()
             }
-            .onChange(of: activeSpace?.worktreePath) { _, _ in
+            .onChange(of: activeSession?.worktreePath) { _, _ in
+                updateRoot()
+                refreshStatus()
+            }
+            // Follow Claude's builtin EnterWorktree/ExitWorktree: when the
+            // Claude pane moves into (or out of) its own worktree, `inspectPanelRoot`
+            // now prefers `claudeWorktreeRoot`, so re-root + refresh badges.
+            .onChange(of: activeSession?.claudeWorktreeRoot) { _, _ in
                 updateRoot()
                 refreshStatus()
             }
@@ -489,11 +482,11 @@ private struct InspectPanelWiringModifier: ViewModifier {
                 refreshStatus()
             }
             // FR-27: badges refresh within 1 s of git status changes. `repoStatuses`
-            // is the @Observable property on SpaceGitContext that the FSEvents watcher
+            // is the @Observable property on SessionGitContext that the FSEvents watcher
             // + RefreshScheduler update after every debounced git-status run. When it
-            // changes for the active space we fetch the full (uncapped) diff and push
+            // changes for the active session we fetch the full (uncapped) diff and push
             // it into the view model so every changed file in the tree gets a badge.
-            .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
+            .onChange(of: activeSession?.gitContext.repoStatuses) { _, _ in
                 refreshStatus()
             }
     }
@@ -501,23 +494,23 @@ private struct InspectPanelWiringModifier: ViewModifier {
 
 // MARK: - Inspect Panel Tabs Wiring Modifier
 
-/// Wires the Diff and Branch tab view-models to the active space's
-/// `SpaceGitContext` signals. Lifted out of the main body to keep Swift's
+/// Wires the Diff and Branch tab view-models to the active session's
+/// `SessionGitContext` signals. Lifted out of the main body to keep Swift's
 /// type-checker within budget and isolate the per-tab refresh triggers from
 /// the v1 file-tree refresh wiring above.
 ///
 /// Handles:
-///   - Active workspace / space changes → re-arm collapse-prune hook +
+///   - Active workspace / session changes → re-arm collapse-prune hook +
 ///     fire one diff and one branch refresh against the new directory.
-///   - `activeSpace?.gitContext.repoStatuses` (FR-T18) → diff refresh. The
+///   - `activeSession?.gitContext.repoStatuses` (FR-T18) → diff refresh. The
 ///     view-model debounces and cancels in-flight diffs internally.
-///   - `activeSpace?.gitContext.branchGraphDirty` (FR-T28) → branch refresh
+///   - `activeSession?.gitContext.branchGraphDirty` (FR-T28) → branch refresh
 ///     when the active repo's dirty flag flips on. The view-model clears
 ///     the flag on successful completion.
-///   - `activeSpace?.worktreePath` and `activeWorkspace?.defaultWorkingDirectory`
+///   - `activeSession?.worktreePath` and `activeWorkspace?.defaultWorkingDirectory`
 ///     → diff + branch refresh (the resolved root may have changed).
 private struct InspectPanelTabsWiringModifier: ViewModifier {
-    let activeSpace: SpaceModel?
+    let activeSession: Session?
     let activeWorkspace: Workspace?
     let refreshDiff: () -> Void
     let refreshBranch: () -> Void
@@ -530,15 +523,22 @@ private struct InspectPanelTabsWiringModifier: ViewModifier {
                 refreshDiff()
                 refreshBranch()
             }
-            .onChange(of: activeSpace?.id) { _, _ in
+            .onChange(of: activeSession?.id) { _, _ in
                 refreshDiff()
                 refreshBranch()
             }
-            .onChange(of: activeSpace?.defaultWorkingDirectory) { _, _ in
+            .onChange(of: activeSession?.defaultWorkingDirectory) { _, _ in
                 refreshDiff()
                 refreshBranch()
             }
-            .onChange(of: activeSpace?.worktreePath) { _, _ in
+            .onChange(of: activeSession?.worktreePath) { _, _ in
+                refreshDiff()
+                refreshBranch()
+            }
+            // Follow Claude's builtin EnterWorktree/ExitWorktree — the resolved
+            // root prefers `claudeWorktreeRoot`, so the Diff/Branch tabs must
+            // re-fetch against the new worktree when it changes.
+            .onChange(of: activeSession?.claudeWorktreeRoot) { _, _ in
                 refreshDiff()
                 refreshBranch()
             }
@@ -547,21 +547,21 @@ private struct InspectPanelTabsWiringModifier: ViewModifier {
                 refreshBranch()
             }
             // FR-T18: every git-status change → diff refresh.
-            .onChange(of: activeSpace?.gitContext.repoStatuses) { _, _ in
+            .onChange(of: activeSession?.gitContext.repoStatuses) { _, _ in
                 refreshDiff()
             }
             // FR-T28: HEAD / local-ref change → branch refresh.
-            .onChange(of: activeSpace?.gitContext.branchGraphDirty) { _, newValue in
+            .onChange(of: activeSession?.gitContext.branchGraphDirty) { _, newValue in
                 guard let newValue,
-                      let space = activeSpace,
-                      let repoID = space.gitContext.pinnedRepoOrder.first,
+                      let session = activeSession,
+                      let repoID = session.gitContext.pinnedRepoOrder.first,
                       newValue.contains(repoID)
                 else { return }
                 refreshBranch()
             }
             // Tab activation kicker: when the user switches to Branch and we
             // don't yet have a graph, fire a one-shot fetch. (Diff handles
-            // its own initial load via `refreshDiff` on space switch.)
+            // its own initial load via `refreshDiff` on session switch.)
             .onChange(of: activeWorkspace?.inspectTabState.activeTab) { _, newTab in
                 guard newTab == .branch,
                       activeWorkspace?.inspectTabState.branchViewModel.graph == nil
@@ -574,10 +574,10 @@ private struct InspectPanelTabsWiringModifier: ViewModifier {
 // MARK: - Terminal Toggle (status-bar inline)
 
 /// Inline show/hide-terminal toggle that lives in the status-bar strip,
-/// to the right of the workspace sidebar. Replaces the floating
-/// liquid-glass disc that used to sit in the Claude section's tab bar.
+/// to the right of the workspace sidebar. Its context menu carries the
+/// dock-position + reset actions that previously lived in the section toolbar.
 private struct TerminalToggleStatusBarButton: View {
-    @Bindable var space: SpaceModel
+    @Bindable var session: Session
 
     @State private var isHovering = false
 
@@ -586,7 +586,7 @@ private struct TerminalToggleStatusBarButton: View {
 
     var body: some View {
         Button {
-            space.toggleTerminal()
+            session.toggleTerminal()
         } label: {
             Image(systemName: iconName)
                 .font(.system(size: 11, weight: .medium))
@@ -600,19 +600,31 @@ private struct TerminalToggleStatusBarButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(space.terminalVisible ? "Hide Terminal" : "Show Terminal")
-        .accessibilityLabel(space.terminalVisible ? "Hide Terminal" : "Show Terminal")
+        .help(session.terminalVisible ? "Hide Terminal" : "Show Terminal")
+        .accessibilityLabel(session.terminalVisible ? "Hide Terminal" : "Show Terminal")
         .accessibilityIdentifier("status-bar-terminal-toggle")
+        .contextMenu {
+            // Dock / reset actions are disabled mid divider-drag (FR-15).
+            Button("Move to Bottom") { session.setDockPosition(.bottom) }
+                .disabled(session.dockPosition == .bottom || session.dividerDragController.isDragging)
+            Button("Move to Right") { session.setDockPosition(.right) }
+                .disabled(session.dockPosition == .right || session.dividerDragController.isDragging)
+            Divider()
+            Button("Reset Terminal Panel", role: .destructive) {
+                session.resetTerminalPanel()
+            }
+            .disabled(session.dividerDragController.isDragging)
+        }
     }
 
     private var iconName: String {
-        space.dockPosition == .bottom
+        session.dockPosition == .bottom
             ? "rectangle.bottomhalf.inset.filled"
             : "rectangle.righthalf.inset.filled"
     }
 
     private var iconForeground: Color {
-        space.terminalVisible
+        session.terminalVisible
             ? Color.primary.opacity(0.85)
             : Color.secondary.opacity(0.55)
     }

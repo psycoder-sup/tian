@@ -6,27 +6,27 @@ struct WorkingDirectoryResolverTests {
     @Test func sourcePaneDirectoryTakesPrecedence() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: "/Users/me/project",
-            spaceDefault: URL(filePath: "/Users/me/space"),
+            sessionDefault: URL(filePath: "/Users/me/session"),
             workspaceDefault: URL(filePath: "/Users/me/workspace"),
             home: "/Users/me"
         )
         #expect(result == "/Users/me/project")
     }
 
-    @Test func spaceDefaultUsedWhenNoSourcePane() {
+    @Test func sessionDefaultUsedWhenNoSourcePane() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: nil,
-            spaceDefault: URL(filePath: "/Users/me/space"),
+            sessionDefault: URL(filePath: "/Users/me/session"),
             workspaceDefault: URL(filePath: "/Users/me/workspace"),
             home: "/Users/me"
         )
-        #expect(result == "/Users/me/space")
+        #expect(result == "/Users/me/session")
     }
 
-    @Test func workspaceDefaultUsedWhenNoSpaceDefault() {
+    @Test func workspaceDefaultUsedWhenNoSessionDefault() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: nil,
-            spaceDefault: nil,
+            sessionDefault: nil,
             workspaceDefault: URL(filePath: "/Users/me/workspace"),
             home: "/Users/me"
         )
@@ -36,7 +36,7 @@ struct WorkingDirectoryResolverTests {
     @Test func homeFallbackWhenNothingSet() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: nil,
-            spaceDefault: nil,
+            sessionDefault: nil,
             workspaceDefault: nil,
             home: "/Users/me"
         )
@@ -46,37 +46,37 @@ struct WorkingDirectoryResolverTests {
     @Test func emptySourcePaneDirectoryFallsThrough() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: "",
-            spaceDefault: URL(filePath: "/Users/me/space"),
+            sessionDefault: URL(filePath: "/Users/me/session"),
             workspaceDefault: nil,
             home: "/Users/me"
         )
-        #expect(result == "/Users/me/space")
+        #expect(result == "/Users/me/session")
     }
 
     @Test func tildeSourcePaneDirectoryFallsThrough() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: "~",
-            spaceDefault: nil,
+            sessionDefault: nil,
             workspaceDefault: URL(filePath: "/Users/me/workspace"),
             home: "/Users/me"
         )
         #expect(result == "/Users/me/workspace")
     }
 
-    @Test func spaceDefaultOverridesWorkspaceDefault() {
+    @Test func sessionDefaultOverridesWorkspaceDefault() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: nil,
-            spaceDefault: URL(filePath: "/space-level"),
+            sessionDefault: URL(filePath: "/session-level"),
             workspaceDefault: URL(filePath: "/workspace-level"),
             home: "/Users/me"
         )
-        #expect(result == "/space-level")
+        #expect(result == "/session-level")
     }
 
     @Test func allNilExceptHomeFallsToHome() {
         let result = WorkingDirectoryResolver.resolve(
             sourcePaneDirectory: nil,
-            spaceDefault: nil,
+            sessionDefault: nil,
             workspaceDefault: nil,
             home: "/home/testuser"
         )

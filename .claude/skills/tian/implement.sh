@@ -170,7 +170,12 @@ fi
 #   1.1.0 — --no-wait async delegation + implement-wait.sh await-by-log; self-verify
 #           report adds files: line; run log records child/parent session ids +
 #           no_wait; analyze.py links children via the run log and filters zombies.
-TIAN_WORKFLOW_VERSION="1.1.0"
+#   1.2.0 — hierarchy flattened to Workspace→Session: worktree create returns
+#           session_id/claude_pane_id/terminal_pane_id (space_id/claude_tab_id gone);
+#           the Claude pane is tracked via `pane list --session <id> --kind claude`;
+#           run-log field space_id→session_id, claude_tab_id dropped; log args use
+#           --session (TIAN_SESSION_ID) instead of --space/--tab.
+TIAN_WORKFLOW_VERSION="1.2.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
 LOGREC="$SCRIPT_DIR/implement-logrec.sh"
 RUN_START_EPOCH="$(date +%s 2>/dev/null || echo 0)"
@@ -276,7 +281,7 @@ block. If the verdict is needs-attention or fail, use --state needs_attention
   tian notify "self-verify: <verdict>" --title "tian implement"
   bash "$LOGREC" --source self-verify --workflow-version "$TIAN_WORKFLOW_VERSION" \\
     --final-state idle --branch "$branch" --worktree "\$PWD" --timeout $timeout \\
-    --space "\$TIAN_SPACE_ID" --pane "\$TIAN_PANE_ID" --tab "\$TIAN_TAB_ID" \\
+    --session "\$TIAN_SESSION_ID" --pane "\$TIAN_PANE_ID" \\
     --parent-session "$parent_session_id" \\
     --verdict "<verdict>" --build "<build>" --tests "<tests>"
 EOF2
@@ -300,10 +305,9 @@ if ! printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
   err "worktree create did not return valid JSON"
 fi
 
-space_id="$(printf '%s' "$out" | jq -r '.space_id // empty')" || space_id=""
-claude_tab="$(printf '%s' "$out" | jq -r '.claude_tab_id // empty')" || claude_tab=""
+session_id="$(printf '%s' "$out" | jq -r '.session_id // empty')" || session_id=""
 claude_pane="$(printf '%s' "$out" | jq -r '.claude_pane_id // empty')" || claude_pane=""
-terminal_pane="$(printf '%s' "$out" | jq -r '.pane_id // empty')" || terminal_pane=""
+terminal_pane="$(printf '%s' "$out" | jq -r '.terminal_pane_id // empty')" || terminal_pane=""
 
 # Worktree filesystem path — prefer the create payload, else resolve from git by
 # branch. Used by the run log to derive the actual commits (authoritative).
@@ -317,8 +321,8 @@ fi
 if [[ -z "$claude_pane" ]]; then
   err "worktree create returned no claude_pane_id (cannot delegate)"
 fi
-if [[ -z "$claude_tab" ]]; then
-  err "worktree create returned no claude_tab_id (cannot track session state)"
+if [[ -z "$session_id" ]]; then
+  err "worktree create returned no session_id (cannot track session state)"
 fi
 
 # ---- wait for the Claude session to boot ------------------------------------
@@ -333,14 +337,14 @@ while (( SECONDS < boot_timeout )); do
   sleep 1
 done
 if (( ! booted )); then
-  err "Claude session did not boot within ${boot_timeout}s (space_id=$space_id)" 3
+  err "Claude session did not boot within ${boot_timeout}s (session_id=$session_id)" 3
 fi
 
 # get_state: print the Claude pane's sessionState (empty on unknown/transient
 # error). Defined before delegation so the submit step can confirm the session
 # actually started working.
 get_state() {
-  "$TIAN" pane list --tab "$claude_tab" --format json 2>/dev/null \
+  "$TIAN" pane list --session "$session_id" --kind claude --format json 2>/dev/null \
     | jq -r --arg id "$claude_pane" '.[] | select(.id == $id) | .sessionState // empty'
 }
 
@@ -349,8 +353,7 @@ get_state() {
 # path can emit it.
 emit_block() {
   local fs="$1"
-  printf 'space_id=%s\n' "$space_id"
-  printf 'claude_tab_id=%s\n' "$claude_tab"
+  printf 'session_id=%s\n' "$session_id"
   printf 'claude_pane_id=%s\n' "$claude_pane"
   printf 'terminal_pane_id=%s\n' "$terminal_pane"
   printf 'final_state=%s\n' "$fs"
@@ -399,7 +402,7 @@ if (( no_wait )); then
     --source spawn --workflow-version "$TIAN_WORKFLOW_VERSION" \
     --final-state delegated --timeout "$timeout" \
     --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
-    --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
+    --session "$session_id" --pane "$claude_pane" \
     --parent-session "$parent_session_id" \
     --no-wait true \
     --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true
@@ -469,7 +472,7 @@ log_run() {
     --source watcher --workflow-version "$TIAN_WORKFLOW_VERSION" \
     --final-state "$fs" --exit-code "$ec" --elapsed "$elapsed" --timeout "$timeout" \
     --branch "$branch" --repo "$repo_root" --worktree "$worktree_path" \
-    --space "$space_id" --pane "$claude_pane" --tab "$claude_tab" \
+    --session "$session_id" --pane "$claude_pane" \
     --parent-session "$parent_session_id" \
     --verdict "${sv_verdict:-unknown}" --build "${sv_build:-}" --tests "${sv_tests:-}" \
     --log "$TIAN_IMPLEMENT_LOG" 2>/dev/null || true

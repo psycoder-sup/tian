@@ -143,7 +143,7 @@ struct IPCServerTests {
 
         // Send ping request
         let json = """
-        {"version":1,"command":"ping","params":{},"env":{"paneId":"","tabId":"","spaceId":"","workspaceId":""}}
+        {"version":2,"command":"ping","params":{},"env":{"paneId":"","sessionId":"","workspaceId":""}}
         """
         let responseData = try sendRawRequest(json, to: socketPath)
 

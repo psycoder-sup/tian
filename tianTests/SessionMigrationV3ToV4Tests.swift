@@ -37,10 +37,12 @@ struct SessionMigrationV3ToV4Tests {
         }
         """.data(using: .utf8)!
 
-        let migrated = try SessionStateMigrator.migrateIfNeeded(data: v3)!
-        let json = try JSONSerialization.jsonObject(with: migrated) as! [String: Any]
-        // Migration chain runs v3→v4→v5, so the result is the current version.
-        #expect((json["version"] as? Int) == SessionStateMigrator.currentVersion)
+        // Drive the v3→v4 step in isolation: the full chain now continues to
+        // v7 (which replaces `spaces` with `sessions`), but this test asserts on
+        // the intermediate v4 section shape that step still produces.
+        let v3dict = try JSONSerialization.jsonObject(with: v3) as! [String: Any]
+        let migration = try #require(SessionStateMigrator.migrations[3])
+        let json = try migration(v3dict)
 
         let ws = (json["workspaces"] as! [[String: Any]])[0]
         let space = (ws["spaces"] as! [[String: Any]])[0]
@@ -104,8 +106,9 @@ struct SessionMigrationV3ToV4Tests {
         }
         """.data(using: .utf8)!
 
-        let migrated = try SessionStateMigrator.migrateIfNeeded(data: v3)!
-        let json = try JSONSerialization.jsonObject(with: migrated) as! [String: Any]
+        let v3dict = try JSONSerialization.jsonObject(with: v3) as! [String: Any]
+        let migration = try #require(SessionStateMigrator.migrations[3])
+        let json = try migration(v3dict)
         let ws = (json["workspaces"] as! [[String: Any]])[0]
         let space = (ws["spaces"] as! [[String: Any]])[0]
         let terminal = space["terminalSection"] as! [String: Any]

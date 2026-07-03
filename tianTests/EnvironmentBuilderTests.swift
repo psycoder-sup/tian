@@ -5,8 +5,7 @@ import Foundation
 struct EnvironmentBuilderTests {
     private let socketPath = "/var/folders/xx/T/tian-501.sock"
     private let paneID = UUID()
-    private let tabID = UUID()
-    private let spaceID = UUID()
+    private let sessionID = UUID()
     private let workspaceID = UUID()
     private let cliPath = "/Applications/tian.app/Contents/MacOS/tian-cli"
 
@@ -16,14 +15,12 @@ struct EnvironmentBuilderTests {
         let ctx = PaneHierarchyContext(
             socketPath: socketPath,
             workspaceID: workspaceID,
-            spaceID: spaceID,
-            tabID: tabID,
+            sessionID: sessionID,
             cliPath: cliPath
         )
         #expect(ctx.socketPath == socketPath)
         #expect(ctx.workspaceID == workspaceID)
-        #expect(ctx.spaceID == spaceID)
-        #expect(ctx.tabID == tabID)
+        #expect(ctx.sessionID == sessionID)
         #expect(ctx.cliPath == cliPath)
     }
 
@@ -33,16 +30,14 @@ struct EnvironmentBuilderTests {
         let env = EnvironmentBuilder.buildPaneEnvironment(
             socketPath: socketPath,
             paneID: paneID,
-            tabID: tabID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             workspaceID: workspaceID,
             cliPath: cliPath
         )
-        #expect(env.count == 12)
+        #expect(env.count == 11)
         #expect(env.keys.contains("TIAN_SOCKET"))
         #expect(env.keys.contains("TIAN_PANE_ID"))
-        #expect(env.keys.contains("TIAN_TAB_ID"))
-        #expect(env.keys.contains("TIAN_SPACE_ID"))
+        #expect(env.keys.contains("TIAN_SESSION_ID"))
         #expect(env.keys.contains("TIAN_WORKSPACE_ID"))
         #expect(env.keys.contains("TIAN_CLI_PATH"))
         #expect(env.keys.contains("TIAN_RESOURCES_DIR"))
@@ -53,19 +48,32 @@ struct EnvironmentBuilderTests {
         #expect(env.keys.contains("DISABLE_AUTO_UPDATE"))
     }
 
+    /// The flattened hierarchy drops the Space/Tab identifiers entirely — only
+    /// TIAN_SESSION_ID remains between pane and workspace.
+    @Test func dropsSpaceAndTabIdentifiers() {
+        let env = EnvironmentBuilder.buildPaneEnvironment(
+            socketPath: socketPath,
+            paneID: paneID,
+            sessionID: sessionID,
+            workspaceID: workspaceID,
+            cliPath: cliPath
+        )
+        #expect(env["TIAN_SESSION_ID"] == sessionID.uuidString)
+        #expect(env["TIAN_TAB_ID"] == nil)
+        #expect(env["TIAN_SPACE_ID"] == nil)
+    }
+
     @Test func valuesMatchInput() {
         let env = EnvironmentBuilder.buildPaneEnvironment(
             socketPath: socketPath,
             paneID: paneID,
-            tabID: tabID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             workspaceID: workspaceID,
             cliPath: cliPath
         )
         #expect(env["TIAN_SOCKET"] == socketPath)
         #expect(env["TIAN_PANE_ID"] == paneID.uuidString)
-        #expect(env["TIAN_TAB_ID"] == tabID.uuidString)
-        #expect(env["TIAN_SPACE_ID"] == spaceID.uuidString)
+        #expect(env["TIAN_SESSION_ID"] == sessionID.uuidString)
         #expect(env["TIAN_WORKSPACE_ID"] == workspaceID.uuidString)
         #expect(env["TIAN_CLI_PATH"] == cliPath)
     }
@@ -75,8 +83,7 @@ struct EnvironmentBuilderTests {
         let env = EnvironmentBuilder.buildPaneEnvironment(
             socketPath: socketPath,
             paneID: paneID,
-            tabID: tabID,
-            spaceID: spaceID,
+            sessionID: sessionID,
             workspaceID: workspaceID,
             cliPath: cliPath
         )

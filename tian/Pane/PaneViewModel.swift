@@ -52,11 +52,12 @@ final class PaneViewModel {
     /// Set to `true` when the last pane is closed; the window should dismiss.
     var shouldDismiss: Bool = false
 
-    /// Called when the last pane is closed. Used by TabModel to trigger cascading close.
+    /// Called when the last pane is closed. Wired by the owning Session to route
+    /// empty-Claude / terminal-panel-gone handling.
     var onEmpty: (() -> Void)?
 
-    /// Provides the space/workspace default directory when pane-level resolution fails.
-    /// Set by the owning SpaceModel so PaneViewModel doesn't need to know the hierarchy.
+    /// Provides the session/workspace default directory when pane-level resolution fails.
+    /// Set by the owning Session so PaneViewModel doesn't need to know the hierarchy.
     var directoryFallback: (() -> String?)?
 
     /// Called when a pane's working directory changes (OSC 7).
@@ -67,23 +68,27 @@ final class PaneViewModel {
     var onPaneRemoved: ((UUID) -> Void)?
 
     /// Hierarchy IDs for building TIAN_* environment variables.
-    /// Set by the owning SpaceModel via `wireHierarchyContext`.
+    /// Set by the owning Session via `wireHierarchyContext`.
     var hierarchyContext: PaneHierarchyContext?
 
-    /// Mirrors the owning tab / section's kind. Inherited by every pane
-    /// produced via `splitPane(...)`. Set on construction; callers that
-    /// hand in a pre-built view model (e.g. SessionRestorer) re-assign
-    /// this immediately after construction.
-    var sectionKind: SectionKind
+    /// Whether this pane's kind is Claude or a plain terminal. Inherited by
+    /// every pane produced via `splitPane(...)`. Set once on construction;
+    /// callers that hand in a pre-built view model (e.g. SessionRestorer) pass
+    /// the kind to `makeEmpty` / `fromState`.
+    let kind: PaneKind
 
-    /// FR-19 — invoked by `focusDirection` when within-tab search finds
-    /// no neighbor, giving the owning SpaceModel a chance to navigate
-    /// across the section divider. Returns true when the cross-section
+    /// Whether this pane may be split. Only terminal panes split; a Claude pane
+    /// is always a single leaf (FR: Claude pane never splittable).
+    var allowsSplits: Bool { kind == .terminal }
+
+    /// FR-19 — invoked by `focusDirection` when within-area search finds
+    /// no neighbor, giving the owning Session a chance to navigate
+    /// across the Claude/terminal divider. Returns true when the cross-area
     /// jump was made.
-    var onFocusCrossSection: ((NavigationDirection) -> Bool)?
+    var onFocusCrossArea: ((NavigationDirection) -> Bool)?
 
-    /// SpaceModel uses this to keep `focusedSectionKind` in sync with
-    /// the actually-focused pane.
+    /// Session uses this to keep `focusedArea` in sync with the
+    /// actually-focused pane.
     var onPaneFocused: ((UUID) -> Void)?
 
     // MARK: - Private
@@ -92,15 +97,15 @@ final class PaneViewModel {
 
     // MARK: - Init
 
-    init(workingDirectory: String = "~", sectionKind: SectionKind = .terminal) {
+    init(workingDirectory: String = "~", kind: PaneKind = .terminal) {
         let initialID = UUID()
         let surface = GhosttyTerminalSurface()
         let surfaceView = TerminalSurfaceView()
         surfaceView.terminalSurface = surface
-        self.sectionKind = sectionKind
-        SectionSpawner.configure(
+        self.kind = kind
+        PaneSpawner.configure(
             view: surfaceView,
-            kind: sectionKind,
+            kind: kind,
             workingDirectory: workingDirectory,
             environmentVariables: [:]
         )
@@ -114,24 +119,24 @@ final class PaneViewModel {
         }
     }
 
-    /// Builds a surface-less PaneViewModel for non-terminal tabs (e.g. the
-    /// markdown reader). Carries a single placeholder leaf so `splitTree` /
-    /// `activePaneId` stay valid for serialization, but creates no
-    /// `GhosttyTerminalSurface` — so `SectionSpawner` never runs and no
-    /// `claude`/shell process is launched. The leaf is never rendered.
-    static func makeEmpty(workingDirectory: String = "~", sectionKind: SectionKind = .claude) -> PaneViewModel {
+    /// Builds a surface-less PaneViewModel (e.g. a placeholder). Carries a
+    /// single placeholder leaf so `splitTree` / `activePaneId` stay valid for
+    /// serialization, but creates no `GhosttyTerminalSurface` — so `PaneSpawner`
+    /// never runs and no `claude`/shell process is launched. The leaf is never
+    /// rendered.
+    static func makeEmpty(workingDirectory: String = "~", kind: PaneKind = .claude) -> PaneViewModel {
         let splitTree = SplitTree(paneID: UUID(), workingDirectory: workingDirectory)
-        return PaneViewModel(splitTree: splitTree, surfaces: [:], surfaceViews: [:], sectionKind: sectionKind)
+        return PaneViewModel(splitTree: splitTree, surfaces: [:], surfaceViews: [:], kind: kind)
     }
 
-    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, sectionKind: SectionKind = .terminal) -> PaneViewModel {
+    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, kind: PaneKind = .terminal) -> PaneViewModel {
         var surfaces: [UUID: GhosttyTerminalSurface] = [:]
         var surfaceViews: [UUID: TerminalSurfaceView] = [:]
         var restoreCommands: [UUID: String] = [:]
         var sessionStates: [UUID: ClaudeSessionState] = [:]
-        let paneNode = Self.buildPaneNode(from: root, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+        let paneNode = Self.buildPaneNode(from: root, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
         let splitTree = SplitTree(root: paneNode, focusedPaneID: focusedPaneID)
-        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews, sectionKind: sectionKind)
+        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews, kind: kind)
         pvm.restoreCommands = restoreCommands
         for (paneID, state) in sessionStates {
             PaneStatusManager.shared.setSessionState(paneID: paneID, state: state)
@@ -143,12 +148,12 @@ final class PaneViewModel {
         splitTree: SplitTree,
         surfaces: [UUID: GhosttyTerminalSurface],
         surfaceViews: [UUID: TerminalSurfaceView],
-        sectionKind: SectionKind = .terminal
+        kind: PaneKind = .terminal
     ) {
         self.splitTree = splitTree
         self.surfaces = surfaces
         self.surfaceViews = surfaceViews
-        self.sectionKind = sectionKind
+        self.kind = kind
         self.paneStates = Dictionary(uniqueKeysWithValues: surfaces.keys.map { ($0, PaneState.running) })
         installObservers()
         for paneID in splitTree.allLeaves() {
@@ -175,7 +180,7 @@ final class PaneViewModel {
             guard let paneID = self.paneID(forSurfaceID: surfaceId) else { return }
             // FR-06: Claude panes close on any exit code (no exit-code overlay).
             // Terminal panes show the exit-code overlay for non-zero codes.
-            if exitCode == 0 || self.sectionKind == .claude {
+            if exitCode == 0 || self.kind == .claude {
                 self.closePane(paneID: paneID)
             } else {
                 self.paneStates[paneID] = .exited(code: exitCode)
@@ -235,7 +240,7 @@ final class PaneViewModel {
 
     private static func buildPaneNode(
         from state: PaneNodeState,
-        sectionKind: SectionKind,
+        kind: PaneKind,
         surfaces: inout [UUID: GhosttyTerminalSurface],
         surfaceViews: inout [UUID: TerminalSurfaceView],
         restoreCommands: inout [UUID: String],
@@ -246,10 +251,10 @@ final class PaneViewModel {
             let surface = GhosttyTerminalSurface()
             let surfaceView = TerminalSurfaceView()
             surfaceView.terminalSurface = surface
-            // Route through SectionSpawner so Claude panes get initialInput = "claude\n".
-            SectionSpawner.configure(
+            // Route through PaneSpawner so Claude panes get their autostart env.
+            PaneSpawner.configure(
                 view: surfaceView,
-                kind: sectionKind,
+                kind: kind,
                 workingDirectory: leaf.workingDirectory,
                 environmentVariables: [:]
             )
@@ -264,7 +269,7 @@ final class PaneViewModel {
                 // would type `claude --resume <id>` *into* an already-running
                 // claude. Terminal panes have no autostart path, so replay the
                 // restore command as keystrokes.
-                if sectionKind == .terminal {
+                if kind == .terminal {
                     surfaceView.initialInput = cmd + "\n"
                 }
             }
@@ -276,10 +281,10 @@ final class PaneViewModel {
         case .split(let split):
             guard let direction = SplitDirection.from(stateValue: split.direction) else {
                 // Invalid direction — treat as a single pane with the first leaf
-                return buildPaneNode(from: split.first, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+                return buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
             }
-            let first = buildPaneNode(from: split.first, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
-            let second = buildPaneNode(from: split.second, sectionKind: sectionKind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+            let first = buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+            let second = buildPaneNode(from: split.second, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
             return .split(id: UUID(), direction: direction, ratio: split.ratio, first: first, second: second)
         }
     }
@@ -295,14 +300,14 @@ final class PaneViewModel {
     }
 
     /// Ensures the pane's ghostty surface exists and is sized, even if its view has
-    /// never entered a window (a background tab/space that was never the visible tab).
+    /// never entered a window (a background session that was never the visible one).
     /// Reuses the pane's persistent `TerminalSurfaceView` and the exact inputs
     /// `TerminalSurfaceView.viewDidMoveToWindow` uses, so working directory, `TIAN_*`
     /// env, and any restore command behave identically. Composes with the lazy path:
-    /// when the tab is later shown, `viewDidMoveToWindow` sees a non-nil surface and
+    /// when the pane is later shown, `viewDidMoveToWindow` sees a non-nil surface and
     /// skips creation (no double shell), then resizes to real bounds.
     /// - Returns: the live wrapper, or nil if the pane has no terminal (empty /
-    ///   non-terminal section) or surface creation failed.
+    ///   surface-less pane) or surface creation failed.
     @discardableResult
     func realizeSurface(for paneID: UUID) -> GhosttyTerminalSurface? {
         guard let surface = surfaces[paneID], let view = surfaceViews[paneID] else { return nil }
@@ -344,6 +349,9 @@ final class PaneViewModel {
 
     @discardableResult
     func splitPane(direction: SplitDirection, targetPaneID: UUID? = nil, focusOnCreate: Bool = true) -> UUID? {
+        // A Claude pane is always a single leaf — reject splits here so the
+        // model is the backstop for IPC, [[layout]], and keyboard split paths.
+        guard allowsSplits else { return nil }
         // Remember where keyboard focus was so a background split can leave it untouched.
         let priorFocusedPaneID = splitTree.focusedPaneID
         // If a specific target pane is requested, temporarily focus it for the split
@@ -358,11 +366,11 @@ final class PaneViewModel {
 
         let workingDirectory = resolveWorkingDirectory(for: splitTree.focusedPaneID)
 
-        // Route through SectionSpawner so the new pane inherits the tab's
-        // section kind (Claude → initialInput = "claude\n"; Terminal → nil).
-        SectionSpawner.configure(
+        // Route through PaneSpawner so the new pane inherits this pane's kind.
+        // (Only terminal panes reach here — Claude splits are rejected above.)
+        PaneSpawner.configure(
             view: newSurfaceView,
-            kind: sectionKind,
+            kind: kind,
             workingDirectory: workingDirectory,
             environmentVariables: buildEnvironmentVariables(forPaneID: newPaneID)
         )
@@ -421,7 +429,7 @@ final class PaneViewModel {
             bellNotifications.remove(paneID)
         }
         // Fires unconditionally: a click on the already-focused pane
-        // still needs to flip the section if focus crossed sections.
+        // still needs to flip the area if focus crossed areas.
         onPaneFocused?(paneID)
     }
 
@@ -437,9 +445,9 @@ final class PaneViewModel {
             focusPane(paneID: targetID)
             return
         }
-        // No within-tab neighbor — ask the owning SpaceModel to try
-        // crossing the section divider (FR-19).
-        _ = onFocusCrossSection?(direction)
+        // No within-area neighbor — ask the owning Session to try
+        // crossing the Claude/terminal divider (FR-19).
+        _ = onFocusCrossArea?(direction)
     }
 
     func updateRatio(splitID: UUID, newRatio: Double) {
@@ -455,13 +463,13 @@ final class PaneViewModel {
     }
 
     /// Seed a one-off launch command for a freshly created (not-yet-spawned)
-    /// pane — e.g. "Run Custom Claude" from the new-tab menu.
+    /// pane — e.g. "Run Custom Claude" from the placeholder menu.
     ///
     /// Stores it as the pane's launch override (so the later
     /// `applyEnvironmentVariables()` re-seed and session persistence keep it),
     /// then re-seeds the surface env immediately. Unlike the bulk
     /// `applyEnvironmentVariables()` this is ungated by `hierarchyContext`, so it
-    /// applies even before the space is attached to a workspace. Must be called
+    /// applies even before the session is attached to a workspace. Must be called
     /// before the surface view enters a window (the env is read once at spawn).
     func applyCustomLaunchCommand(_ command: String, toPaneID paneID: UUID) {
         restoreCommands[paneID] = command
@@ -488,14 +496,14 @@ final class PaneViewModel {
         // Preserve the view's `window` reference across the restart — we
         // cannot precondition-check `view.window == nil` here because it
         // may still be attached. Set the fields directly rather than via
-        // SectionSpawner.configure (which asserts window==nil).
+        // PaneSpawner.configure (which asserts window==nil).
         surfaceView.initialWorkingDirectory = workingDirectory
         // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches on restart
         // (via the bundled .zshrc) — resuming its session if a restore command is
         // registered, otherwise bare `claude` — while a Terminal pane gets a clean
-        // shell. initialInput stays nil — see SectionSpawner.
-        surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
-            kind: sectionKind,
+        // shell. initialInput stays nil — see PaneSpawner.
+        surfaceView.environmentVariables = PaneSpawner.autostartEnvironment(
+            kind: kind,
             base: buildEnvironmentVariables(forPaneID: paneID),
             restoreCommand: restoreCommands[paneID]
         )
@@ -545,8 +553,7 @@ final class PaneViewModel {
         return EnvironmentBuilder.buildPaneEnvironment(
             socketPath: ctx.socketPath,
             paneID: paneID,
-            tabID: ctx.tabID,
-            spaceID: ctx.spaceID,
+            sessionID: ctx.sessionID,
             workspaceID: ctx.workspaceID,
             cliPath: ctx.cliPath
         )
@@ -564,21 +571,21 @@ final class PaneViewModel {
 
     /// Re-seeds one pane's surface env from its current launch override
     /// (`restoreCommands[paneID]`, else the bare default) merged onto the pane's
-    /// TIAN_* env. This runs after `SectionSpawner.configure` and would otherwise
+    /// TIAN_* env. This runs after `PaneSpawner.configure` and would otherwise
     /// clobber the autostart var, so it re-merges TIAN_AUTOSTART_CMD — without it
     /// Claude panes never auto-launch. A restore/custom command makes the pane
     /// resume (`claude --resume <id>`) or run a one-off command instead of bare
     /// `claude`.
     private func reseedAutostartEnvironment(forPaneID paneID: UUID) {
         guard let surfaceView = surfaceViews[paneID] else { return }
-        surfaceView.environmentVariables = SectionSpawner.autostartEnvironment(
-            kind: sectionKind,
+        surfaceView.environmentVariables = PaneSpawner.autostartEnvironment(
+            kind: kind,
             base: buildEnvironmentVariables(forPaneID: paneID),
             restoreCommand: restoreCommands[paneID]
         )
     }
 
-    /// Resolve working directory for a pane: inherited config (OSC 7) -> tree -> space/workspace default -> $HOME.
+    /// Resolve working directory for a pane: inherited config (OSC 7) -> tree -> session/workspace default -> $HOME.
     private func resolveWorkingDirectory(for paneID: UUID) -> String {
         if let surface = surfaces[paneID]?.surface {
             // working_directory is zig-allocated; C API has no free function (same in Ghostty's own app)

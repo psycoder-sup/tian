@@ -6,7 +6,6 @@ import Foundation
 struct PaneHierarchyContext: Sendable {
     let socketPath: String
     let workspaceID: UUID
-    let spaceID: UUID
-    let tabID: UUID
+    let sessionID: UUID
     let cliPath: String
 }

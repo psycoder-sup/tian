@@ -4,13 +4,13 @@ import Observation
 /// App-wide, user-editable preferences backed by `UserDefaults`.
 ///
 /// Currently holds a single setting: the command a fresh Claude pane
-/// auto-runs (see `SectionSpawner.claudeAutostartCommand`). The shell
+/// auto-runs (see `PaneSpawner.claudeAutostartCommand`). The shell
 /// integration appends `; builtin exit`, so this value is just the command
 /// word(s) — e.g. `claude`, `claude --chrome`, or `headroom wrap claude`.
 @MainActor
 @Observable
 final class TianSettings {
-    /// Shared instance read by non-UI code (`SectionSpawner`). The settings
+    /// Shared instance read by non-UI code (`PaneSpawner`). The settings
     /// UI binds to the same instance so edits take effect immediately.
     static let shared = TianSettings()
 

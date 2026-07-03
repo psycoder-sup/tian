@@ -40,20 +40,21 @@ struct ProcessDetectorTests {
         #expect(result.isEmpty)
     }
 
-    @Test func traversesMultipleSpaces() {
+    @Test func traversesMultipleSessions() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
-        ws.spaceCollection.createSpace()
+        ws.sessionCollection.createSession()
+        ws.sessionCollection.createSession()
 
         let result = ProcessDetector.detectRunningProcesses(in: [collection])
         #expect(result.isEmpty)
     }
 
-    @Test func traversesMultipleTabs() {
+    @Test func traversesSessionTerminalPanels() {
+        // A session's terminal panel adds panes the detector must walk.
         let collection = WorkspaceCollection()
-        let space = collection.workspaces[0].spaceCollection.activeSpace!
-        space.createTab()
-        space.createTab()
+        let session = collection.workspaces[0].sessionCollection.activeSession!
+        session.showTerminal()
 
         let result = ProcessDetector.detectRunningProcesses(in: [collection])
         #expect(result.isEmpty)
@@ -70,15 +71,15 @@ struct ProcessDetectorTests {
     // MARK: - RunningProcessInfo Structure
 
     @Test func runningProcessInfoCapturesNames() {
+        let paneID = UUID()
         let info = RunningProcessInfo(
             workspaceName: "project",
-            spaceName: "dev",
-            tabName: "Tab 1",
-            paneID: UUID()
+            sessionName: "dev",
+            paneID: paneID
         )
         #expect(info.workspaceName == "project")
-        #expect(info.spaceName == "dev")
-        #expect(info.tabName == "Tab 1")
+        #expect(info.sessionName == "dev")
+        #expect(info.paneID == paneID)
     }
 
     // MARK: - Scoped Checks (nil surfaces → no confirmation)
@@ -89,28 +90,28 @@ struct ProcessDetectorTests {
         #expect(!ProcessDetector.needsConfirmation(surface: surface))
     }
 
-    @Test func runningProcessCountInSingleTabReturnsZeroForNilSurfaces() {
-        let tab = TabModel()
-        #expect(ProcessDetector.runningProcessCount(in: tab) == 0)
+    @Test func runningProcessCountInSinglePaneReturnsZeroForNilSurfaces() {
+        let pane = PaneViewModel(workingDirectory: "/tmp", kind: .terminal)
+        #expect(ProcessDetector.runningProcessCount(in: pane) == 0)
     }
 
-    @Test func runningProcessCountInMultipleTabsReturnsZero() {
-        let tab1 = TabModel()
-        let tab2 = TabModel()
-        #expect(ProcessDetector.runningProcessCount(in: [tab1, tab2]) == 0)
+    @Test func runningProcessCountInMultiplePanesReturnsZero() {
+        let pane1 = PaneViewModel(workingDirectory: "/tmp", kind: .terminal)
+        let pane2 = PaneViewModel(workingDirectory: "/tmp", kind: .claude)
+        #expect(ProcessDetector.runningProcessCount(in: [pane1, pane2]) == 0)
     }
 
-    @Test func runningProcessCountInEmptyTabArrayReturnsZero() {
-        let tabs: [TabModel] = []
-        #expect(ProcessDetector.runningProcessCount(in: tabs) == 0)
+    @Test func runningProcessCountInEmptyPaneArrayReturnsZero() {
+        let panes: [PaneViewModel] = []
+        #expect(ProcessDetector.runningProcessCount(in: panes) == 0)
     }
 
-    @Test func runningProcessCountInTabWithSplitsReturnsZero() {
-        let tab = TabModel()
-        tab.paneViewModel.splitPane(direction: .horizontal)
+    @Test func runningProcessCountInPaneWithSplitsReturnsZero() {
+        let pane = PaneViewModel(workingDirectory: "/tmp", kind: .terminal)
+        pane.splitPane(direction: .horizontal)
         // Two panes, both with nil surfaces
-        #expect(tab.paneViewModel.surfaces.count == 2)
-        #expect(ProcessDetector.runningProcessCount(in: tab) == 0)
+        #expect(pane.surfaces.count == 2)
+        #expect(ProcessDetector.runningProcessCount(in: pane) == 0)
     }
 }
 

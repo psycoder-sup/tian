@@ -17,8 +17,7 @@ let rainbowColors: [Color] = [
 private let glowCornerRadius: CGFloat = 6
 
 /// Shared breathing envelope for rainbow overlays — oscillates in
-/// `[0.70, 1.00]` with a 2.5 s period. Used by `RainbowGlow` and
-/// `AuroraCapsuleFill` so sibling indicators pulse in sync.
+/// `[0.70, 1.00]` with a 2.5 s period. Drives `RainbowGlow`'s pulse.
 @inlinable func rainbowBreathe(_ t: TimeInterval) -> Double {
     0.85 + 0.15 * sin(t * 0.8 * .pi)
 }

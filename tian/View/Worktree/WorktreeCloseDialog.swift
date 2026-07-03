@@ -1,6 +1,6 @@
 import AppKit
 
-/// Presents an NSAlert for confirming worktree Space closure.
+/// Presents an NSAlert for confirming worktree Session closure.
 /// Follows the pattern established by `CloseConfirmationDialog`.
 @MainActor
 enum WorktreeCloseDialog {
@@ -19,7 +19,7 @@ enum WorktreeCloseDialog {
         let alert = ConfirmAlert()
         alert.alertStyle = .warning
         alert.messageText = "Remove worktree?"
-        alert.informativeText = "This space is backed by a git worktree at:\n\(worktreePath)"
+        alert.informativeText = "This session is backed by a git worktree at:\n\(worktreePath)"
         alert.addButton(withTitle: "Remove Worktree & Close")
         alert.addButton(withTitle: "Close Only")
         alert.addButton(withTitle: "Cancel")

@@ -89,7 +89,7 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - Create with config
 
-    @Test func createWorktreeSpaceWithConfig() async throws {
+    @Test func createWorktreeSessionWithConfig() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -110,7 +110,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "feature/test-config",
             repoPath: repo,
             workspaceID: workspace.id
@@ -125,13 +125,13 @@ struct WorktreeOrchestratorTests {
         #expect(FileManager.default.fileExists(atPath: expectedPath, isDirectory: &isDir))
         #expect(isDir.boolValue)
 
-        // Verify Space was created in the collection
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace != nil)
-        #expect(newSpace?.name == "feature/test-config")
-        #expect(newSpace?.worktreePath != nil)
-        #expect(resolvePath(newSpace!.worktreePath!.path) == resolvePath(expectedPath))
-        #expect(newSpace?.defaultWorkingDirectory != nil)
+        // Verify Session was created in the collection
+        let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
+        #expect(newSession != nil)
+        #expect(newSession?.customName == "feature/test-config")
+        #expect(newSession?.worktreePath != nil)
+        #expect(resolvePath(newSession!.worktreePath!.path) == resolvePath(expectedPath))
+        #expect(newSession?.defaultWorkingDirectory != nil)
 
         // Verify .env was copied to worktree
         let copiedEnv = (expectedPath as NSString).appendingPathComponent(".env")
@@ -143,7 +143,7 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - Create without config
 
-    @Test func createWorktreeSpaceWithoutConfig() async throws {
+    @Test func createWorktreeSessionWithoutConfig() async throws {
         let repo = try makeTempGitRepo()
         let repoName = URL(filePath: repo).lastPathComponent
         let centralBase = (NSHomeDirectory() as NSString)
@@ -156,7 +156,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "no-config-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -170,11 +170,55 @@ struct WorktreeOrchestratorTests {
         #expect(FileManager.default.fileExists(atPath: expectedPath, isDirectory: &isDir))
         #expect(isDir.boolValue)
 
-        // Space has a single tab (no layout applied)
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace != nil)
-        #expect(newSpace?.tabs.count == 1)
-        #expect(newSpace?.name == "no-config-branch")
+        // Session has a live Claude pane and a single-pane terminal panel
+        // (no layout applied → the terminal panel is never split).
+        let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
+        #expect(newSession != nil)
+        #expect(newSession?.customName == "no-config-branch")
+        #expect(newSession?.claudePane != nil)
+        #expect(newSession?.terminalPanel?.splitTree.leafCount == 1)
+    }
+
+    // MARK: - Layout targets the terminal panel
+
+    /// A `[[layout]]` split lands in the splittable terminal panel — never the
+    /// Claude pane. The Claude pane stays a single leaf; the terminal panel
+    /// grows to the layout's pane count.
+    @Test func applyLayoutSplitsLandInTerminalPanel() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        // A single vertical split with two empty panes (no commands → no shell
+        // readiness wait). Two terminal panes expected after creation.
+        try writeConfig("""
+        worktree_dir = ".worktrees"
+        shell_ready_delay = 0.01
+
+        [layout]
+        direction = "vertical"
+        ratio = 0.5
+
+        [layout.first]
+
+        [layout.second]
+        """, in: repo)
+
+        let (provider, workspace) = makeProvider(repoPath: repo)
+        let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
+
+        let result = try await orchestrator.createWorktreeSession(
+            branchName: "layout-branch",
+            repoPath: repo,
+            workspaceID: workspace.id
+        )
+
+        let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
+        #expect(newSession != nil)
+        // Split landed in the terminal panel (2 leaves)…
+        #expect(newSession?.terminalPanel?.splitTree.leafCount == 2)
+        // …and the Claude pane stayed a single, unsplittable leaf.
+        #expect(newSession?.claudePane?.splitTree.leafCount == 1)
+        #expect(newSession?.claudePane?.allowsSplits == false)
     }
 
     // MARK: - Duplicate detection
@@ -189,26 +233,29 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         // First creation
-        let first = try await orchestrator.createWorktreeSpace(
+        let first = try await orchestrator.createWorktreeSession(
             branchName: "dup-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
         #expect(!first.existed)
 
-        let spaceCountAfterFirst = workspace.spaceCollection.spaces.count
+        let sessionCountAfterFirst = workspace.sessionCollection.sessions.count
 
         // Second creation with same branch — should detect duplicate
-        let second = try await orchestrator.createWorktreeSpace(
+        let second = try await orchestrator.createWorktreeSession(
             branchName: "dup-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         #expect(second.existed)
-        #expect(second.spaceID == first.spaceID)
-        // No new Space should have been added
-        #expect(workspace.spaceCollection.spaces.count == spaceCountAfterFirst)
+        #expect(second.sessionID == first.sessionID)
+        // Duplicate detection returns the existing Session's pane ids.
+        #expect(second.claudePaneID == first.claudePaneID)
+        #expect(second.terminalPaneID == first.terminalPaneID)
+        // No new Session should have been added
+        #expect(workspace.sessionCollection.sessions.count == sessionCountAfterFirst)
     }
 
     @Test func duplicateDetectionBackgroundDoesNotActivate() async throws {
@@ -220,25 +267,25 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // First creation (foreground) activates the new worktree Space.
-        let first = try await orchestrator.createWorktreeSpace(
+        // First creation (foreground) activates the new worktree Session.
+        let first = try await orchestrator.createWorktreeSession(
             branchName: "dup-bg-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
         #expect(!first.existed)
 
-        // Move focus to a different Space so a stray activation would be observable.
-        let otherSpaceID = workspace.spaceCollection.spaces
-            .first(where: { $0.id != first.spaceID })?.id
-        #expect(otherSpaceID != nil)
-        workspace.spaceCollection.activeSpaceID = otherSpaceID!
+        // Move focus to a different Session so a stray activation would be observable.
+        let otherSessionID = workspace.sessionCollection.sessions
+            .first(where: { $0.id != first.sessionID })?.id
+        #expect(otherSessionID != nil)
+        workspace.sessionCollection.activeSessionID = otherSessionID!
 
-        let spaceCountAfterFirst = workspace.spaceCollection.spaces.count
+        let sessionCountAfterFirst = workspace.sessionCollection.sessions.count
 
         // Second creation with same branch + background — duplicate detected,
-        // must NOT steal focus from the currently active Space.
-        let second = try await orchestrator.createWorktreeSpace(
+        // must NOT steal focus from the currently active Session.
+        let second = try await orchestrator.createWorktreeSession(
             branchName: "dup-bg-branch",
             repoPath: repo,
             workspaceID: workspace.id,
@@ -246,24 +293,24 @@ struct WorktreeOrchestratorTests {
         )
 
         #expect(second.existed)
-        #expect(second.spaceID == first.spaceID)
-        #expect(workspace.spaceCollection.spaces.count == spaceCountAfterFirst)
-        // Background opt-out: active Space stays put instead of jumping to the worktree.
-        #expect(workspace.spaceCollection.activeSpaceID == otherSpaceID)
+        #expect(second.sessionID == first.sessionID)
+        #expect(workspace.sessionCollection.sessions.count == sessionCountAfterFirst)
+        // Background opt-out: active Session stays put instead of jumping to the worktree.
+        #expect(workspace.sessionCollection.activeSessionID == otherSessionID)
     }
 
-    @Test func newSpaceBackgroundDoesNotStealFocus() async throws {
+    @Test func newSessionBackgroundDoesNotStealFocus() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // Stay in whatever Space is active before creating the worktree.
-        let originalActiveSpaceID = workspace.spaceCollection.activeSpaceID
+        // Stay in whatever Session is active before creating the worktree.
+        let originalActiveSessionID = workspace.sessionCollection.activeSessionID
 
-        // Create a brand-new worktree Space in the background.
-        let result = try await orchestrator.createWorktreeSpace(
+        // Create a brand-new worktree Session in the background.
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "bg-new-branch",
             repoPath: repo,
             workspaceID: workspace.id,
@@ -271,20 +318,19 @@ struct WorktreeOrchestratorTests {
         )
 
         #expect(!result.existed)
-        #expect(result.spaceID != originalActiveSpaceID)
-        // Background opt-out: the active Space must not jump to the new worktree.
-        #expect(workspace.spaceCollection.activeSpaceID == originalActiveSpaceID)
+        #expect(result.sessionID != originalActiveSessionID)
+        // Background opt-out: the active Session must not jump to the new worktree.
+        #expect(workspace.sessionCollection.activeSessionID == originalActiveSessionID)
 
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace != nil)
-        // showTerminal(background:) must leave focus on the Claude section rather than
+        let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
+        #expect(newSession != nil)
+        // showTerminal(background:) must leave focus on the Claude area rather than
         // flipping to .terminal — flipping pulls the terminal surface's first responder
         // and steals the window key, which is the focus-steal this guards against.
-        #expect(newSpace?.focusedSectionKind == .claude)
+        #expect(newSession?.focusedArea == .claude)
 
         // The worktree still exposes both its terminal pane and its Claude pane.
-        #expect(result.paneID != nil)
-        #expect(result.claudeTabID != nil)
+        #expect(result.terminalPaneID != nil)
         #expect(result.claudePaneID != nil)
     }
 
@@ -322,7 +368,7 @@ struct WorktreeOrchestratorTests {
         }
 
         let start = ContinuousClock.now
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "cancel-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -363,7 +409,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        _ = try await orchestrator.createWorktreeSpace(
+        _ = try await orchestrator.createWorktreeSession(
             branchName: "interactive-shell-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -391,7 +437,7 @@ struct WorktreeOrchestratorTests {
 
         #expect(orchestrator.setupProgress == nil)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "lifecycle-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -401,7 +447,7 @@ struct WorktreeOrchestratorTests {
         #expect(!result.existed)
     }
 
-    @Test func setupProgress_carriesWorkspaceAndSpaceIDsDuringRun() async throws {
+    @Test func setupProgress_carriesWorkspaceAndSessionIDsDuringRun() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -423,7 +469,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let observedSpaceIDBox = Box<UUID>()
+        let observedSessionIDBox = Box<UUID>()
 
         Task { @MainActor in
             // Wait for setupProgress to appear, snapshot, then release the gate.
@@ -432,31 +478,31 @@ struct WorktreeOrchestratorTests {
                 try? await Task.sleep(for: .milliseconds(20))
             }
             let observedWorkspaceID = orchestrator.setupProgress?.workspaceID
-            let observedSpaceID = orchestrator.setupProgress?.spaceID
+            let observedSessionID = orchestrator.setupProgress?.sessionID
             let observedTotal = orchestrator.setupProgress?.totalCommands
             #expect(observedWorkspaceID == workspace.id)
             #expect(observedTotal == 1)
-            // observedSpaceID is the new Space being created. We can't compare
-            // it to a known UUID from this side (Space is created inside the
+            // observedSessionID is the new Session being created. We can't compare
+            // it to a known UUID from this side (Session is created inside the
             // orchestrator), but we can assert it's non-nil and persist it
             // for the outer test to verify post-await.
-            #expect(observedSpaceID != nil)
-            observedSpaceIDBox.value = observedSpaceID
+            #expect(observedSessionID != nil)
+            observedSessionIDBox.value = observedSessionID
             FileManager.default.createFile(atPath: gate, contents: Data(), attributes: nil)
         }
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "ids-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         #expect(orchestrator.setupProgress == nil)
-        #expect(result.spaceID == workspace.spaceCollection.spaces.first { $0.id == result.spaceID }?.id)
+        #expect(result.sessionID == workspace.sessionCollection.sessions.first { $0.id == result.sessionID }?.id)
 
-        let observedSpaceID = observedSpaceIDBox.value
-        #expect(observedSpaceID == result.spaceID,
-                "polling task should have observed the same Space ID that createWorktreeSpace returned")
+        let observedSessionID = observedSessionIDBox.value
+        #expect(observedSessionID == result.sessionID,
+                "polling task should have observed the same Session ID that createWorktreeSession returned")
     }
 
     @Test func setupProgress_recordsLastFailedIndex_whenCommandExitsNonZero() async throws {
@@ -502,7 +548,7 @@ struct WorktreeOrchestratorTests {
             #expect(orchestrator.setupProgress?.lastFailedIndex == 1)
         }
 
-        _ = try await orchestrator.createWorktreeSpace(
+        _ = try await orchestrator.createWorktreeSession(
             branchName: "fail-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -510,9 +556,9 @@ struct WorktreeOrchestratorTests {
         #expect(orchestrator.setupProgress == nil)
     }
 
-    // MARK: - Remove worktree space
+    // MARK: - Remove worktree session
 
-    @Test func removeWorktreeSpace() async throws {
+    @Test func removeWorktreeSession() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -521,8 +567,8 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // Create a worktree Space
-        let result = try await orchestrator.createWorktreeSpace(
+        // Create a worktree Session
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "to-remove",
             repoPath: repo,
             workspaceID: workspace.id
@@ -531,26 +577,26 @@ struct WorktreeOrchestratorTests {
         let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/to-remove")
         #expect(FileManager.default.fileExists(atPath: worktreePath))
 
-        let spaceCountBefore = workspace.spaceCollection.spaces.count
+        let sessionCountBefore = workspace.sessionCollection.sessions.count
 
         // Remove it
-        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
 
         // Worktree directory should be gone
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
 
-        // Space should be removed from collection
-        #expect(workspace.spaceCollection.spaces.count == spaceCountBefore - 1)
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Session should be removed from collection
+        #expect(workspace.sessionCollection.sessions.count == sessionCountBefore - 1)
+        #expect(!workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
     }
 
-    @Test func removeWorktreeSpace_runsArchiveCommands() async throws {
+    @Test func removeWorktreeSession_runsArchiveCommands() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         // Drop a sentinel-stamping archive command. We pick a path
         // OUTSIDE the worktree so the file survives `git worktree remove`
-        // and we can assert on it after the Space is gone.
+        // and we can assert on it after the Session is gone.
         let sentinel = FileManager.default.temporaryDirectory
             .appendingPathComponent("tian-archive-sentinel-\(UUID().uuidString).txt")
         defer { try? FileManager.default.removeItem(at: sentinel) }
@@ -568,7 +614,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "archive-me",
             repoPath: repo,
             workspaceID: workspace.id
@@ -585,19 +631,19 @@ struct WorktreeOrchestratorTests {
             return String(cString: ptr)
         } ?? worktreePath
 
-        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
 
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
         #expect(FileManager.default.fileExists(atPath: sentinel.path))
         let recordedCwd = try String(contentsOf: sentinel, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         #expect(recordedCwd == canonicalWorktree)
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        #expect(!workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
     }
 
     // MARK: - Remove with --delete-branch
 
-    @Test func removeWorktreeSpace_keepsBranchByDefault() async throws {
+    @Test func removeWorktreeSession_keepsBranchByDefault() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -606,14 +652,14 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "keep-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         // Default removal (no deleteBranch) must leave the branch in place.
-        let removal = try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        let removal = try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
 
         #expect(removal.branchName == nil)
         #expect(!removal.branchDeleted)
@@ -623,7 +669,7 @@ struct WorktreeOrchestratorTests {
         #expect(exists)
     }
 
-    @Test func removeWorktreeSpace_deleteBranch_removesMergedBranch() async throws {
+    @Test func removeWorktreeSession_deleteBranch_removesMergedBranch() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -634,15 +680,15 @@ struct WorktreeOrchestratorTests {
 
         // A fresh worktree branch has no commits beyond HEAD — it's merged,
         // so `git branch -d` deletes it without --force.
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "del-branch",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/del-branch")
-        let removal = try await orchestrator.removeWorktreeSpace(
-            spaceID: result.spaceID, deleteBranch: true
+        let removal = try await orchestrator.removeWorktreeSession(
+            sessionID: result.sessionID, deleteBranch: true
         )
 
         #expect(removal.branchName == "del-branch")
@@ -655,7 +701,7 @@ struct WorktreeOrchestratorTests {
         #expect(!exists)
     }
 
-    @Test func removeWorktreeSpace_deleteBranch_keepsUnmergedAndStillRemovesWorktree() async throws {
+    @Test func removeWorktreeSession_deleteBranch_keepsUnmergedAndStillRemovesWorktree() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -664,7 +710,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "unmerged-wt",
             repoPath: repo,
             workspaceID: workspace.id
@@ -679,13 +725,13 @@ struct WorktreeOrchestratorTests {
         try runGitSync(["add", "."], in: worktreePath)
         try runGitSync(["commit", "-m", "unmerged work"], in: worktreePath)
 
-        let removal = try await orchestrator.removeWorktreeSpace(
-            spaceID: result.spaceID, deleteBranch: true
+        let removal = try await orchestrator.removeWorktreeSession(
+            sessionID: result.sessionID, deleteBranch: true
         )
 
-        // The worktree (primary action) is removed and the Space is gone…
+        // The worktree (primary action) is removed and the Session is gone…
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        #expect(!workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
         // …but the unmerged branch is kept because --force was not passed.
         #expect(removal.branchName == "unmerged-wt")
         #expect(!removal.branchDeleted)
@@ -696,7 +742,7 @@ struct WorktreeOrchestratorTests {
         #expect(exists)
     }
 
-    @Test func removeWorktreeSpace_deleteBranch_force_removesUnmergedBranch() async throws {
+    @Test func removeWorktreeSession_deleteBranch_force_removesUnmergedBranch() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -705,7 +751,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "force-del-wt",
             repoPath: repo,
             workspaceID: workspace.id
@@ -722,8 +768,8 @@ struct WorktreeOrchestratorTests {
 
         // force: true must thread through to `git branch -D`, deleting the
         // unmerged branch the safe `-d` would have kept.
-        let removal = try await orchestrator.removeWorktreeSpace(
-            spaceID: result.spaceID, force: true, deleteBranch: true
+        let removal = try await orchestrator.removeWorktreeSession(
+            sessionID: result.sessionID, force: true, deleteBranch: true
         )
 
         #expect(removal.branchName == "force-del-wt")
@@ -735,7 +781,7 @@ struct WorktreeOrchestratorTests {
         #expect(!exists)
     }
 
-    @Test func removeWorktreeSpace_deleteBranch_detachedHead_skipsBranchDelete() async throws {
+    @Test func removeWorktreeSession_deleteBranch_detachedHead_skipsBranchDelete() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -744,7 +790,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "detach-wt",
             repoPath: repo,
             workspaceID: workspace.id
@@ -755,12 +801,12 @@ struct WorktreeOrchestratorTests {
         let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/detach-wt")
         try runGitSync(["checkout", "--detach"], in: worktreePath)
 
-        let removal = try await orchestrator.removeWorktreeSpace(
-            spaceID: result.spaceID, deleteBranch: true
+        let removal = try await orchestrator.removeWorktreeSession(
+            sessionID: result.sessionID, deleteBranch: true
         )
 
         // Worktree removed, but no branch is deleted — we never guess a name
-        // from the (renamable) Space, so the branch is left intact.
+        // from the (renamable) Session, so the branch is left intact.
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
         #expect(removal.branchName == nil)
         #expect(!removal.branchDeleted)
@@ -833,25 +879,25 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "cleanup-flow",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
-        // Capture every distinct phase observed while removeWorktreeSpace runs.
+        // Capture every distinct phase observed while removeWorktreeSession runs.
         let (_, phases) = try await observingProgressPhases(on: orchestrator) {
-            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+            try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
         }
 
         #expect(phases.contains(.cleanup))
         #expect(orchestrator.setupProgress == nil)
-        // Space should be gone (clean archive success path).
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Session should be gone (clean archive success path).
+        #expect(!workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
     }
 
     /// FR-040, FR-041, FR-050: archive failure halts the cleanup pipeline,
-    /// the worktree directory stays on disk, the Space stays open, and
+    /// the worktree directory stays on disk, the Session stays open, and
     /// setupProgress is nil after the call returns.
     @Test func archiveFailureHaltsPipeline() async throws {
         let repo = try makeTempGitRepo()
@@ -870,7 +916,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "archive-halt",
             repoPath: repo,
             workspaceID: workspace.id
@@ -879,18 +925,18 @@ struct WorktreeOrchestratorTests {
         let worktreePath = (repo as NSString).appendingPathComponent(".worktrees/archive-halt")
         // The orchestrator must NOT throw on archive failure — failure is
         // captured via setupProgress.lastFailedIndex and the linger-capsule.
-        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
 
         // Worktree directory still on disk.
         #expect(FileManager.default.fileExists(atPath: worktreePath))
-        // Space still in the collection.
-        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Session still in the collection.
+        #expect(workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
         // setupProgress nil after call.
         #expect(orchestrator.setupProgress == nil)
     }
 
     /// FR-040, FR-041: user cancel during archive halts the pipeline before
-    /// `git worktree remove`. Worktree and Space are preserved.
+    /// `git worktree remove`. Worktree and Session are preserved.
     @Test func userCancelDuringArchivePreservesWorktree() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
@@ -908,7 +954,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "archive-cancel",
             repoPath: repo,
             workspaceID: workspace.id
@@ -926,15 +972,15 @@ struct WorktreeOrchestratorTests {
         }
 
         let start = ContinuousClock.now
-        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+        try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
         let elapsed = ContinuousClock.now - start
 
         // Should return well before the 5s sleep completes.
         #expect(elapsed < .seconds(4))
         // Worktree directory preserved on disk.
         #expect(FileManager.default.fileExists(atPath: worktreePath))
-        // Space preserved.
-        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Session preserved.
+        #expect(workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
         // setupProgress nil after call.
         #expect(orchestrator.setupProgress == nil)
     }
@@ -952,14 +998,14 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "no-archive",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         let (_, phases) = try await observingProgressPhases(on: orchestrator) {
-            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID)
+            try await orchestrator.removeWorktreeSession(sessionID: result.sessionID)
         }
 
         #expect(phases.contains(.removing))
@@ -989,7 +1035,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "uncommitted-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -1006,7 +1052,7 @@ struct WorktreeOrchestratorTests {
         // the catch site.
         var caughtUncommitted = false
         do {
-            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID, force: false)
+            try await orchestrator.removeWorktreeSession(sessionID: result.sessionID, force: false)
         } catch let error as WorktreeError {
             if case .uncommittedChanges = error {
                 caughtUncommitted = true
@@ -1017,16 +1063,16 @@ struct WorktreeOrchestratorTests {
         }
         #expect(caughtUncommitted)
         #expect(orchestrator.setupProgress == nil)
-        // Space and worktree still preserved (uncommitted changes were
+        // Session and worktree still preserved (uncommitted changes were
         // not force-removed).
-        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        #expect(workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
         #expect(FileManager.default.fileExists(atPath: worktreePath))
     }
 
     // MARK: - Remote ref
 
     @Test
-    func createWorktreeSpace_withRemoteRef_skipsBranchExistsPreflight() async throws {
+    func createWorktreeSession_withRemoteRef_skipsBranchExistsPreflight() async throws {
         // Seed a remote with a branch, clone it — the branch only exists as origin/feat/r in the clone.
         let remote = try makeTempGitRepo()
         defer { cleanup(remote) }
@@ -1045,7 +1091,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: clone)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "feat/r",
             existingBranch: true,
             remoteRef: "origin/feat/r",
@@ -1058,7 +1104,7 @@ struct WorktreeOrchestratorTests {
     // MARK: - Base ref
 
     @Test
-    func createWorktreeSpace_withBaseRef_branchesFromBase() async throws {
+    func createWorktreeSession_withBaseRef_branchesFromBase() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -1074,7 +1120,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "feature/from-base",
             base: baseSHA,
             repoPath: repo,
@@ -1089,7 +1135,7 @@ struct WorktreeOrchestratorTests {
     }
 
     @Test
-    func createWorktreeSpace_baseWithExisting_throws() async throws {
+    func createWorktreeSession_baseWithExisting_throws() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -1100,7 +1146,7 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         await #expect(throws: WorktreeError.self) {
-            try await orchestrator.createWorktreeSpace(
+            try await orchestrator.createWorktreeSession(
                 branchName: "existing-branch",
                 existingBranch: true,
                 base: "HEAD",
@@ -1111,7 +1157,7 @@ struct WorktreeOrchestratorTests {
     }
 
     @Test
-    func createWorktreeSpace_invalidBaseRef_throws() async throws {
+    func createWorktreeSession_invalidBaseRef_throws() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
@@ -1121,7 +1167,7 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         await #expect(throws: WorktreeError.self) {
-            try await orchestrator.createWorktreeSpace(
+            try await orchestrator.createWorktreeSession(
                 branchName: "feature/bad-base",
                 base: "no-such-ref-xyz",
                 repoPath: repo,
@@ -1153,7 +1199,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "dirty-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -1167,17 +1213,17 @@ struct WorktreeOrchestratorTests {
 
         // Remove without force should fail
         await #expect(throws: WorktreeError.self) {
-            try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID, force: false)
+            try await orchestrator.removeWorktreeSession(sessionID: result.sessionID, force: false)
         }
 
-        // Space should still exist after failed removal
-        #expect(workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        // Session should still exist after failed removal
+        #expect(workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
 
         // Remove with force should succeed
-        try await orchestrator.removeWorktreeSpace(spaceID: result.spaceID, force: true)
+        try await orchestrator.removeWorktreeSession(sessionID: result.sessionID, force: true)
 
         #expect(!FileManager.default.fileExists(atPath: worktreePath))
-        #expect(!workspace.spaceCollection.spaces.contains(where: { $0.id == result.spaceID }))
+        #expect(!workspace.sessionCollection.sessions.contains(where: { $0.id == result.sessionID }))
     }
 
     // MARK: - Pipe overflow
@@ -1203,7 +1249,7 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         let start = ContinuousClock.now
-        _ = try await orchestrator.createWorktreeSpace(
+        _ = try await orchestrator.createWorktreeSession(
             branchName: "loud-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -1242,7 +1288,7 @@ struct WorktreeOrchestratorTests {
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
         let start = ContinuousClock.now
-        _ = try await orchestrator.createWorktreeSpace(
+        _ = try await orchestrator.createWorktreeSession(
             branchName: "trap-branch",
             repoPath: repo,
             workspaceID: workspace.id
@@ -1257,7 +1303,7 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - Workspace ID targeting (Bug 1 regression)
 
-    @Test func createWorktreeSpaceTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
+    @Test func createWorktreeSessionTargetsSpecifiedWorkspaceNotKeyWindow() async throws {
         let repoA = try makeTempGitRepo()
         let repoC = try makeTempGitRepo()
         let repoCName = URL(filePath: repoC).lastPathComponent
@@ -1275,30 +1321,30 @@ struct WorktreeOrchestratorTests {
         let workspaceC = collectionC.activeWorkspace!
 
         // Simulate the bug scenario: key window's active workspace is A, but we
-        // target C explicitly via workspaceID. The new space must land in C.
+        // target C explicitly via workspaceID. The new session must land in C.
         let provider = MockWorkspaceProvider()
         provider.collections = [collectionA, collectionC]
         provider.keyWindowWorkspace = workspaceA
 
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "feature-c",
             existingBranch: false,
             repoPath: repoC,
             workspaceID: workspaceC.id
         )
 
-        #expect(workspaceC.spaceCollection.spaces.contains { $0.id == result.spaceID })
-        #expect(!workspaceA.spaceCollection.spaces.contains { $0.id == result.spaceID })
+        #expect(workspaceC.sessionCollection.sessions.contains { $0.id == result.sessionID })
+        #expect(!workspaceA.sessionCollection.sessions.contains { $0.id == result.sessionID })
     }
 
     // MARK: - In-flight guard (FR-061)
 
-    /// FR-061: Concurrent `removeWorktreeSpace` on a *different* Space is
+    /// FR-061: Concurrent `removeWorktreeSession` on a *different* Session is
     /// rejected with `WorktreeError.closeInFlight` while the first removal
     /// is still in flight.
-    @Test func concurrentCloseOnDifferentSpaceIsRejected() async throws {
+    @Test func concurrentCloseOnDifferentSessionIsRejected() async throws {
         let repoA = try makeTempGitRepo()
         let repoB = try makeTempGitRepo()
         defer {
@@ -1306,7 +1352,7 @@ struct WorktreeOrchestratorTests {
             cleanup(repoB)
         }
 
-        // Space A: configure a slow archive command so the first removal
+        // Session A: configure a slow archive command so the first removal
         // stays in flight long enough for the second call to race.
         try writeConfig(
             """
@@ -1318,11 +1364,11 @@ struct WorktreeOrchestratorTests {
             """,
             in: repoA
         )
-        // Space B: no archive commands — fast removal so the in-flight
+        // Session B: no archive commands — fast removal so the in-flight
         // guard is the only thing stopping it.
         try writeConfig("worktree_dir = \".worktrees\"", in: repoB)
 
-        // Both Spaces live in the same orchestrator / provider.
+        // Both Sessions live in the same orchestrator / provider.
         let collectionA = WorkspaceCollection(workingDirectory: repoA)
         let collectionB = WorkspaceCollection(workingDirectory: repoB)
         let workspaceA = collectionA.activeWorkspace!
@@ -1334,19 +1380,19 @@ struct WorktreeOrchestratorTests {
 
         let orch = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // Create both worktree Spaces first.
-        let resultA = try await orch.createWorktreeSpace(
+        // Create both worktree Sessions first.
+        let resultA = try await orch.createWorktreeSession(
             branchName: "close-guard-a",
             repoPath: repoA,
             workspaceID: workspaceA.id
         )
-        let resultB = try await orch.createWorktreeSpace(
+        let resultB = try await orch.createWorktreeSession(
             branchName: "close-guard-b",
             repoPath: repoB,
             workspaceID: workspaceB.id
         )
 
-        // Cancel Space A's slow archive command after it starts, so the
+        // Cancel Session A's slow archive command after it starts, so the
         // test doesn't hang for 5 s.
         let cancelTask = Task { @MainActor in
             for _ in 0..<500 {
@@ -1356,9 +1402,9 @@ struct WorktreeOrchestratorTests {
             orch.cancelCommands()
         }
 
-        // Start Space A removal in background — it will block on `sleep 5`.
+        // Start Session A removal in background — it will block on `sleep 5`.
         let removeATask = Task { @MainActor in
-            try await orch.removeWorktreeSpace(spaceID: resultA.spaceID)
+            try await orch.removeWorktreeSession(sessionID: resultA.sessionID)
         }
 
         // Wait until the in-flight guard is raised.
@@ -1366,18 +1412,18 @@ struct WorktreeOrchestratorTests {
             if orch.isCloseInFlight { break }
             try? await Task.sleep(for: .milliseconds(10))
         }
-        #expect(orch.isCloseInFlight, "isCloseInFlight should be true while Space A removal is running")
+        #expect(orch.isCloseInFlight, "isCloseInFlight should be true while Session A removal is running")
 
-        // Attempt to remove Space B while Space A removal is still in flight.
+        // Attempt to remove Session B while Session A removal is still in flight.
         var caughtCloseInFlight = false
         do {
-            try await orch.removeWorktreeSpace(spaceID: resultB.spaceID)
+            try await orch.removeWorktreeSession(sessionID: resultB.sessionID)
         } catch WorktreeError.closeInFlight {
             caughtCloseInFlight = true
         }
-        #expect(caughtCloseInFlight, "Expected WorktreeError.closeInFlight when removing a different Space concurrently")
+        #expect(caughtCloseInFlight, "Expected WorktreeError.closeInFlight when removing a different Session concurrently")
 
-        // Let Space A's removal finish (cancel already signalled above).
+        // Let Session A's removal finish (cancel already signalled above).
         _ = await cancelTask.value
         _ = try? await removeATask.value
 
@@ -1385,7 +1431,7 @@ struct WorktreeOrchestratorTests {
         #expect(!orch.isCloseInFlight, "isCloseInFlight should be false after all removals complete")
     }
 
-    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSpace`
+    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSession`
     /// returns normally (success path).
     @Test func isCloseInFlight_isClearedOnSuccess() async throws {
         let repo = try makeTempGitRepo()
@@ -1396,18 +1442,18 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orch = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orch.createWorktreeSpace(
+        let result = try await orch.createWorktreeSession(
             branchName: "inflight-success",
             repoPath: repo,
             workspaceID: workspace.id
         )
 
         #expect(!orch.isCloseInFlight)
-        try await orch.removeWorktreeSpace(spaceID: result.spaceID)
+        try await orch.removeWorktreeSession(sessionID: result.sessionID)
         #expect(!orch.isCloseInFlight)
     }
 
-    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSpace`
+    /// `isCloseInFlight` is cleared via defer even when `removeWorktreeSession`
     /// throws (error path, e.g. uncommittedChanges).
     @Test func isCloseInFlight_isClearedOnFailure() async throws {
         let repo = try makeTempGitRepo()
@@ -1418,7 +1464,7 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orch = WorktreeOrchestrator(workspaceProvider: provider)
 
-        let result = try await orch.createWorktreeSpace(
+        let result = try await orch.createWorktreeSession(
             branchName: "inflight-failure",
             repoPath: repo,
             workspaceID: workspace.id
@@ -1432,7 +1478,7 @@ struct WorktreeOrchestratorTests {
 
         #expect(!orch.isCloseInFlight)
         do {
-            try await orch.removeWorktreeSpace(spaceID: result.spaceID, force: false)
+            try await orch.removeWorktreeSession(sessionID: result.sessionID, force: false)
         } catch WorktreeError.uncommittedChanges {
             // expected
         }
@@ -1441,9 +1487,9 @@ struct WorktreeOrchestratorTests {
 
     // MARK: - Orchestrator → implementer parent link
 
-    /// A worktree Space records the creating Space as its `parentSpaceID` so the
-    /// sidebar can nest it under its orchestrator.
-    @Test func worktreeSpaceRecordsCreatorAsParent() async throws {
+    /// A worktree Session records the creating Session as its `parentSessionID`
+    /// so the sidebar can nest it under its orchestrator.
+    @Test func worktreeSessionRecordsCreatorAsParent() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
         try writeConfig("worktree_dir = \".worktrees\"", in: repo)
@@ -1451,53 +1497,53 @@ struct WorktreeOrchestratorTests {
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
 
-        // The workspace's default Space plays the orchestrator.
-        let creator = workspace.spaceCollection.activeSpace!
+        // The workspace's default Session plays the orchestrator.
+        let creator = workspace.sessionCollection.activeSession!
 
-        let result = try await orchestrator.createWorktreeSpace(
+        let result = try await orchestrator.createWorktreeSession(
             branchName: "impl-a",
             repoPath: repo,
             workspaceID: workspace.id,
             background: true,
-            creatorSpaceID: creator.id
+            creatorSessionID: creator.id
         )
 
-        let newSpace = workspace.spaceCollection.spaces.first(where: { $0.id == result.spaceID })
-        #expect(newSpace?.parentSpaceID == creator.id)
+        let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
+        #expect(newSession?.parentSessionID == creator.id)
     }
 
-    /// Two-level cap: when an implementer (a Space that already has a parent)
-    /// spawns another worktree, the new Space attaches to the top orchestrator,
+    /// Two-level cap: when an implementer (a Session that already has a parent)
+    /// spawns another worktree, the new Session attaches to the top orchestrator,
     /// not the implementer — never a third level.
-    @Test func worktreeSpaceCapsNestingAtTwoLevels() async throws {
+    @Test func worktreeSessionCapsNestingAtTwoLevels() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
         try writeConfig("worktree_dir = \".worktrees\"", in: repo)
 
         let (provider, workspace) = makeProvider(repoPath: repo)
         let orchestrator = WorktreeOrchestrator(workspaceProvider: provider)
-        let top = workspace.spaceCollection.activeSpace!
+        let top = workspace.sessionCollection.activeSession!
 
-        let firstResult = try await orchestrator.createWorktreeSpace(
+        let firstResult = try await orchestrator.createWorktreeSession(
             branchName: "impl-1",
             repoPath: repo,
             workspaceID: workspace.id,
             background: true,
-            creatorSpaceID: top.id
+            creatorSessionID: top.id
         )
-        let firstImpl = workspace.spaceCollection.spaces.first(where: { $0.id == firstResult.spaceID })!
-        #expect(firstImpl.parentSpaceID == top.id)
+        let firstImpl = workspace.sessionCollection.sessions.first(where: { $0.id == firstResult.sessionID })!
+        #expect(firstImpl.parentSessionID == top.id)
 
         // The implementer spawns another worktree → caps to the top orchestrator.
-        let secondResult = try await orchestrator.createWorktreeSpace(
+        let secondResult = try await orchestrator.createWorktreeSession(
             branchName: "impl-2",
             repoPath: repo,
             workspaceID: workspace.id,
             background: true,
-            creatorSpaceID: firstImpl.id
+            creatorSessionID: firstImpl.id
         )
-        let secondImpl = workspace.spaceCollection.spaces.first(where: { $0.id == secondResult.spaceID })!
-        #expect(secondImpl.parentSpaceID == top.id)
+        let secondImpl = workspace.sessionCollection.sessions.first(where: { $0.id == secondResult.sessionID })!
+        #expect(secondImpl.parentSessionID == top.id)
     }
 }
 

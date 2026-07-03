@@ -18,9 +18,11 @@ struct PaneViewModelRealizeSurfaceTests {
         #expect(pvm.realizeSurface(for: pvm.splitTree.focusedPaneID) == nil)
     }
 
-    /// A normal (foreground) split moves keyboard focus to the new pane.
+    /// A normal (foreground) split moves keyboard focus to the new pane. Only
+    /// terminal-kind panes split (a Claude pane rejects splits), so the empty PVM
+    /// is built with `kind: .terminal`.
     @Test func splitPaneFocusesNewPaneByDefault() {
-        let pvm = PaneViewModel.makeEmpty()
+        let pvm = PaneViewModel.makeEmpty(kind: .terminal)
         let newID = pvm.splitPane(direction: .vertical)
         #expect(newID != nil)
         #expect(pvm.splitTree.focusedPaneID == newID)
@@ -29,7 +31,7 @@ struct PaneViewModelRealizeSurfaceTests {
     /// A background split (`focusOnCreate: false`, used by `pane split --background`)
     /// creates the pane but leaves keyboard focus on the originally-focused pane.
     @Test func backgroundSplitKeepsFocusOnOriginalPane() {
-        let pvm = PaneViewModel.makeEmpty()
+        let pvm = PaneViewModel.makeEmpty(kind: .terminal)
         let original = pvm.splitTree.focusedPaneID
         let newID = pvm.splitPane(direction: .vertical, focusOnCreate: false)
         #expect(newID != nil)
