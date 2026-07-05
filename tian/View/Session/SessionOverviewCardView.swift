@@ -1,12 +1,17 @@
 import SwiftUI
 
 /// A single Mission-Control-style card in the Session Overview grid: the
-/// session's status dot + name (+ orchestrator marker), a live preview of the
-/// Claude pane's last output lines, and the shared sidebar status footer.
-/// The whole card is tappable; the active session gets an accent stroke.
+/// session's name (+ orchestrator marker), a live preview of the Claude pane's
+/// last output lines, and the shared sidebar status footer. The whole card is
+/// tappable. The card's border color encodes the session's aggregate Claude
+/// status; keyboard selection and the active session are shown via a subtle
+/// background highlight (and, for selection, a slight scale-up + lift shadow)
+/// rather than a competing accent ring.
 struct SessionOverviewCardView: View {
     let session: Session
     let isActive: Bool
+    /// `true` when this card is the keyboard-selected one in the overview grid.
+    let isSelected: Bool
     /// `true` when this session has ≥1 implementer nested under it — shows the
     /// `house` orchestrator marker next to the name, mirroring the sidebar row.
     /// Defaulted like `SidebarSessionRowView`'s `isOrchestrator`; the grid
@@ -19,13 +24,30 @@ struct SessionOverviewCardView: View {
     @State private var previewText = ""
     @State private var isHovering = false
 
+    /// The card's border color: the session's aggregate Claude status, or a
+    /// faint neutral edge when inactive (no status to show).
+    private var borderColor: Color {
+        session.aggregateClaudeState?.overviewBorderColor ?? Color.white.opacity(0.12)
+    }
+
+    /// Background wash that signals "where you are": brightest for the
+    /// keyboard-selected card, a clearly-perceptible-but-dimmer wash for the
+    /// active session when it isn't selected, and the faintest whisper on hover.
+    /// The ordering is deliberate — active must read stronger than a mere hover.
+    /// Selection and active never both apply to the same card, so they can't stack.
+    private var highlightColor: Color {
+        if isSelected { return Color.white.opacity(0.09) }
+        if isActive { return Color.white.opacity(0.05) }
+        if isHovering { return Color.white.opacity(0.03) }
+        return .clear
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Header — status dot, name, and the orchestrator marker (matches
+            // Header — name and the orchestrator marker (matches
             // `SidebarSessionRowView`'s rule: shown only for an orchestrator).
+            // Status is carried by the card border, not a dot.
             HStack(spacing: 8) {
-                SessionDotView(state: session.aggregateClaudeState ?? .inactive)
-
                 Text(session.displayName)
                     .font(.headline)
                     .lineLimit(1)
@@ -85,18 +107,24 @@ struct SessionOverviewCardView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay {
-                    if isHovering {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.04))
-                    }
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(highlightColor)
                 }
         }
         .overlay {
-            if isActive {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.accentColor, lineWidth: 2)
-            }
+            // Status-as-border: always the aggregate Claude status color (or a
+            // faint neutral edge when inactive). Selection/active are conveyed
+            // by the highlight + scale, so no accent ring competes here.
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(borderColor, lineWidth: 2)
         }
+        .scaleEffect(isSelected ? 1.03 : 1.0)
+        .shadow(
+            color: isSelected ? Color.black.opacity(0.25) : .clear,
+            radius: isSelected ? 10 : 0,
+            y: isSelected ? 4 : 0
+        )
+        .animation(.easeInOut(duration: 0.12), value: isSelected)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture { onSelect() }
