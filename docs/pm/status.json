@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-03",
+  "lastUpdated": "2026-07-05",
   "now": [],
   "next": [
     "Daily-drive v1.0.0 (session model) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
@@ -13,6 +13,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-05",
+      "summary": "Session Overview grid (mission-control cards): an overlay showing every Claude session across the window's workspaces as a card (name, state dot, branch/diff, status label, live Claude-pane text preview). Toggle via ⌘⇧O or a button beside the sidebar collapse toggle; click-to-activate; Escape dismisses; untinted Liquid Glass backdrop. Built clean; tianTests green (1 pre-existing git-graph flake, unrelated); /code-review medium findings fixed. Delivered via /orchestrate (5 agents, peak width 2).",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/55"
+    },
     {
       "date": "2026-07-03",
       "summary": "Released v1.0.0 — the Workspace→Session model goes public (major bump): built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release live; Sparkle appcast signed + pushed (the v0.18.0 sign_update gotcha is resolved — the EdDSA key is now in the keychain and verified against SUPublicEDKey).",

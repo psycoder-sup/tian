@@ -19,18 +19,6 @@ struct SidebarSessionRowView: View {
     @State private var isRenaming = false
     @State private var lastClickTime: Date?
 
-    /// Worktree-first git status backing the row's branch + diff / PR badges:
-    /// the Claude pane's own worktree status (so sibling worktrees of one repo
-    /// stay distinct), else the first pinned repo's shared status. Matches
-    /// `SessionStatusLineView`'s selection; derived once per render and shared
-    /// with the accessibility string.
-    private var resolvedGitStatus: GitRepoStatus? {
-        session.claudePaneID
-            .flatMap { session.gitContext.status(forPane: $0) }
-            ?? session.gitContext.pinnedRepoOrder.first
-                .flatMap { session.gitContext.repoStatuses[$0] }
-    }
-
     /// Session-shaped voice-over summary: selection, Claude state, branch,
     /// diff counts, PR state, and the latest free-form status label. Reads the
     /// values the row already derived for its visible content, so it doesn't
@@ -178,7 +166,7 @@ struct SidebarSessionRowView: View {
         // and the accessibility string all read these, so a11y never re-walks
         // the pane mirrors or git status.
         let claudeState = session.aggregateClaudeState
-        let gitStatus = resolvedGitStatus
+        let gitStatus = session.resolvedGitStatus
         let latestStatus = session.latestPaneStatus
 
         Group {

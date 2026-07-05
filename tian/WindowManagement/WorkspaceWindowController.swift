@@ -152,6 +152,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                     object: self.workspaceCollection
                 )
                 return nil
+            case .toggleSessionOverview:
+                NotificationCenter.default.post(
+                    name: .toggleSessionOverview,
+                    object: self.workspaceCollection
+                )
+                return nil
             case .newSession:
                 let workspaceID = self.workspaceCollection.activeWorkspaceID
                 var userInfo: [AnyHashable: Any] = [:]

@@ -141,6 +141,10 @@ struct KeyBindingRegistry {
         registry.bindings[.toggleDebugOverlay] = [KeyBinding(
             characters: "p", keyCode: nil, modifiers: [.command, .shift])]
 
+        // Session overview grid — Cmd+Shift+O
+        registry.bindings[.toggleSessionOverview] = [KeyBinding(
+            characters: "o", keyCode: nil, modifiers: [.command, .shift])]
+
         registry.rebuildIndex()
         return registry
     }
