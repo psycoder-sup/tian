@@ -15,9 +15,9 @@
   "shipped": [
     {
       "date": "2026-07-05",
-      "summary": "Session Overview grid (mission-control cards): an overlay showing every Claude session across the window's workspaces as a card (name, state dot, branch/diff, status label, live Claude-pane text preview). Toggle via ⌘⇧O or a button beside the sidebar collapse toggle; click-to-activate; Escape dismisses; untinted Liquid Glass backdrop. Built clean; tianTests green (1 pre-existing git-graph flake, unrelated); /code-review medium findings fixed. Delivered via /orchestrate (5 agents, peak width 2).",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/55"
+      "summary": "Released v1.1.0 — Session Overview grid (mission-control cards): an overlay showing every Claude session across the window's workspaces as a card (name, state dot, branch/diff, status label, live Claude-pane text preview). ⌘⇧O / sidebar-button toggle; click-to-activate; Escape dismiss; untinted Liquid Glass backdrop. Delivered via /orchestrate (5 agents) + /code-review; merged PR #55; built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live (sign_update clean — EdDSA key in keychain).",
+      "commit": "9d9dcee",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.1.0"
     },
     {
       "date": "2026-07-03",
@@ -30,12 +30,6 @@
       "summary": "Workspace→Session hierarchy flatten merged (ADR 0004): removed Spaces/Sections/Tabs — a session = one never-split Claude pane + toggleable terminal panel; persistence v6→v7 migration; clean-break IPC/CLI v2 (session verbs, TIAN_SESSION_ID); sessions auto-name from the Claude pane title; Claude exit closes the session; terminal spawn + inspect panel follow Claude's EnterWorktree. Verified: 907 tianTests green, live v6→v7 + CLI smoke, 8-angle adversarial review with all confirmed findings fixed.",
       "commit": "a484027",
       "link": "https://github.com/psycoder-sup/tian/pull/54"
-    },
-    {
-      "date": "2026-07-02",
-      "summary": "Released v0.18.0 (sidebar tab-name + per-tab branch rows): built, notarized (Apple Accepted), stapled, GitHub Release live, Sparkle appcast signed + pushed. Gotcha: the Sparkle EdDSA private key is NOT in the local keychain, so publish.sh dies at sign_update — signed the DMG directly via `sign_update --ed-key-file` after verifying the key derives to the app's SUPublicEDKey (KDEXWrfR…).",
-      "commit": "3dfa201",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v0.18.0"
     }
   ]
 }
