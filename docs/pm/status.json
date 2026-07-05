@@ -15,9 +15,9 @@
   "shipped": [
     {
       "date": "2026-07-06",
-      "summary": "Session Overview (⌘⇧O) UX: full keyboard control (2D arrow card selection, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); card status shown as a border color via a shared ClaudeSessionState.solidStatusColor palette (also consumed by the sidebar dot) replacing the status dot; overlay reworked to a full-bleed .ultraThinMaterial frosted panel — Liquid Glass showed a diagonal sheen at that size (HIG: glass is for chrome/controls, not large content). Delivered via /orchestrate (single-implementer, W=1) + a fresh /code-review medium (clean; only the known multi-workspace ↑/↓ nav limitation). Verified: scripts/build.sh Debug green + warning-free (touch-forced recompile), driven live in the debug app.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/58"
+      "summary": "Released v1.2.0 — Session Overview (⌘⇧O) UX overhaul (PR #58): full 2D keyboard nav (arrows select, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); status shown as a card border via a shared ClaudeSessionState.solidStatusColor palette (also feeds the sidebar dot) replacing the status dot; full-bleed .ultraThinMaterial frosted overlay replacing Liquid Glass (which sheened diagonally at that size — HIG: glass is for chrome, not large content). Delivered via /orchestrate + a fresh /code-review medium (clean; only the known multi-workspace ↑/↓ nav limitation). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. Note: publish.sh again died at sign_update (Sparkle EdDSA key still not in the login keychain) — finished manually via the documented recovery.",
+      "commit": "c495789",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.0"
     },
     {
       "date": "2026-07-05",
