@@ -7,6 +7,7 @@ extension Notification.Name {
     static let focusSidebar = Notification.Name("focusSidebar")
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
     static let showCreateSessionInput = Notification.Name("showCreateSessionInput")
+    static let toggleSessionOverview = Notification.Name("toggleSessionOverview")
 }
 
 extension Notification {
@@ -22,6 +23,10 @@ struct SidebarContainerView: View {
     var bottomContentInset: CGFloat = 0
 
     @State private var sidebarState = SidebarState()
+    /// Whether the Mission-Control-style session overview grid is overlaid on
+    /// the session content. Toggled by `.toggleSessionOverview` (Cmd+Shift+O /
+    /// sidebar button); cleared when a card is selected or the overlay dismissed.
+    @State private var isOverviewVisible = false
     @State private var lastContainerSize: CGSize = .zero
     @State private var nsWindow: NSWindow?
     @State private var announcementsEnabled = false
@@ -42,19 +47,26 @@ struct SidebarContainerView: View {
         displayedSessionCollection?.activeSession
     }
 
+    /// Top-gutter floor when the sidebar is collapsed: 80pt traffic-lights + 6pt
+    /// spacing + ~18pt sidebar toggle + 6pt + ~18pt overview toggle.
+    private let topGutterFloor: CGFloat = 130
+    /// The single-button floor the bottom terminal-toggle aligns to (it has no
+    /// second button): 80pt traffic-lights + 6pt + ~18pt toggle.
+    private let bottomStripFloor: CGFloat = 104
+
     /// Leading inset that reserves room for the traffic lights + sidebar
-    /// toggle when the sidebar is collapsed, and matches the sidebar width
-    /// when expanded. 104pt = 80pt traffic-light gutter + 6pt HStack spacing
-    /// + ~18pt toggle button. Used to size the toggle button overlay frame.
+    /// toggle + overview button when the sidebar is collapsed, and matches the
+    /// sidebar width when expanded. Used to size the toggle button overlay frame.
     private var toggleGutterWidth: CGFloat {
-        max(sidebarState.mode.width, 104)
+        max(sidebarState.mode.width, topGutterFloor)
     }
 
     /// Inset applied to the leading edge of the session content so its header
-    /// chrome doesn't slide under the sidebar toggle / traffic lights.
-    /// Drops to zero when the sidebar is wide enough to swallow the toggle.
+    /// chrome doesn't slide under the sidebar toggle / overview button /
+    /// traffic lights. Drops to zero when the sidebar is wide enough to swallow
+    /// the buttons.
     private var windowLeadingInset: CGFloat {
-        max(104 - sidebarState.mode.width, 0)
+        max(topGutterFloor - sidebarState.mode.width, 0)
     }
 
     /// Inset applied to the trailing edge of the session content so its header
@@ -77,7 +89,8 @@ struct SidebarContainerView: View {
         .background(WindowAccessor(window: $nsWindow))
         .modifier(SidebarNotificationModifier(
             workspaceCollection: workspaceCollection,
-            sidebarState: sidebarState
+            sidebarState: sidebarState,
+            isOverviewVisible: $isOverviewVisible
         ))
         .onChange(of: sidebarState.focusTarget) { _, newTarget in
             if newTarget == .terminal {
@@ -142,6 +155,7 @@ struct SidebarContainerView: View {
             HStack(spacing: 6) {
                 Color.clear.frame(width: 80)
                 SidebarToggleButton(workspaceCollection: workspaceCollection)
+                SidebarOverviewButton(workspaceCollection: workspaceCollection)
             }
             .frame(width: toggleGutterWidth, height: 44, alignment: .leading)
         }
@@ -214,7 +228,7 @@ struct SidebarContainerView: View {
     private var terminalToggleStatusBarOverlay: some View {
         if let session = activeSession, bottomContentInset > 0 {
             TerminalToggleStatusBarButton(session: session)
-                .padding(.leading, toggleGutterWidth + 4)
+                .padding(.leading, max(sidebarState.mode.width, bottomStripFloor) + 4)
                 .frame(height: bottomContentInset)
         }
     }
@@ -374,6 +388,14 @@ struct SidebarContainerView: View {
             .onChange(of: sessionCollection.activeSessionID) { _, _ in
                 handleSessionChanged()
             }
+            // Overview grid is applied as an .overlay (not an if/else swap) so
+            // the ZStack above stays mounted — every session's Metal terminal
+            // surface keeps its live state while the overview is open.
+            .modifier(SessionOverviewOverlayModifier(
+                workspaceCollection: workspaceCollection,
+                sidebarState: sidebarState,
+                isOverviewVisible: $isOverviewVisible
+            ))
         } else if workspaceCollection.workspaces.isEmpty {
             WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
         }
@@ -425,6 +447,7 @@ struct SidebarContainerView: View {
 private struct SidebarNotificationModifier: ViewModifier {
     let workspaceCollection: WorkspaceCollection
     let sidebarState: SidebarState
+    @Binding var isOverviewVisible: Bool
 
     func body(content: Content) -> some View {
         content
@@ -441,6 +464,49 @@ private struct SidebarNotificationModifier: ViewModifier {
                 }
                 sidebarState.focusTarget = .sidebar
             }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSessionOverview)) { notification in
+                guard let obj = notification.object as? WorkspaceCollection,
+                      obj === workspaceCollection else { return }
+                // Don't turn the overview on in a window with nothing to show —
+                // otherwise the flag desyncs and the grid pops up the instant a
+                // session is later created. Still allow turning it back off.
+                let hasSessions = workspaceCollection.workspaces
+                    .contains { !$0.sessionCollection.sessions.isEmpty }
+                guard hasSessions || isOverviewVisible else { return }
+                isOverviewVisible.toggle()
+            }
+    }
+}
+
+// MARK: - Session Overview Overlay Modifier
+
+/// Overlays the Mission-Control-style session overview grid on the always-mounted
+/// session `ZStack`. Broken out into its own `ViewModifier` so the overlay closure
+/// doesn't push `sessionContentStack` past Swift's type-check budget, mirroring the
+/// other modifiers in this file. The `.overlay` keeps the underlying ZStack — and
+/// every session's live terminal surface — mounted while the overview is visible.
+private struct SessionOverviewOverlayModifier: ViewModifier {
+    let workspaceCollection: WorkspaceCollection
+    let sidebarState: SidebarState
+    @Binding var isOverviewVisible: Bool
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if isOverviewVisible {
+                SessionOverviewGridView(
+                    workspaceCollection: workspaceCollection,
+                    onSelect: { workspaceID, sessionID in
+                        workspaceCollection.activateWorkspace(id: workspaceID)
+                        workspaceCollection.workspaces
+                            .first(where: { $0.id == workspaceID })?
+                            .sessionCollection.activateSession(id: sessionID)
+                        sidebarState.focusTarget = .terminal
+                        isOverviewVisible = false
+                    },
+                    onDismiss: { isOverviewVisible = false }
+                )
+            }
+        }
     }
 }
 

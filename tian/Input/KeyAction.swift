@@ -18,6 +18,9 @@ enum KeyAction: Hashable {
     case toggleSidebar
     case focusSidebar
 
+    // Session overview grid
+    case toggleSessionOverview
+
     // Session panes (Claude / terminal areas)
     case toggleTerminalPanel
     case cycleFocusArea

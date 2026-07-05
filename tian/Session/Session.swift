@@ -365,6 +365,49 @@ final class Session: Identifiable {
         return latest
     }
 
+    /// Worktree-first git status for this session's badges: the Claude pane's own
+    /// worktree status, else the first pinned repo's shared status. Shared by the
+    /// sidebar row and the overview card so both resolve identically.
+    var resolvedGitStatus: GitRepoStatus? {
+        claudePaneID
+            .flatMap { gitContext.status(forPane: $0) }
+            ?? gitContext.pinnedRepoOrder.first
+                .flatMap { gitContext.repoStatuses[$0] }
+    }
+
+    /// Last `maxLines` meaningful lines of the Claude pane's visible screen.
+    /// Reads the VT parser text (safe for a background/non-visible pane).
+    /// Blank lines and horizontal-rule / separator lines are dropped first.
+    /// Returns `""` when the session has no live Claude surface.
+    func claudePreviewText(maxLines: Int) -> String {
+        guard let pane = claudePane, let id = claudePaneID,
+              let text = pane.surface(for: id)?.readContents(fullScrollback: false)
+        else { return "" }
+        return text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { !isSeparatorLine($0) }
+            .suffix(maxLines)
+            .joined(separator: "\n")
+    }
+
+    /// True for blank lines and horizontal-rule / separator lines (e.g. the
+    /// borders Claude Code draws around its input box), so the overview preview
+    /// shows message text instead of dashes.
+    private func isSeparatorLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        // Horizontal-rule glyphs only — NOT bullets/dots, which appear in real text.
+        let ruleChars: Set<Character> = [
+            "-", "\u{2500}", "\u{2501}", "\u{2014}", "\u{2013}", "_", "=",
+            "\u{2550}", "\u{2504}", "\u{2505}", "\u{2508}", "\u{2509}",
+            "\u{254C}", "\u{254D}", "\u{23AF}", "\u{FE63}", "\u{2015}"
+        ]
+        let ruleCount = trimmed.reduce(into: 0) { count, ch in
+            if ruleChars.contains(ch) { count += 1 }
+        }
+        return Double(ruleCount) / Double(trimmed.count) >= 0.8
+    }
+
     // MARK: - Close
 
     /// Explicit user-gesture close. If any pane has live foreground processes
