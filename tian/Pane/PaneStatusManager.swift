@@ -18,6 +18,7 @@ final class PaneStatusManager {
 
     private(set) var statuses: [UUID: PaneStatus] = [:]
     private(set) var sessionStates: [UUID: ClaudeSessionState] = [:]
+    private(set) var lastPrompts: [UUID: String] = [:]
 
     private var nextSequence: UInt64 = 0
 
@@ -30,13 +31,23 @@ final class PaneStatusManager {
         owner(of: paneID)?.paneStatuses[paneID] = status   // dual-write
     }
 
-    /// Clears both the free-form status label and session state for the pane.
+    /// Records the latest user prompt typed into a pane's Claude session.
+    /// Plain overwrite — no sequence counter, since the prompt is scoped to a
+    /// single Claude pane rather than aggregated across panes.
+    func setLastPrompt(paneID: UUID, text: String) {
+        lastPrompts[paneID] = text
+        owner(of: paneID)?.paneLastPrompts[paneID] = text   // dual-write
+    }
+
+    /// Clears the free-form status label, session state, and last prompt for the pane.
     func clearStatus(paneID: UUID) {
         statuses.removeValue(forKey: paneID)
         sessionStates.removeValue(forKey: paneID)
+        lastPrompts.removeValue(forKey: paneID)
         if let pvm = owner(of: paneID) {
             pvm.paneStatuses.removeValue(forKey: paneID)
             pvm.sessionStates.removeValue(forKey: paneID)
+            pvm.paneLastPrompts.removeValue(forKey: paneID)
         }
     }
 
@@ -44,9 +55,11 @@ final class PaneStatusManager {
         for id in paneIDs {
             statuses.removeValue(forKey: id)
             sessionStates.removeValue(forKey: id)
+            lastPrompts.removeValue(forKey: id)
             if let pvm = owner(of: id) {
                 pvm.paneStatuses.removeValue(forKey: id)
                 pvm.sessionStates.removeValue(forKey: id)
+                pvm.paneLastPrompts.removeValue(forKey: id)
             }
         }
     }

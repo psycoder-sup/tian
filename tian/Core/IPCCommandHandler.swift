@@ -58,6 +58,9 @@ final class IPCCommandHandler {
         case "status.set":   return handleStatusSet(request)
         case "status.clear": return handleStatusClear(request)
 
+        // Prompt
+        case "prompt.set": return handlePromptSet(request)
+
         // Notify (Phase 5)
         case "notify": return await handleNotify(request)
 
@@ -519,6 +522,28 @@ final class IPCCommandHandler {
         }
 
         statusManager.clearStatus(paneID: paneId)
+        return .success()
+    }
+
+    // MARK: - Prompt Commands
+
+    /// Records the latest user prompt typed into a pane's Claude session (mirrored
+    /// to the owning PaneViewModel by `PaneStatusManager`). Per-pane: targets the
+    /// caller's `TIAN_PANE_ID`. Mirrors `handleStatusSet`'s pane-resolution boilerplate.
+    private func handlePromptSet(_ request: IPCRequest) -> IPCResponse {
+        guard let text = stringParam("text", from: request.params) else {
+            return missingParameter("text")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        statusManager.setLastPrompt(paneID: paneId, text: text)
         return .success()
     }
 

@@ -365,6 +365,23 @@ final class Session: Identifiable {
         return latest
     }
 
+    /// The latest user prompt typed into this session's Claude pane, read from
+    /// the per-PVM mirror. `nil` when there is no live Claude pane or no prompt
+    /// has been captured yet.
+    ///
+    /// Unlike the sibling aggregates (`latestPaneStatus`, `aggregateClaudeState`)
+    /// which scan every leaf of every pane, this scopes deliberately to the single
+    /// `claudePaneID` leaf: the Claude pane is always one leaf (`allowsSplits` is
+    /// false for Claude panes) and user prompts originate only there, so there is
+    /// nothing to aggregate across.
+    var latestPrompt: String? {
+        guard let id = claudePaneID,
+              let text = claudePane?.paneLastPrompts[id],
+              !text.isEmpty
+        else { return nil }
+        return text
+    }
+
     /// Worktree-first git status for this session's badges: the Claude pane's own
     /// worktree status, else the first pinned repo's shared status. Shared by the
     /// sidebar row and the overview card so both resolve identically.

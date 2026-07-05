@@ -53,6 +53,24 @@ struct SessionOverviewCardView: View {
 
             Spacer(minLength: 0)
 
+            // Latest user prompt — the most recent question typed into the
+            // Claude pane. A single truncated line with an input glyph so it
+            // reads as "what the user asked", distinct from the monospaced
+            // output preview above and the footer's branch text below. Omitted
+            // entirely when no prompt has been captured.
+            if let prompt = session.latestPrompt {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.system(size: 9))
+                    Text(prompt)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             // Footer — the shared sidebar status line (branch + diff / PR badges
             // plus the latest free-form Claude status label).
             SessionStatusLineView(

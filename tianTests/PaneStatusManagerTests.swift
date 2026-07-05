@@ -490,4 +490,83 @@ struct PaneStatusManagerTests {
         #expect(manager.sessionState(for: paneID) == .busy)  // manager still has it
         #expect(pvm.sessionState(forPane: paneID) == nil)    // mirror NOT updated
     }
+
+    // MARK: - setLastPrompt
+
+    @Test func setLastPromptStoresText() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setLastPrompt(paneID: paneID, text: "fix the bug")
+
+        #expect(manager.lastPrompts[paneID] == "fix the bug")
+    }
+
+    @Test func setLastPromptReplacesExisting() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setLastPrompt(paneID: paneID, text: "First")
+        manager.setLastPrompt(paneID: paneID, text: "Second")
+
+        #expect(manager.lastPrompts[paneID] == "Second")
+        #expect(manager.lastPrompts.count == 1)
+    }
+
+    @Test func setLastPromptDoesNotAffectStatuses() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setLastPrompt(paneID: paneID, text: "prompt")
+
+        #expect(manager.statuses[paneID] == nil)
+        #expect(manager.sessionStates[paneID] == nil)
+        #expect(manager.lastPrompts[paneID] == "prompt")
+    }
+
+    @Test func setLastPromptMirrorsToOwnerPaneViewModel() {
+        let manager = PaneStatusManager()
+        let pvm = PaneViewModel(kind: .terminal)
+        let paneID = pvm.splitTree.focusedPaneID
+
+        manager.registerPane(paneID, owner: pvm)
+
+        manager.setLastPrompt(paneID: paneID, text: "run the tests")
+        #expect(pvm.paneLastPrompts[paneID] == "run the tests")
+    }
+
+    // MARK: - clearStatus / clearAll clear the prompt
+
+    @Test func clearStatusClearsLastPrompt() {
+        let manager = PaneStatusManager()
+        let pvm = PaneViewModel(kind: .terminal)
+        let paneID = pvm.splitTree.focusedPaneID
+
+        manager.registerPane(paneID, owner: pvm)
+        manager.setLastPrompt(paneID: paneID, text: "prompt")
+        manager.clearStatus(paneID: paneID)
+
+        #expect(manager.lastPrompts[paneID] == nil)
+        #expect(pvm.paneLastPrompts[paneID] == nil)
+    }
+
+    @Test func clearAllClearsLastPrompt() {
+        let manager = PaneStatusManager()
+        let pvmA = PaneViewModel(kind: .terminal)
+        let pvmB = PaneViewModel(kind: .terminal)
+        let a = pvmA.splitTree.focusedPaneID
+        let b = pvmB.splitTree.focusedPaneID
+
+        manager.registerPane(a, owner: pvmA)
+        manager.registerPane(b, owner: pvmB)
+        manager.setLastPrompt(paneID: a, text: "A")
+        manager.setLastPrompt(paneID: b, text: "B")
+
+        manager.clearAll(for: [a])
+
+        #expect(manager.lastPrompts[a] == nil)
+        #expect(pvmA.paneLastPrompts[a] == nil)
+        #expect(manager.lastPrompts[b] == "B")
+        #expect(pvmB.paneLastPrompts[b] == "B")
+    }
 }
