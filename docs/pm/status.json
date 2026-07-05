@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-05",
+  "lastUpdated": "2026-07-06",
   "now": [],
   "next": [
     "Daily-drive v1.0.0 (session model) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
@@ -13,6 +13,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-06",
+      "summary": "Session Overview (⌘⇧O) UX: full keyboard control (2D arrow card selection, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); card status shown as a border color via a shared ClaudeSessionState.solidStatusColor palette (also consumed by the sidebar dot) replacing the status dot; overlay reworked to a full-bleed .ultraThinMaterial frosted panel — Liquid Glass showed a diagonal sheen at that size (HIG: glass is for chrome/controls, not large content). Delivered via /orchestrate (single-implementer, W=1) + a fresh /code-review medium (clean; only the known multi-workspace ↑/↓ nav limitation). Verified: scripts/build.sh Debug green + warning-free (touch-forced recompile), driven live in the debug app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/58"
+    },
     {
       "date": "2026-07-05",
       "summary": "Show the latest submitted prompt on each Session Overview card (⌘⇧O), on a line above the branch/diff footer. Capture rides the existing claude-settings hook pipeline: a new UserPromptSubmit hook (tian-hook-prompt.sh) forwards `.prompt` via a new `tian prompt set --text` CLI / `prompt.set` IPC into a per-pane PaneStatusManager store (PVM-mirrored so SwiftUI re-renders, ephemeral, cleared with the status label), surfaced as Session.latestPrompt in SessionOverviewCardView. Delivered via /orchestrate (5 agents, 2 file-disjoint waves) + /code-review (4 findings applied, 1 refuted by design). Verified: 916 tianTests green; hook bundled + wired into UserPromptSubmit in the built app.",
