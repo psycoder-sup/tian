@@ -97,6 +97,11 @@ struct SidebarContainerView: View {
                 returnFocusToActivePane()
             }
         }
+        .onChange(of: isOverviewVisible) { _, isVisible in
+            if !isVisible && sidebarState.focusTarget == .terminal {
+                returnFocusToActivePane()
+            }
+        }
         .onChange(of: workspaceCollection.activeWorkspaceID) { _, _ in
             if announcementsEnabled, let name = workspaceCollection.activeWorkspace?.name {
                 AccessibilityNotification.Announcement("Workspace: \(name)").post()
