@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-06",
+      "summary": "Fixed the known multi-workspace ↑/↓ nav limitation in the Session Overview (⌘⇧O): Up/Down now step across workspace-section boundaries. The old move() navigated a flat concatenation of every workspace's cards with one global columnCount (index ± columnCount), treating the stacked per-workspace LazyVGrids as a single uniform grid — so a workspace with fewer sessions than the column count left phantom cells and Up/Down skipped real cards (e.g. tian:[1][2], .claude:[3], ax:[4] at 3 cols toggled only card 1 <-> 4). Extracted a pure, tested OverviewGridNavigation helper that models the actual visual layout (each section flowed into rows of columnCount, stacked); Up/Down preserve the column clamped to the target row, Left/Right keep render order. Verified: Debug build green, 11 new OverviewGridNavigationTests pass, /code-review medium clean, confirmed live in the debug app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/59"
+    },
+    {
+      "date": "2026-07-06",
       "summary": "Released v1.2.0 — Session Overview (⌘⇧O) UX overhaul (PR #58): full 2D keyboard nav (arrows select, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); status shown as a card border via a shared ClaudeSessionState.solidStatusColor palette (also feeds the sidebar dot) replacing the status dot; full-bleed .ultraThinMaterial frosted overlay replacing Liquid Glass (which sheened diagonally at that size — HIG: glass is for chrome, not large content). Delivered via /orchestrate + a fresh /code-review medium (clean; only the known multi-workspace ↑/↓ nav limitation). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. Note: publish.sh again died at sign_update (Sparkle EdDSA key still not in the login keychain) — finished manually via the documented recovery.",
       "commit": "c495789",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.0"
