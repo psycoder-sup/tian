@@ -53,6 +53,7 @@ targets:
           - "Resources/claude"
           - "Resources/tian-hook-log.sh"
           - "Resources/tian-hook-pr-refresh.sh"
+          - "Resources/tian-hook-prompt.sh"
           - "Resources/tian-claude-settings.json"
           - "Resources/shell-integration/**"
     dependencies:
@@ -113,6 +114,14 @@ targets:
           - $(SRCROOT)/tian/Resources/tian-hook-pr-refresh.sh
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-hook-pr-refresh.sh
+      - script: |
+          cp -f "$SRCROOT/tian/Resources/tian-hook-prompt.sh" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-prompt.sh"
+          chmod +x "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-prompt.sh"
+        name: Bundle Prompt Hook
+        inputFiles:
+          - $(SRCROOT)/tian/Resources/tian-hook-prompt.sh
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-hook-prompt.sh
       - script: |
           SI_SRC="$SRCROOT/tian/Resources/shell-integration"
           SI_DST="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/shell-integration"

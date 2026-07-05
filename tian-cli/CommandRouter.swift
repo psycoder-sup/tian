@@ -595,6 +595,31 @@ struct StatusClear: ParsableCommand {
     }
 }
 
+// MARK: - Prompt
+
+struct PromptGroup: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "prompt",
+        abstract: "Manage the latest prompt shown on the session overview card.",
+        subcommands: [PromptSet.self]
+    )
+}
+
+struct PromptSet: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "set",
+        abstract: "Set the latest user prompt for the current pane."
+    )
+
+    @Option(name: .long, help: "The prompt text.")
+    var text: String
+
+    func run() throws {
+        let response = try sendRequest(command: "prompt.set", params: ["text": .string(text)])
+        try handleVoidResponse(response)
+    }
+}
+
 // MARK: - Notify
 
 struct NotifyCommand: ParsableCommand {

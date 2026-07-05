@@ -42,6 +42,12 @@ final class PaneViewModel {
     /// external mutation as a bug.
     var paneStatuses: [UUID: PaneStatus] = [:]
 
+    /// Per-pane last-prompt mirror, written by `PaneStatusManager` via the pane
+    /// registry. Like `paneStatuses`, this is mutated only by the manager — the
+    /// plain `var` is intentional so the manager (in the same module) can
+    /// dual-write; treat external mutation as a bug. Ephemeral, never persisted.
+    var paneLastPrompts: [UUID: String] = [:]
+
     /// The container size for the split tree view, updated from the view layer.
     /// Used to compute pane frames for spatial navigation.
     var containerSize: CGSize = .zero

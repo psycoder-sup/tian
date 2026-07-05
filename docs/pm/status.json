@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-05",
+      "summary": "Show the latest submitted prompt on each Session Overview card (⌘⇧O), on a line above the branch/diff footer. Capture rides the existing claude-settings hook pipeline: a new UserPromptSubmit hook (tian-hook-prompt.sh) forwards `.prompt` via a new `tian prompt set --text` CLI / `prompt.set` IPC into a per-pane PaneStatusManager store (PVM-mirrored so SwiftUI re-renders, ephemeral, cleared with the status label), surfaced as Session.latestPrompt in SessionOverviewCardView. Delivered via /orchestrate (5 agents, 2 file-disjoint waves) + /code-review (4 findings applied, 1 refuted by design). Verified: 916 tianTests green; hook bundled + wired into UserPromptSubmit in the built app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/56"
+    },
+    {
+      "date": "2026-07-05",
       "summary": "Released v1.1.0 — Session Overview grid (mission-control cards): an overlay showing every Claude session across the window's workspaces as a card (name, state dot, branch/diff, status label, live Claude-pane text preview). ⌘⇧O / sidebar-button toggle; click-to-activate; Escape dismiss; untinted Liquid Glass backdrop. Delivered via /orchestrate (5 agents) + /code-review; merged PR #55; built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live (sign_update clean — EdDSA key in keychain).",
       "commit": "9d9dcee",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.1.0"

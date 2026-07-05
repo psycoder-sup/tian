@@ -88,6 +88,10 @@
           },
           {
             "type": "command",
+            "command": "tian-hook-prompt.sh"
+          },
+          {
+            "type": "command",
             "command": "d=$(jq -r '.cwd // empty' 2>/dev/null); [ -n \"$d\" ] && tian pane set-directory \"$d\" >/dev/null 2>&1 || true"
           }
         ]

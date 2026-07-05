@@ -253,6 +253,36 @@ struct IPCCommandHandlerTests {
         #expect(response.error?.message.contains("at least one of") == true)
     }
 
+    // MARK: - Prompt Commands
+
+    @Test @MainActor func promptSetMissingTextReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
+        let response = await handler.handle(request("prompt.set"))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Missing required parameter: text") == true)
+    }
+
+    @Test @MainActor func promptSetInvalidPaneUUIDReturnsError() async {
+        let invalidEnv = IPCEnv(paneId: "not-a-uuid", sessionId: "", workspaceId: "")
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
+        let response = await handler.handle(request("prompt.set", ["text": .string("fix the bug")], env: invalidEnv))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid pane UUID") == true)
+    }
+
+    @Test @MainActor func promptSetNonexistentPaneReturnsError() async {
+        let statusManager = PaneStatusManager()
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: statusManager)
+        let response = await handler.handle(request("prompt.set", ["text": .string("fix the bug")]))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Pane not found") == true)
+        // Failed pane lookup must not store the prompt.
+        #expect(statusManager.lastPrompts.isEmpty)
+    }
+
     // MARK: - Pane split (validation + Claude rejection backstop)
 
     @Test @MainActor func paneSplitInvalidPaneUUIDReturnsError() async {
