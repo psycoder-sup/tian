@@ -170,6 +170,17 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
                     userInfo: userInfo
                 )
                 return nil
+            case .renameSession:
+                var userInfo: [AnyHashable: Any] = [:]
+                if let id = self.workspaceCollection.activeSessionCollection?.activeSessionID {
+                    userInfo[Notification.renameSessionIDKey] = id
+                }
+                NotificationCenter.default.post(
+                    name: .renameSession,
+                    object: self.workspaceCollection,
+                    userInfo: userInfo
+                )
+                return nil
             default:
                 break
             }

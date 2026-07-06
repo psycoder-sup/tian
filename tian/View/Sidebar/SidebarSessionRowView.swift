@@ -254,6 +254,15 @@ struct SidebarSessionRowView: View {
             onSetDirectory: onSetDirectory,
             onClose: onClose
         ))
+        // Cmd+R (posted by the window key monitor) enters inline-rename on the
+        // active session's row. Matching on the globally-unique session UUID is
+        // the correct guard — the row has no workspaceCollection reference.
+        .onReceive(NotificationCenter.default.publisher(for: .renameSession)) { notification in
+            if !isSettingUp,
+               notification.userInfo?[Notification.renameSessionIDKey] as? UUID == session.id {
+                isRenaming = true
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("session-row-\(session.id)")

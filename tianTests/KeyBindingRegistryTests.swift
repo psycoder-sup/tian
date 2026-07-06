@@ -30,6 +30,12 @@ struct KeyBindingRegistryTests {
         #expect(KeyBindingRegistry.shared.action(for: event) == .newSession)
     }
 
+    @Test func cmdRMapsToRenameSession() {
+        // Cmd+R enters inline-rename on the active session's sidebar row.
+        let event = keyEvent(keyCode: 15 /* R */, characters: "r", modifiers: [.command])
+        #expect(KeyBindingRegistry.shared.action(for: event) == .renameSession)
+    }
+
     @Test func nonLatinImeResolvesByPhysicalKey() {
         // Under a Korean (or other non-Latin) IME, the T key reports a composed
         // character for charactersIgnoringModifiers; the binding must still
