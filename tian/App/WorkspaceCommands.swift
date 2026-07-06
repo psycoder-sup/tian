@@ -51,14 +51,14 @@ struct WorkspaceCommands: Commands {
                     controller.workspaceCollection.previousSessionGlobal()
                 }
             }
-            .keyboardShortcut(.leftArrow, modifiers: [.command, .shift])
+            .keyboardShortcut(.upArrow, modifiers: [.command, .shift])
 
             Button("Next Session") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {
                     controller.workspaceCollection.nextSessionGlobal()
                 }
             }
-            .keyboardShortcut(.rightArrow, modifiers: [.command, .shift])
+            .keyboardShortcut(.downArrow, modifiers: [.command, .shift])
 
             Divider()
 

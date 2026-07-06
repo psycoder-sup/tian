@@ -90,9 +90,7 @@ struct SidebarExpandedContentView: View {
             .allowsHitTesting(false)
         }
         .onAppear {
-            if let id = workspaceCollection.activeWorkspaceID {
-                disclosedWorkspaces.insert(id)
-            }
+            discloseActiveWorkspace()
         }
         .onChange(of: sidebarState.focusTarget) { _, newTarget in
             if newTarget == .sidebar {
@@ -100,6 +98,15 @@ struct SidebarExpandedContentView: View {
             } else {
                 selectedIndex = nil
             }
+        }
+        // Auto-expand the active workspace when focus lands in it — on
+        // cross-workspace jumps (⌘⇧↑/↓, ⌘1–9, clicks) and within-workspace
+        // session switches. Expand-only: never collapses other workspaces.
+        .onChange(of: workspaceCollection.activeWorkspaceID) { _, _ in
+            discloseActiveWorkspace()
+        }
+        .onChange(of: workspaceCollection.activeWorkspace?.activeSessionID) { _, _ in
+            discloseActiveWorkspace()
         }
     }
 
@@ -136,6 +143,14 @@ struct SidebarExpandedContentView: View {
     }
 
     // MARK: - Disclosure
+
+    /// Expand the workspace that owns the active session so its row is visible.
+    /// Expand-only — mirrors the `.onAppear` insert; never collapses anything.
+    private func discloseActiveWorkspace() {
+        if let id = workspaceCollection.activeWorkspaceID {
+            disclosedWorkspaces.insert(id)
+        }
+    }
 
     private func toggleDisclosure(_ id: UUID) {
         if disclosedWorkspaces.contains(id) {

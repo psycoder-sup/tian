@@ -50,7 +50,7 @@ struct KeyBindingRegistryTests {
     }
 
     @Test func keyCodeBindingResolves() {
-        let event = keyEvent(keyCode: 124 /* Right */, characters: "\u{F703}", modifiers: [.command, .shift])
+        let event = keyEvent(keyCode: 125 /* Down */, characters: "\u{F701}", modifiers: [.command, .shift])
         #expect(KeyBindingRegistry.shared.action(for: event) == .nextSession)
     }
 
@@ -79,7 +79,7 @@ struct KeyBindingRegistryTests {
     @Test func numericPadFlagDoesNotBlockMatch() {
         // Arrow keys carry .numericPad in event flags; chord matching must tolerate it.
         let modifiers: NSEvent.ModifierFlags = [.command, .shift, .numericPad]
-        let event = keyEvent(keyCode: 124, characters: "\u{F703}", modifiers: modifiers)
+        let event = keyEvent(keyCode: 125, characters: "\u{F701}", modifiers: modifiers)
         #expect(KeyBindingRegistry.shared.action(for: event) == .nextSession)
     }
 }
