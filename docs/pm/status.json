@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-06",
+      "summary": "Open-source readiness prep (PR #61): added LICENSE (MIT) and THIRD-PARTY-NOTICES.md (verbatim licenses for Ghostty, Sparkle, Swift Argument Parser, TOMLKit, MarkdownUI, NetworkImage, swift-cmark), a README license badge + section, and externalized the Apple signing Team ID out of project.yml/release.sh into a gitignored .tian/signing.env (template committed; injected via xcodebuild at build time, so Debug/local/CI are unaffected — xcodegen generate verified). Untracked .claude/agent-memory (already gitignored) and removed the two disabled Claude GitHub workflows. Full git-history secrets scan (397 commits, all blobs) found no keys/tokens/credentials — repo is clean to open-source.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/61"
+    },
+    {
+      "date": "2026-07-06",
       "summary": "Sidebar auto-unfold + session-nav shortcut rebind (PR #60, via /orchestrate). The sidebar now auto-expands the workspace containing the focused session on any focus change (cross-workspace ⌘⇧↑/↓, ⌘1–9, click) via two .onChange observers feeding a small expand-only discloseActiveWorkspace() helper. Global Previous/Next Session rebound from ⌘⇧←/→ to ⌘⇧↑/↓ across both definition sites that must stay in sync — the SwiftUI menu accelerator (WorkspaceCommands) and the NSEvent keyCode monitor (KeyBindingRegistry, 125 Down / 126 Up); tests updated. Verified: BUILD SUCCEEDED + 927 tianTests green; /code-review medium applied (deduped .onAppear to the shared helper).",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/60"
