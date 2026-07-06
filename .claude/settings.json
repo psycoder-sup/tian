@@ -9,7 +9,8 @@
       "Bash(xcodebuild -project tian.xcodeproj:*)",
       "Bash(xcodebuild -project */tian/tian.xcodeproj *)",
       "Bash(./scripts/build.sh *)",
-      "Read(tian/Vendor/*)"
+      "Read(tian/Vendor/*)",
+      "Bash(gh pr merge *)"
     ]
   },
   "enabledPlugins": {
