@@ -4,7 +4,7 @@
   "lastUpdated": "2026-07-06",
   "now": [],
   "next": [
-    "Daily-drive the shipped app (now v1.2.1) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.3.0) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -21,51 +21,15 @@
     },
     {
       "date": "2026-07-06",
-      "summary": "Surface background subagents + run_in_background bash per session, and fix the false-idle bug (PR #64, via /orchestrate). Claude Code's Stop/SubagentStop hooks carry a background_tasks snapshot -> `tian activity sync` -> IPC -> PaneStatusManager (PVM-mirrored) -> Session, rendered as a sidebar badge (BackgroundActivityBadgeView) + an overview-card list (SessionOverviewActivityListView). A session no longer reads idle while background work runs: Session.aggregateClaudeState floors to .busy and IPC session.list reports the same floored state (so an orchestrator polling the CLI sees it too). Snapshot-authoritative — a single activity sync whole-set replace (chosen after review so correctness doesn't depend on the hook payload's id shape) + lenient BackgroundActivity.fromClaudeSnapshot decoder + a staleness TTL for a background bash that finishes with no completion hook. Built via /orchestrate (2 waves, 6 implementers) + /code-review medium (8 angles) + a 5-agent review-fix wave. Verified: BUILD SUCCEEDED, 966 tianTests green; Stop/SubagentStop hooks confirmed firing in a live tian-debug session; sidebar badge + busy-dot visually confirmed end-to-end.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/64"
+      "summary": "Released v1.3.0 — session & sidebar UX batch (PRs #60/#62/#63/#64). Surfaces background subagents + run_in_background bash per session with the false-idle fix (Session.aggregateClaudeState floors to .busy while non-stale background work runs, and IPC session.list reports the same floored state so a CLI-polling orchestrator agrees with the sidebar dot); adds ⌘R to rename the active session, workspace drag-to-reorder in the sidebar, and auto-unfold of the focused session with session-nav rebound to ⌘⇧↑/↓. Also prepped the repo for open-sourcing (MIT LICENSE + THIRD-PARTY-NOTICES, clean 397-commit secrets scan). Built, notarized, stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
+      "commit": "cf8ca59",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.3.0"
     },
     {
       "date": "2026-07-06",
-      "summary": "Sidebar workspace drag-and-drop reorder (PR #63, via /orchestrate). Replaced the non-functional .draggable/.dropDestination scaffolding (which moved a dragged workspace to the bottom regardless of drop position, and drifted in 2D) with a custom vertical DragGesture: the insertion slot is computed from the dragged row's visual center (grab-point-independent, precise even for short collapsed rows) via pure WorkspaceReorderGeometry helpers (insertionSlot/reorderShuffleOffset) -> WorkspaceCollection.reorderDestinationIndex -> reorderWorkspace; non-dragged rows shuffle aside to open an animated gap at the insertion point; sessions are no longer draggable and the now-dead WorkspaceDragItem/SessionDragItem types were deleted. Verified: BUILD SUCCEEDED + 941 tianTests green; /code-review medium --fix applied (4 cleanups: single-source slot calc, harden unmeasured-frame fallback, relocate pixel-geometry off the model, delete dead types; no correctness bugs).",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/63"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Cmd+R renames the active session (PR #62, via /orchestrate). A new KeyAction.renameSession + KeyBindingRegistry binding drops the active Claude session's sidebar row into inline-rename mode (same field as double-click / context-menu Rename), dispatched via a .renameSession NotificationCenter post from the window key monitor (WorkspaceWindowController) and matched in SidebarSessionRowView by globally-unique session UUID. Kept out of the NSText first-responder allow-list so it can't hijack an open text field, and gated on !isSettingUp so a still-setting-up session can't arm a deferred focus-stealing rename. Verified: BUILD SUCCEEDED (rebased onto PR #60/#61); /code-review medium (isSettingUp gate applied); new KeyBindingRegistryTests.cmdRMapsToRenameSession() passes.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/62"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Open-source readiness prep (PR #61): added LICENSE (MIT) and THIRD-PARTY-NOTICES.md (verbatim licenses for Ghostty, Sparkle, Swift Argument Parser, TOMLKit, MarkdownUI, NetworkImage, swift-cmark), a README license badge + section, and externalized the Apple signing Team ID out of project.yml/release.sh into a gitignored .tian/signing.env (template committed; injected via xcodebuild at build time, so Debug/local/CI are unaffected — xcodegen generate verified). Untracked .claude/agent-memory (already gitignored) and removed the two disabled Claude GitHub workflows. Full git-history secrets scan (397 commits, all blobs) found no keys/tokens/credentials — repo is clean to open-source.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/61"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Sidebar auto-unfold + session-nav shortcut rebind (PR #60, via /orchestrate). The sidebar now auto-expands the workspace containing the focused session on any focus change (cross-workspace ⌘⇧↑/↓, ⌘1–9, click) via two .onChange observers feeding a small expand-only discloseActiveWorkspace() helper. Global Previous/Next Session rebound from ⌘⇧←/→ to ⌘⇧↑/↓ across both definition sites that must stay in sync — the SwiftUI menu accelerator (WorkspaceCommands) and the NSEvent keyCode monitor (KeyBindingRegistry, 125 Down / 126 Up); tests updated. Verified: BUILD SUCCEEDED + 927 tianTests green; /code-review medium applied (deduped .onAppear to the shared helper).",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/60"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Released v1.2.1 (patch) — fixes the Session Overview (⌘⇧O) multi-workspace ↑/↓ nav limitation known in v1.2.0: Up/Down now step across workspace-section boundaries via a pure, tested OverviewGridNavigation helper that models the actual stacked-per-workspace visual layout instead of a flat global-columnCount grid (PR #59, 11 new tests). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 395) live. publish.sh ran clean end-to-end this time — sign_update succeeded (EdDSA key present in the login keychain), no manual appcast recovery needed.",
+      "summary": "Released v1.2.1 (patch) — fixes the Session Overview (⌘⇧O) multi-workspace ↑/↓ nav limitation from v1.2.0: Up/Down now step across workspace-section boundaries via a pure, tested OverviewGridNavigation helper that models the actual stacked-per-workspace visual layout instead of a flat global-columnCount grid (PR #59, 11 new tests). Notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 395) live.",
       "commit": "0e85738",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.1"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Released v1.2.0 — Session Overview (⌘⇧O) UX overhaul (PR #58): full 2D keyboard nav (arrows select, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); status shown as a card border via a shared ClaudeSessionState.solidStatusColor palette (also feeds the sidebar dot) replacing the status dot; full-bleed .ultraThinMaterial frosted overlay replacing Liquid Glass (which sheened diagonally at that size — HIG: glass is for chrome, not large content). Delivered via /orchestrate + a fresh /code-review medium. Built, notarized, stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
-      "commit": "c495789",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.0"
-    },
-    {
-      "date": "2026-07-05",
-      "summary": "Show the latest submitted prompt on each Session Overview card (⌘⇧O), on a line above the branch/diff footer. Capture rides the existing claude-settings hook pipeline: a new UserPromptSubmit hook (tian-hook-prompt.sh) forwards `.prompt` via a new `tian prompt set --text` CLI / `prompt.set` IPC into a per-pane PaneStatusManager store (PVM-mirrored so SwiftUI re-renders, ephemeral, cleared with the status label), surfaced as Session.latestPrompt in SessionOverviewCardView. Delivered via /orchestrate (5 agents, 2 file-disjoint waves) + /code-review (4 findings applied, 1 refuted by design). Verified: 916 tianTests green; hook bundled + wired into UserPromptSubmit in the built app.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/56"
     }
   ]
 }
