@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-06",
+      "summary": "Cmd+R renames the active session (PR #62, via /orchestrate). A new KeyAction.renameSession + KeyBindingRegistry binding drops the active Claude session's sidebar row into inline-rename mode (same field as double-click / context-menu Rename), dispatched via a .renameSession NotificationCenter post from the window key monitor (WorkspaceWindowController) and matched in SidebarSessionRowView by globally-unique session UUID. Kept out of the NSText first-responder allow-list so it can't hijack an open text field, and gated on !isSettingUp so a still-setting-up session can't arm a deferred focus-stealing rename. Verified: BUILD SUCCEEDED (rebased onto PR #60/#61); /code-review medium (isSettingUp gate applied); new KeyBindingRegistryTests.cmdRMapsToRenameSession() passes.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/62"
+    },
+    {
+      "date": "2026-07-06",
       "summary": "Open-source readiness prep (PR #61): added LICENSE (MIT) and THIRD-PARTY-NOTICES.md (verbatim licenses for Ghostty, Sparkle, Swift Argument Parser, TOMLKit, MarkdownUI, NetworkImage, swift-cmark), a README license badge + section, and externalized the Apple signing Team ID out of project.yml/release.sh into a gitignored .tian/signing.env (template committed; injected via xcodebuild at build time, so Debug/local/CI are unaffected — xcodegen generate verified). Untracked .claude/agent-memory (already gitignored) and removed the two disabled Claude GitHub workflows. Full git-history secrets scan (397 commits, all blobs) found no keys/tokens/credentials — repo is clean to open-source.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/61"

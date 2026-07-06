@@ -145,6 +145,11 @@ struct KeyBindingRegistry {
         registry.bindings[.toggleSessionOverview] = [KeyBinding(
             characters: "o", keyCode: nil, modifiers: [.command, .shift])]
 
+        // Session rename — Cmd+R puts the active session's sidebar row into
+        // inline-rename mode.
+        registry.bindings[.renameSession] = [KeyBinding(
+            characters: "r", keyCode: nil, modifiers: [.command])]
+
         registry.rebuildIndex()
         return registry
     }

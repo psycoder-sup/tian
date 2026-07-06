@@ -8,10 +8,12 @@ extension Notification.Name {
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
     static let showCreateSessionInput = Notification.Name("showCreateSessionInput")
     static let toggleSessionOverview = Notification.Name("toggleSessionOverview")
+    static let renameSession = Notification.Name("renameSession")
 }
 
 extension Notification {
     static let createSessionWorkspaceIDKey = "createSessionWorkspaceID"
+    static let renameSessionIDKey = "renameSessionID"
 }
 
 struct SidebarContainerView: View {

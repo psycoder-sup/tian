@@ -18,6 +18,9 @@ enum KeyAction: Hashable {
     case toggleSidebar
     case focusSidebar
 
+    // Session rename
+    case renameSession
+
     // Session overview grid
     case toggleSessionOverview
 
