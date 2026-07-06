@@ -4,7 +4,7 @@
   "lastUpdated": "2026-07-06",
   "now": [],
   "next": [
-    "Daily-drive v1.0.0 (session model) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.2.1) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -15,13 +15,13 @@
   "shipped": [
     {
       "date": "2026-07-06",
-      "summary": "Fixed the known multi-workspace ↑/↓ nav limitation in the Session Overview (⌘⇧O): Up/Down now step across workspace-section boundaries. The old move() navigated a flat concatenation of every workspace's cards with one global columnCount (index ± columnCount), treating the stacked per-workspace LazyVGrids as a single uniform grid — so a workspace with fewer sessions than the column count left phantom cells and Up/Down skipped real cards (e.g. tian:[1][2], .claude:[3], ax:[4] at 3 cols toggled only card 1 <-> 4). Extracted a pure, tested OverviewGridNavigation helper that models the actual visual layout (each section flowed into rows of columnCount, stacked); Up/Down preserve the column clamped to the target row, Left/Right keep render order. Verified: Debug build green, 11 new OverviewGridNavigationTests pass, /code-review medium clean, confirmed live in the debug app.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/59"
+      "summary": "Released v1.2.1 (patch) — fixes the Session Overview (⌘⇧O) multi-workspace ↑/↓ nav limitation known in v1.2.0: Up/Down now step across workspace-section boundaries via a pure, tested OverviewGridNavigation helper that models the actual stacked-per-workspace visual layout instead of a flat global-columnCount grid (PR #59, 11 new tests). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 395) live. publish.sh ran clean end-to-end this time — sign_update succeeded (EdDSA key present in the login keychain), no manual appcast recovery needed.",
+      "commit": "0e85738",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.1"
     },
     {
       "date": "2026-07-06",
-      "summary": "Released v1.2.0 — Session Overview (⌘⇧O) UX overhaul (PR #58): full 2D keyboard nav (arrows select, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); status shown as a card border via a shared ClaudeSessionState.solidStatusColor palette (also feeds the sidebar dot) replacing the status dot; full-bleed .ultraThinMaterial frosted overlay replacing Liquid Glass (which sheened diagonally at that size — HIG: glass is for chrome, not large content). Delivered via /orchestrate + a fresh /code-review medium (clean; only the known multi-workspace ↑/↓ nav limitation). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. Note: publish.sh again died at sign_update (Sparkle EdDSA key still not in the login keychain) — finished manually via the documented recovery.",
+      "summary": "Released v1.2.0 — Session Overview (⌘⇧O) UX overhaul (PR #58): full 2D keyboard nav (arrows select, Enter opens, Escape dismisses; selection defaults to the active session + self-heals); status shown as a card border via a shared ClaudeSessionState.solidStatusColor palette (also feeds the sidebar dot) replacing the status dot; full-bleed .ultraThinMaterial frosted overlay replacing Liquid Glass (which sheened diagonally at that size — HIG: glass is for chrome, not large content). Delivered via /orchestrate + a fresh /code-review medium. Built, notarized, stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
       "commit": "c495789",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.0"
     },
@@ -30,24 +30,6 @@
       "summary": "Show the latest submitted prompt on each Session Overview card (⌘⇧O), on a line above the branch/diff footer. Capture rides the existing claude-settings hook pipeline: a new UserPromptSubmit hook (tian-hook-prompt.sh) forwards `.prompt` via a new `tian prompt set --text` CLI / `prompt.set` IPC into a per-pane PaneStatusManager store (PVM-mirrored so SwiftUI re-renders, ephemeral, cleared with the status label), surfaced as Session.latestPrompt in SessionOverviewCardView. Delivered via /orchestrate (5 agents, 2 file-disjoint waves) + /code-review (4 findings applied, 1 refuted by design). Verified: 916 tianTests green; hook bundled + wired into UserPromptSubmit in the built app.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/56"
-    },
-    {
-      "date": "2026-07-05",
-      "summary": "Released v1.1.0 — Session Overview grid (mission-control cards): an overlay showing every Claude session across the window's workspaces as a card (name, state dot, branch/diff, status label, live Claude-pane text preview). ⌘⇧O / sidebar-button toggle; click-to-activate; Escape dismiss; untinted Liquid Glass backdrop. Delivered via /orchestrate (5 agents) + /code-review; merged PR #55; built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live (sign_update clean — EdDSA key in keychain).",
-      "commit": "9d9dcee",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.1.0"
-    },
-    {
-      "date": "2026-07-03",
-      "summary": "Released v1.0.0 — the Workspace→Session model goes public (major bump): built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release live; Sparkle appcast signed + pushed (the v0.18.0 sign_update gotcha is resolved — the EdDSA key is now in the keychain and verified against SUPublicEDKey).",
-      "commit": "3dd1cb0",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.0.0"
-    },
-    {
-      "date": "2026-07-03",
-      "summary": "Workspace→Session hierarchy flatten merged (ADR 0004): removed Spaces/Sections/Tabs — a session = one never-split Claude pane + toggleable terminal panel; persistence v6→v7 migration; clean-break IPC/CLI v2 (session verbs, TIAN_SESSION_ID); sessions auto-name from the Claude pane title; Claude exit closes the session; terminal spawn + inspect panel follow Claude's EnterWorktree. Verified: 907 tianTests green, live v6→v7 + CLI smoke, 8-angle adversarial review with all confirmed findings fixed.",
-      "commit": "a484027",
-      "link": "https://github.com/psycoder-sup/tian/pull/54"
     }
   ]
 }
