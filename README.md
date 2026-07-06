@@ -1,5 +1,7 @@
 # tian
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A native macOS terminal emulator built with SwiftUI, embedding [Ghostty](https://ghostty.org/) as its terminal core.
 
 Ghostty handles the PTY, VT parsing, Metal rendering, font atlas, cursor, selection, scrollback, and color themes. tian wraps it in a native macOS shell with a 4-level workspace model and a CLI for scripting the UI from inside your shell.
@@ -133,3 +135,9 @@ log stream --predicate 'subsystem == "com.tian.app"'
 - `.dev/tmp/` — gitignored scratch space for experiments
 
 See [`CLAUDE.md`](CLAUDE.md) for deeper architecture notes.
+
+## License
+
+tian is released under the [MIT License](LICENSE).
+
+It embeds and links third-party software — Ghostty, Sparkle, and others — distributed under their own terms. See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) for their licenses and attributions.

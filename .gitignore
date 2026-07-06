@@ -26,6 +26,9 @@ build/
 # tian-cli config artifacts
 .tian/*.rejected
 
+# Local code-signing config for scripts/release.sh (see .tian/signing.env.example)
+.tian/signing.env
+
 # Swift Package Manager
 .build/
 Package.resolved
