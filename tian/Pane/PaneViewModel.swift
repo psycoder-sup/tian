@@ -48,6 +48,14 @@ final class PaneViewModel {
     /// dual-write; treat external mutation as a bug. Ephemeral, never persisted.
     var paneLastPrompts: [UUID: String] = [:]
 
+    /// Per-pane background-activity mirror (outstanding subagents / backgrounded
+    /// bash), written by `PaneStatusManager` via the pane registry. Like the
+    /// sibling mirrors, this is mutated only by the manager — the plain `var` is
+    /// intentional so the manager (in the same module) can dual-write; treat
+    /// external mutation as a bug. The UI observes it (via `Session`) to keep a
+    /// session flagged busy while background work runs. Ephemeral, never persisted.
+    var paneBackgroundActivities: [UUID: [BackgroundActivity]] = [:]
+
     /// The container size for the split tree view, updated from the view layer.
     /// Used to compute pane frames for spatial navigation.
     var containerSize: CGSize = .zero

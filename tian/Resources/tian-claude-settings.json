@@ -97,6 +97,21 @@
         ]
       }
     ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh SubagentStop"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh sync"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
@@ -104,6 +119,10 @@
           {
             "type": "command",
             "command": "tian-hook-log.sh Stop idle"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh sync"
           }
         ]
       }

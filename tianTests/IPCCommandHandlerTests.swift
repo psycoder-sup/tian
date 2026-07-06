@@ -283,6 +283,46 @@ struct IPCCommandHandlerTests {
         #expect(statusManager.lastPrompts.isEmpty)
     }
 
+    // MARK: - Background Activity Commands
+
+    /// A representative Claude `background_tasks` snapshot (one subagent, one
+    /// backgrounded bash command) passed as the `activity.sync` `json` param.
+    private let backgroundTasksJSON = """
+    [
+      {"task_id": "a1", "type": "agent", "agent_type": "code-implementer", "status": "running"},
+      {"task_id": "b2", "type": "bash", "command": "npm test", "status": "running"}
+    ]
+    """
+
+    @Test @MainActor func activitySyncMissingJsonReturnsError() async {
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
+        let response = await handler.handle(request("activity.sync"))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Missing required parameter: json") == true)
+    }
+
+    @Test @MainActor func activitySyncInvalidPaneUUIDReturnsError() async {
+        let invalidEnv = IPCEnv(paneId: "not-a-uuid", sessionId: "", workspaceId: "")
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: PaneStatusManager())
+        let response = await handler.handle(request("activity.sync", ["json": .string(backgroundTasksJSON)], env: invalidEnv))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Invalid pane UUID") == true)
+    }
+
+    @Test @MainActor func activitySyncNonexistentPaneReturnsError() async {
+        let statusManager = PaneStatusManager()
+        let handler = IPCCommandHandler(windowCoordinator: WindowCoordinator(), statusManager: statusManager)
+        // A well-formed background_tasks snapshot threads through the json param and
+        // reaches pane resolution; the sentinel env pane fails the lookup.
+        let response = await handler.handle(request("activity.sync", ["json": .string(backgroundTasksJSON)]))
+        #expect(response.ok == false)
+        #expect(response.error?.code == 1)
+        #expect(response.error?.message.contains("Pane not found") == true)
+        #expect(statusManager.backgroundActivities.isEmpty)
+    }
+
     // MARK: - Pane split (validation + Claude rejection backstop)
 
     @Test @MainActor func paneSplitInvalidPaneUUIDReturnsError() async {

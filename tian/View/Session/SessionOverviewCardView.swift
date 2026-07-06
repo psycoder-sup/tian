@@ -100,6 +100,11 @@ struct SessionOverviewCardView: View {
                 repoStatus: session.resolvedGitStatus,
                 latestStatus: session.latestPaneStatus
             )
+
+            // Background work — outstanding subagents / backgrounded bash for this
+            // session. Additive and self-hiding: renders nothing when there's no
+            // background activity, so the footer above is unaffected.
+            SessionOverviewActivityListView(activities: session.backgroundActivities)
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
