@@ -1,13 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Direction of an arrow-key move in the overview grid, translated from the
-/// keyboard responder's raw key codes into a value the SwiftUI view's pure
-/// move helper can act on.
-private enum ArrowDirection {
-    case up, down, left, right
-}
-
 /// A Mission-Control-style overview of every Claude session across all
 /// workspaces, laid out as a grid of `SessionOverviewCardView` cards covering
 /// the whole session area with a full-bleed `.ultraThinMaterial` frosted
@@ -173,23 +166,22 @@ struct SessionOverviewGridView: View {
         return cards.first?.id
     }
 
-    /// Move the selection one step in `direction` across the flat, render-order
-    /// list: ±1 for Left/Right, ∓`columnCount` for Up/Down. Clamped to the list
-    /// bounds (no wrap). A missing/invalid selection is treated as index 0.
-    private func move(_ direction: ArrowDirection) {
-        let cards = flatCards
-        guard !cards.isEmpty else { return }
-        let current = cards.firstIndex { $0.id == selectedSessionID } ?? 0
-        let cols = max(1, columnCount)
-        let delta: Int
-        switch direction {
-        case .left:  delta = -1
-        case .right: delta = 1
-        case .up:    delta = -cols
-        case .down:  delta = cols
+    /// Move the selection one step in `direction` across the overview's stacked
+    /// per-workspace grids (see `OverviewGridNavigation`): Left/Right walk the
+    /// flat render order, Up/Down step between visual rows across workspace
+    /// section boundaries preserving the column. Clamped to bounds (no wrap).
+    private func move(_ direction: OverviewGridNavigation.Direction) {
+        let sections = workspaceCollection.workspaces.map { workspace in
+            workspace.sessionCollection.hierarchicalOrder().map(\.session.id)
         }
-        let next = min(max(current + delta, 0), cards.count - 1)
-        selectedSessionID = cards[next].id
+        if let next = OverviewGridNavigation.move(
+            direction,
+            from: selectedSessionID,
+            sections: sections,
+            columnCount: columnCount
+        ) {
+            selectedSessionID = next
+        }
     }
 
     /// Open the currently selected session (activates it and dismisses the
@@ -223,7 +215,7 @@ struct SessionOverviewGridView: View {
 /// leaking to the live terminal surface behind the overlay. Mirrors
 /// `SidebarKeyboardResponder`.
 private struct OverviewKeyboardResponder: NSViewRepresentable {
-    let onArrow: (ArrowDirection) -> Void
+    let onArrow: (OverviewGridNavigation.Direction) -> Void
     let onActivate: () -> Void
     let onEscape: () -> Void
 
@@ -245,7 +237,7 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
     }
 
     final class KeyView: NSView {
-        var onArrow: ((ArrowDirection) -> Void)?
+        var onArrow: ((OverviewGridNavigation.Direction) -> Void)?
         var onActivate: (() -> Void)?
         var onEscape: (() -> Void)?
 
