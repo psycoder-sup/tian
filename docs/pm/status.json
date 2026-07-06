@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-06",
+      "summary": "Sidebar auto-unfold + session-nav shortcut rebind (PR #60, via /orchestrate). The sidebar now auto-expands the workspace containing the focused session on any focus change (cross-workspace ⌘⇧↑/↓, ⌘1–9, click) via two .onChange observers feeding a small expand-only discloseActiveWorkspace() helper. Global Previous/Next Session rebound from ⌘⇧←/→ to ⌘⇧↑/↓ across both definition sites that must stay in sync — the SwiftUI menu accelerator (WorkspaceCommands) and the NSEvent keyCode monitor (KeyBindingRegistry, 125 Down / 126 Up); tests updated. Verified: BUILD SUCCEEDED + 927 tianTests green; /code-review medium applied (deduped .onAppear to the shared helper).",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/60"
+    },
+    {
+      "date": "2026-07-06",
       "summary": "Released v1.2.1 (patch) — fixes the Session Overview (⌘⇧O) multi-workspace ↑/↓ nav limitation known in v1.2.0: Up/Down now step across workspace-section boundaries via a pure, tested OverviewGridNavigation helper that models the actual stacked-per-workspace visual layout instead of a flat global-columnCount grid (PR #59, 11 new tests). Built, notarized (Apple Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 395) live. publish.sh ran clean end-to-end this time — sign_update succeeded (EdDSA key present in the login keychain), no manual appcast recovery needed.",
       "commit": "0e85738",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.2.1"

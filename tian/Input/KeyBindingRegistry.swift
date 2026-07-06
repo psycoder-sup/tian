@@ -110,11 +110,11 @@ struct KeyBindingRegistry {
             characters: "t", keyCode: nil, modifiers: [.command, .shift])]
 
         // Session navigation (across workspaces)
-        // Cmd+Shift+Right (keyCode 124) / Cmd+Shift+Left (keyCode 123)
+        // Cmd+Shift+Down (keyCode 125) / Cmd+Shift+Up (keyCode 126)
         registry.bindings[.nextSession] = [KeyBinding(
-            characters: nil, keyCode: 124, modifiers: [.command, .shift])]
+            characters: nil, keyCode: 125, modifiers: [.command, .shift])]
         registry.bindings[.previousSession] = [KeyBinding(
-            characters: nil, keyCode: 123, modifiers: [.command, .shift])]
+            characters: nil, keyCode: 126, modifiers: [.command, .shift])]
         registry.bindings[.newWorkspace] = [KeyBinding(
             characters: "n", keyCode: nil, modifiers: [.command, .shift])]
         registry.bindings[.closeWorkspace] = [KeyBinding(
