@@ -48,6 +48,12 @@ class TianAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenter
         self.ipcServer = server
         server.start()
 
+        // Age out background-activity badges on their own. Claude only reports
+        // `background_tasks` on Stop/SubagentStop, so a session that stops syncing
+        // (ended, orphaned, or gone idle) needs this timer to lift the stale
+        // `.busy` floor instead of waiting for an incidental re-render.
+        PaneStatusManager.shared.startStalenessPruning()
+
         SkillInstaller.syncIfNeeded()
     }
 

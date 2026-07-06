@@ -51,8 +51,12 @@ struct BackgroundActivity: Identifiable, Equatable, Codable, Sendable {
     var lastSeen: Date = Date()
 
     /// How long an un-refreshed activity stays "live" before it reads as stale.
+    /// Claude only reports `background_tasks` on Stop/SubagentStop, so a session
+    /// that stops syncing (ended, orphaned, or long-idle) never sends a shrinking
+    /// snapshot; this backstop ages the last one out, and `PaneStatusManager`
+    /// sweeps aged-out entries on a timer so the busy floor lifts on its own.
     /// Idle-for-TTL means idle even if a process technically lingers.
-    static let stalenessTTL: TimeInterval = 600
+    static let stalenessTTL: TimeInterval = 180
 
     /// True once `lastSeen` is older than `stalenessTTL` — the activity hasn't
     /// appeared in a recent-enough snapshot to keep flooring the session busy.

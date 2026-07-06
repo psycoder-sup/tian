@@ -23,6 +23,14 @@ final class PaneStatusManager {
 
     private var nextSequence: UInt64 = 0
 
+    /// Repeating sweep that ages out stale background activities (see
+    /// `startStalenessPruning`). `nil` until started at app launch.
+    private var pruningTask: Task<Void, Never>?
+
+    /// How often `pruneStaleActivities` runs. Well under `stalenessTTL` so an
+    /// aged-out entry is dropped within one interval of crossing the threshold.
+    private static let pruneInterval: Duration = .seconds(30)
+
     init() {}
 
     func setStatus(paneID: UUID, label: String) {
@@ -161,6 +169,42 @@ final class PaneStatusManager {
         } else {
             backgroundActivities[paneID] = activities
             owner(of: paneID)?.paneBackgroundActivities[paneID] = activities   // dual-write
+        }
+    }
+
+    /// Begins the periodic staleness sweep. Idempotent (a second call is a no-op)
+    /// and started once from the app delegate at launch, mirroring
+    /// `SystemMonitor.start()`.
+    func startStalenessPruning() {
+        guard pruningTask == nil else { return }
+        pruningTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.pruneInterval)
+                guard !Task.isCancelled else { return }
+                self?.pruneStaleActivities()
+            }
+        }
+    }
+
+    /// Drops background activities aged past `BackgroundActivity.stalenessTTL`
+    /// from every pane, mirroring the removal to each owning PVM (same dual-write
+    /// as `syncActivities`). This is what actually lifts the `.busy` floor once
+    /// Claude stops syncing: `background_tasks` only arrives on Stop/SubagentStop,
+    /// so a session that ends/orphans/idles never sends a shrinking snapshot, and
+    /// without this timer the stale entry would linger until an incidental
+    /// re-render happened to re-read `isStale`. A pane whose activities all age
+    /// out has its entry removed entirely, matching `syncActivities([])`.
+    func pruneStaleActivities() {
+        for (paneID, activities) in backgroundActivities {
+            let fresh = activities.filter { !$0.isStale }
+            guard fresh.count != activities.count else { continue }   // nothing aged out
+            if fresh.isEmpty {
+                backgroundActivities.removeValue(forKey: paneID)
+                owner(of: paneID)?.paneBackgroundActivities.removeValue(forKey: paneID)   // dual-write
+            } else {
+                backgroundActivities[paneID] = fresh
+                owner(of: paneID)?.paneBackgroundActivities[paneID] = fresh   // dual-write
+            }
         }
     }
 

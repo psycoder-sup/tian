@@ -248,6 +248,67 @@ struct BackgroundActivityStoreTests {
         #expect(pvm.paneBackgroundActivities[paneID] == nil)
     }
 
+    // MARK: - Staleness pruning (timer sweep)
+
+    /// An activity last seen safely past `stalenessTTL` — the timer should drop it.
+    private func aged(_ id: String) -> BackgroundActivity {
+        BackgroundActivity(
+            id: id, kind: .bash, label: "old", status: "running",
+            lastSeen: Date(timeIntervalSinceNow: -(BackgroundActivity.stalenessTTL + 60))
+        )
+    }
+
+    @Test func pruneDropsStaleKeepsFresh() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        manager.syncActivities(paneID: pane, [
+            BackgroundActivity(id: "fresh", kind: .agent, label: "a", status: nil),
+            aged("stale")
+        ])
+
+        manager.pruneStaleActivities()
+
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["fresh"])
+    }
+
+    @Test func pruneRemovesPaneEntryWhenAllStale() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        manager.syncActivities(paneID: pane, [aged("s1"), aged("s2")])
+
+        manager.pruneStaleActivities()
+
+        // All aged out → the whole entry is dropped, matching syncActivities([]).
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    @Test func pruneIsNoOpWhenNothingStale() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        manager.syncActivities(paneID: pane, [BackgroundActivity(id: "1", kind: .agent, label: "a", status: nil)])
+
+        manager.pruneStaleActivities()
+
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["1"])
+    }
+
+    @Test func pruneMirrorsRemovalToOwnerPaneViewModel() throws {
+        let manager = PaneStatusManager()
+        let pvm = PaneViewModel(kind: .terminal)
+        let paneID = pvm.splitTree.focusedPaneID
+        manager.registerPane(paneID, owner: pvm)
+
+        manager.syncActivities(paneID: paneID, [
+            BackgroundActivity(id: "fresh", kind: .agent, label: "a", status: nil),
+            aged("stale")
+        ])
+        manager.pruneStaleActivities()
+
+        // Both the manager store and the per-PVM mirror drop the stale entry.
+        #expect(manager.backgroundActivities[paneID]?.map(\.id) == ["fresh"])
+        #expect(try #require(pvm.paneBackgroundActivities[paneID]).map(\.id) == ["fresh"])
+    }
+
     // MARK: - Session idle-gate flooring
 
     /// A helper that seeds a session's Claude pane mirror directly (the same

@@ -176,6 +176,10 @@
           {
             "type": "command",
             "command": "tian-hook-log.sh SessionEnd inactive"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh clear"
           }
         ]
       }
