@@ -432,6 +432,107 @@ struct WorkspaceCollectionTests {
         #expect(collection.workspaces[0].id == ws.id)
     }
 
+    // MARK: - Reorder Destination Index (slot → destination mapping)
+
+    @Test func reorderDestinationMovesDown() {
+        // Dropping row 0 into the slot before row 2 lands at index 1 after the
+        // remove-then-insert shift.
+        #expect(WorkspaceCollection.reorderDestinationIndex(source: 0, targetSlot: 2) == 1)
+    }
+
+    @Test func reorderDestinationMovesUp() {
+        // Moving up doesn't shift: the slot before row 0 is destination 0.
+        #expect(WorkspaceCollection.reorderDestinationIndex(source: 2, targetSlot: 0) == 0)
+    }
+
+    @Test func reorderDestinationDropsAtEnd() {
+        // The end-of-list slot (count) for a 3-item list maps to the last index.
+        #expect(WorkspaceCollection.reorderDestinationIndex(source: 0, targetSlot: 3) == 2)
+    }
+
+    @Test func reorderDestinationJustBelowSelfIsNoOp() {
+        // The slot immediately below the item resolves back to its own index.
+        #expect(WorkspaceCollection.reorderDestinationIndex(source: 1, targetSlot: 2) == 1)
+    }
+
+    @Test func reorderDestinationOntoSelfIsNoOp() {
+        // The slot immediately above the item (its own row) resolves to itself.
+        #expect(WorkspaceCollection.reorderDestinationIndex(source: 1, targetSlot: 1) == 1)
+    }
+
+    @Test func reorderToEndSlotProducesExpectedOrder() {
+        // Integration: dropping the first workspace into the end slot leaves it
+        // last, with the other two shifted up one — matching the visual drop.
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        let ws2 = collection.createWorkspace(name: "second")!
+        let ws3 = collection.createWorkspace(name: "third")!
+
+        let dest = WorkspaceCollection.reorderDestinationIndex(source: 0, targetSlot: 3)
+        collection.reorderWorkspace(from: 0, to: dest)
+
+        #expect(collection.workspaces.map(\.id) == [ws2.id, ws3.id, ws1.id])
+    }
+
+    // MARK: - Insertion Slot (drag pointer-Y → slot mapping)
+
+    @Test func insertionSlotAboveFirstRowIsZero() {
+        // A pointer above the first row's midpoint lands in the top slot.
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 5, rowMidYs: [10, 30, 50]) == 0)
+    }
+
+    @Test func insertionSlotBetweenRowsCountsRowsAbove() {
+        // The slot equals the number of row midpoints strictly above the pointer.
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 20, rowMidYs: [10, 30, 50]) == 1)
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 40, rowMidYs: [10, 30, 50]) == 2)
+    }
+
+    @Test func insertionSlotBelowLastRowIsCount() {
+        // A pointer past the last midpoint lands in the end-of-list slot (count).
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 100, rowMidYs: [10, 30, 50]) == 3)
+    }
+
+    @Test func insertionSlotOnMidpointExcludesThatRow() {
+        // Boundary: the filter is strict `<`, so a pointer exactly on a row's
+        // midpoint does NOT count that row as above — only the rows strictly
+        // above it (here just midY 10) contribute, yielding slot 1.
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 30, rowMidYs: [10, 30, 50]) == 1)
+    }
+
+    @Test func insertionSlotEmptyRowsIsZero() {
+        // With no rows measured yet, every pointer maps to slot 0.
+        #expect(WorkspaceReorderGeometry.insertionSlot(forY: 42, rowMidYs: []) == 0)
+    }
+
+    // MARK: - Reorder Shuffle Offset (live-gap offsets during drag)
+
+    @Test func shuffleOffsetDragDownShiftsInterveningRowsUp() {
+        // Dragging row 0 down to slot 3: the rows it passes (1, 2) slide up by the
+        // dragged height to open the gap; the row at the target slot (3) and the
+        // dragged row's own origin (0) stay put.
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 1, source: 0, slot: 3, draggedHeight: 10) == -10)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 2, source: 0, slot: 3, draggedHeight: 10) == -10)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 3, source: 0, slot: 3, draggedHeight: 10) == 0)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 0, source: 0, slot: 3, draggedHeight: 10) == 0)
+    }
+
+    @Test func shuffleOffsetDragUpShiftsInterveningRowsDown() {
+        // Dragging row 3 up to slot 1: the rows now below the gap (1, 2) slide down
+        // by the dragged height; rows outside the span (0, 3) stay put.
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 1, source: 3, slot: 1, draggedHeight: 10) == 10)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 2, source: 3, slot: 1, draggedHeight: 10) == 10)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 0, source: 3, slot: 1, draggedHeight: 10) == 0)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 3, source: 3, slot: 1, draggedHeight: 10) == 0)
+    }
+
+    @Test func shuffleOffsetNoOpZoneOpensNoGap() {
+        // The two no-op slots (its own row and the slot just below it) shift nothing.
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 0, source: 1, slot: 1, draggedHeight: 10) == 0)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 2, source: 1, slot: 1, draggedHeight: 10) == 0)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 0, source: 1, slot: 2, draggedHeight: 10) == 0)
+        #expect(WorkspaceReorderGeometry.reorderShuffleOffset(index: 2, source: 1, slot: 2, draggedHeight: 10) == 0)
+    }
+
     // MARK: - Computed Properties
 
     @Test func activeWorkspaceReturnsCorrectWorkspace() {

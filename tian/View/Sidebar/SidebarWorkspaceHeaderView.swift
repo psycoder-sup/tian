@@ -5,6 +5,9 @@ struct SidebarWorkspaceHeaderView: View {
     let isExpanded: Bool
     let isActive: Bool
     let isKeyboardSelected: Bool
+    /// When `true`, draws the drag-reorder insertion indicator along this row's
+    /// top edge — i.e. "a workspace will be inserted *above* this row".
+    var isDropTargetAbove: Bool = false
     let onToggleDisclosure: () -> Void
     let onAddSession: () -> Void
     let onSetDirectory: (URL?) -> Void
@@ -54,9 +57,13 @@ struct SidebarWorkspaceHeaderView: View {
                     .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
             }
         }
+        .overlay(alignment: .top) {
+            if isDropTargetAbove {
+                WorkspaceDropIndicator()
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture { onToggleDisclosure() }
-        .draggable(WorkspaceDragItem(workspaceID: workspace.id))
         .contextMenu {
             Button("Rename") { isRenaming = true }
             Divider()
@@ -75,5 +82,18 @@ struct SidebarWorkspaceHeaderView: View {
         .accessibilityIdentifier("workspace-header-\(workspace.id)")
         .accessibilityLabel("\(workspace.name), \(workspace.sessionCollection.sessions.count) sessions, \(isExpanded ? "expanded" : "collapsed")")
         .accessibilityHint("Double-tap to expand or collapse")
+    }
+}
+
+/// A thin accent-colored capsule marking the position a dragged workspace will
+/// land during a sidebar reorder. Shared by the header rows (top edge = "insert
+/// above this row") and the trailing end-of-list drop zone. Purely decorative.
+struct WorkspaceDropIndicator: View {
+    var body: some View {
+        Capsule()
+            .fill(Color.accentColor)
+            .frame(height: 2)
+            .padding(.horizontal, 8)
+            .accessibilityHidden(true)
     }
 }
