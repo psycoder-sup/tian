@@ -15,6 +15,12 @@
   "shipped": [
     {
       "date": "2026-07-06",
+      "summary": "Busy Session-Overview cards now show a spinning rainbow border (PR #65) — reviving the early-stage pane highlight. Reused the previously-unused RainbowBorder (a sharp 2px spinning AngularGradient with a Reduce-Motion static fallback), which gained a cornerRadius knob + continuous corners to hug the 12pt card; SessionOverviewCardView branches its border overlay on aggregateClaudeState == .busy while every other state keeps its solid status-color stroke. Two-file wiring change, no new component. Verified: BUILD SUCCEEDED + 980 tianTests green.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/65"
+    },
+    {
+      "date": "2026-07-06",
       "summary": "Surface background subagents + run_in_background bash per session, and fix the false-idle bug (PR #64, via /orchestrate). Claude Code's Stop/SubagentStop hooks carry a background_tasks snapshot -> `tian activity sync` -> IPC -> PaneStatusManager (PVM-mirrored) -> Session, rendered as a sidebar badge (BackgroundActivityBadgeView) + an overview-card list (SessionOverviewActivityListView). A session no longer reads idle while background work runs: Session.aggregateClaudeState floors to .busy and IPC session.list reports the same floored state (so an orchestrator polling the CLI sees it too). Snapshot-authoritative — a single activity sync whole-set replace (chosen after review so correctness doesn't depend on the hook payload's id shape) + lenient BackgroundActivity.fromClaudeSnapshot decoder + a staleness TTL for a background bash that finishes with no completion hook. Built via /orchestrate (2 waves, 6 implementers) + /code-review medium (8 angles) + a 5-agent review-fix wave. Verified: BUILD SUCCEEDED, 966 tianTests green; Stop/SubagentStop hooks confirmed firing in a live tian-debug session; sidebar badge + busy-dot visually confirmed end-to-end.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/64"

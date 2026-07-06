@@ -25,6 +25,11 @@ private let glowCornerRadius: CGFloat = 6
 // MARK: - Focus indicator (sharp rainbow border, no glow)
 
 struct RainbowBorder: View {
+    /// Corner radius of the border stroke. Defaults to the shared glow radius so
+    /// existing callers are unaffected; larger surfaces (e.g. the 12pt overview
+    /// card) pass their own so the rainbow hugs their rounded corners.
+    var cornerRadius: CGFloat = glowCornerRadius
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -35,7 +40,7 @@ struct RainbowBorder: View {
                 center: .center
             )
             .mask {
-                RoundedRectangle(cornerRadius: glowCornerRadius)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(lineWidth: 2)
             }
             .allowsHitTesting(false)
@@ -50,7 +55,7 @@ struct RainbowBorder: View {
                     endAngle: angle + .degrees(360)
                 )
                 .mask {
-                    RoundedRectangle(cornerRadius: glowCornerRadius)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(lineWidth: 2)
                 }
             }

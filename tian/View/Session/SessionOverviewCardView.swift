@@ -117,11 +117,17 @@ struct SessionOverviewCardView: View {
                 }
         }
         .overlay {
-            // Status-as-border: always the aggregate Claude status color (or a
-            // faint neutral edge when inactive). Selection/active are conveyed
-            // by the highlight + scale, so no accent ring competes here.
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(borderColor, lineWidth: 2)
+            // Status-as-border: the busy state animates a spinning rainbow edge
+            // (reviving the early-stage pane highlight); every other state shows
+            // its solid aggregate Claude status color (or a faint neutral edge
+            // when inactive). Selection/active are conveyed by the highlight +
+            // scale, so no accent ring competes here.
+            if session.aggregateClaudeState == .busy {
+                RainbowBorder(cornerRadius: 12)
+            } else {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(borderColor, lineWidth: 2)
+            }
         }
         .scaleEffect(isSelected ? 1.03 : 1.0)
         .shadow(
