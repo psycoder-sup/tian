@@ -15,6 +15,7 @@ struct TianCLI: ParsableCommand {
             PaneGroup.self,
             StatusGroup.self,
             PromptGroup.self,
+            ActivityGroup.self,
             NotifyCommand.self,
             WorktreeGroup.self,
             GitGroup.self,

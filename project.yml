@@ -54,6 +54,7 @@ targets:
           - "Resources/tian-hook-log.sh"
           - "Resources/tian-hook-pr-refresh.sh"
           - "Resources/tian-hook-prompt.sh"
+          - "Resources/tian-hook-activity.sh"
           - "Resources/tian-claude-settings.json"
           - "Resources/shell-integration/**"
     dependencies:
@@ -122,6 +123,14 @@ targets:
           - $(SRCROOT)/tian/Resources/tian-hook-prompt.sh
         outputFiles:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-hook-prompt.sh
+      - script: |
+          cp -f "$SRCROOT/tian/Resources/tian-hook-activity.sh" "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-activity.sh"
+          chmod +x "$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/tian-hook-activity.sh"
+        name: Bundle Activity Hook
+        inputFiles:
+          - $(SRCROOT)/tian/Resources/tian-hook-activity.sh
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/tian-hook-activity.sh
       - script: |
           SI_SRC="$SRCROOT/tian/Resources/shell-integration"
           SI_DST="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/shell-integration"

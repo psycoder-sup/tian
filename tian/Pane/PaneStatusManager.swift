@@ -19,6 +19,7 @@ final class PaneStatusManager {
     private(set) var statuses: [UUID: PaneStatus] = [:]
     private(set) var sessionStates: [UUID: ClaudeSessionState] = [:]
     private(set) var lastPrompts: [UUID: String] = [:]
+    private(set) var backgroundActivities: [UUID: [BackgroundActivity]] = [:]
 
     private var nextSequence: UInt64 = 0
 
@@ -39,15 +40,18 @@ final class PaneStatusManager {
         owner(of: paneID)?.paneLastPrompts[paneID] = text   // dual-write
     }
 
-    /// Clears the free-form status label, session state, and last prompt for the pane.
+    /// Clears the free-form status label, session state, last prompt, and any
+    /// outstanding background activities for the pane (e.g. on pane close).
     func clearStatus(paneID: UUID) {
         statuses.removeValue(forKey: paneID)
         sessionStates.removeValue(forKey: paneID)
         lastPrompts.removeValue(forKey: paneID)
+        backgroundActivities.removeValue(forKey: paneID)
         if let pvm = owner(of: paneID) {
             pvm.paneStatuses.removeValue(forKey: paneID)
             pvm.sessionStates.removeValue(forKey: paneID)
             pvm.paneLastPrompts.removeValue(forKey: paneID)
+            pvm.paneBackgroundActivities.removeValue(forKey: paneID)
         }
     }
 
@@ -56,10 +60,12 @@ final class PaneStatusManager {
             statuses.removeValue(forKey: id)
             sessionStates.removeValue(forKey: id)
             lastPrompts.removeValue(forKey: id)
+            backgroundActivities.removeValue(forKey: id)
             if let pvm = owner(of: id) {
                 pvm.paneStatuses.removeValue(forKey: id)
                 pvm.sessionStates.removeValue(forKey: id)
                 pvm.paneLastPrompts.removeValue(forKey: id)
+                pvm.paneBackgroundActivities.removeValue(forKey: id)
             }
         }
     }
@@ -138,6 +144,24 @@ final class PaneStatusManager {
             result.append((paneID: paneID, state: state))
         }
         return result.sorted { $0.state > $1.state }
+    }
+
+    // MARK: - Background Activity
+
+    /// Replaces the whole background-activity set for a pane from Claude's
+    /// `background_tasks` snapshot — the sole writer of background activity.
+    /// Mirrors to the owning PVM via the pane registry, exactly like
+    /// `setSessionState` / `setStatus`. An empty array clears the pane's entry
+    /// entirely, so a pane with no outstanding work reads as absent rather than an
+    /// empty array.
+    func syncActivities(paneID: UUID, _ activities: [BackgroundActivity]) {
+        if activities.isEmpty {
+            backgroundActivities.removeValue(forKey: paneID)
+            owner(of: paneID)?.paneBackgroundActivities.removeValue(forKey: paneID)   // dual-write
+        } else {
+            backgroundActivities[paneID] = activities
+            owner(of: paneID)?.paneBackgroundActivities[paneID] = activities   // dual-write
+        }
     }
 
     // MARK: - Pane Registry

@@ -168,6 +168,7 @@ struct SidebarSessionRowView: View {
         let claudeState = session.aggregateClaudeState
         let gitStatus = session.resolvedGitStatus
         let latestStatus = session.latestPaneStatus
+        let backgroundActivities = session.backgroundActivities
 
         Group {
             if let progress = setupProgress {
@@ -196,6 +197,11 @@ struct SidebarSessionRowView: View {
                         }
 
                         Spacer()
+
+                        // Trailing badge: outstanding background work (subagents /
+                        // backgrounded bash). Self-hides when there's none, so it
+                        // only appears while work is in flight.
+                        BackgroundActivityBadgeView(activities: backgroundActivities)
                     }
 
                     SessionStatusLineView(

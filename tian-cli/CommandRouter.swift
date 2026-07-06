@@ -620,6 +620,33 @@ struct PromptSet: ParsableCommand {
     }
 }
 
+// MARK: - Activity
+
+struct ActivityGroup: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "activity",
+        abstract: "Report outstanding background work (subagents / background bash) for the current pane.",
+        subcommands: [
+            ActivitySync.self,
+        ]
+    )
+}
+
+struct ActivitySync: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "sync",
+        abstract: "Replace the current pane's background activities with a raw Claude background_tasks JSON array."
+    )
+
+    @Option(name: .long, help: "Raw Claude background_tasks JSON array, forwarded verbatim.")
+    var json: String
+
+    func run() throws {
+        let response = try sendRequest(command: "activity.sync", params: ["json": .string(json)])
+        try handleVoidResponse(response)
+    }
+}
+
 // MARK: - Notify
 
 struct NotifyCommand: ParsableCommand {

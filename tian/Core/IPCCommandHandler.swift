@@ -61,6 +61,9 @@ final class IPCCommandHandler {
         // Prompt
         case "prompt.set": return handlePromptSet(request)
 
+        // Background Activity
+        case "activity.sync":   return handleActivitySync(request)
+
         // Notify (Phase 5)
         case "notify": return await handleNotify(request)
 
@@ -172,7 +175,12 @@ final class IPCCommandHandler {
         }
 
         let items: [IPCValue] = workspace.sessionCollection.sessions.map { session in
-            let claudeState = statusManager.aggregateSessionState(in: session)
+            // Use the same floored value the GUI dot reads (`aggregateClaudeState`
+            // lifts a clean turn-end to `.busy` while non-stale background work is
+            // outstanding), so `tian session list` and the sidebar agree. The
+            // unfloored `statusManager.aggregateSessionState(in:)` would report
+            // `idle` mid-background-work, defeating orchestrator polling.
+            let claudeState = session.aggregateClaudeState
             return .object([
                 "id": .string(session.id.uuidString),
                 "name": .string(session.displayName),
@@ -544,6 +552,30 @@ final class IPCCommandHandler {
         }
 
         statusManager.setLastPrompt(paneID: paneId, text: text)
+        return .success()
+    }
+
+    // MARK: - Background Activity Commands
+
+    /// Replaces the caller pane's whole background-activity set from a Claude
+    /// `background_tasks` JSON snapshot, decoded leniently server-side (malformed
+    /// input yields an empty set, clearing the pane). Per-pane: targets
+    /// `TIAN_PANE_ID`. Mirrors `handleStatusSet`'s pane-resolution boilerplate.
+    private func handleActivitySync(_ request: IPCRequest) -> IPCResponse {
+        guard let json = stringParam("json", from: request.params) else {
+            return missingParameter("json")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        let activities = BackgroundActivity.fromClaudeSnapshot(json: json)
+        statusManager.syncActivities(paneID: paneId, activities)
         return .success()
     }
 

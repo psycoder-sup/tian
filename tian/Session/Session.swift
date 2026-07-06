@@ -331,11 +331,12 @@ final class Session: Identifiable {
     /// in `allPanes` order.
     var allPaneIDs: [UUID] { allPanes.flatMap { $0.splitTree.allLeaves() } }
 
-    /// Aggregate Claude session state across this session's panes, read from the
-    /// per-PVM mirrors (not `PaneStatusManager.shared`) so observation stays
+    /// Raw aggregate Claude session state across this session's panes, read from
+    /// the per-PVM mirrors (not `PaneStatusManager.shared`) so observation stays
     /// scoped. Highest-priority non-inactive state wins — same ranking as
-    /// `PaneStatusManager.aggregateSessionState(in:)`.
-    var aggregateClaudeState: ClaudeSessionState? {
+    /// `PaneStatusManager.aggregateSessionState(in:)`. This is the *unfloored*
+    /// value; `aggregateClaudeState` layers the background-activity floor on top.
+    var rawAggregateClaudeState: ClaudeSessionState? {
         var top: ClaudeSessionState?
         for pvm in allPanes {
             for paneID in pvm.splitTree.allLeaves() {
@@ -347,6 +348,59 @@ final class Session: Identifiable {
             }
         }
         return top
+    }
+
+    /// Every *fresh* outstanding background activity across this session's panes,
+    /// read from the per-PVM mirrors (same scoped-observation reasoning as
+    /// `rawAggregateClaudeState`). Flattened across every leaf in `allPanes` order.
+    /// Stale entries (`BackgroundActivity.isStale`) are excluded: once Claude goes
+    /// idle and stops syncing, the last snapshot's entries age out after
+    /// `stalenessTTL`, so a background command that quietly finished during an idle
+    /// session no longer appears here. Drives the background-work UI; the `.busy`
+    /// floor below uses the non-allocating `hasBackgroundActivity` twin.
+    var backgroundActivities: [BackgroundActivity] {
+        var result: [BackgroundActivity] = []
+        for pvm in allPanes {
+            for paneID in pvm.splitTree.allLeaves() {
+                for activity in pvm.paneBackgroundActivities[paneID] ?? [] where !activity.isStale {
+                    result.append(activity)
+                }
+            }
+        }
+        return result
+    }
+
+    /// Whether any pane still has *fresh* (non-stale) background work — the
+    /// non-allocating, TTL-aware twin of `!backgroundActivities.isEmpty`. Walks the
+    /// per-PVM mirrors and short-circuits on the first non-stale activity instead
+    /// of building (and discarding) the whole flattened array just to test
+    /// emptiness. Drives the `.busy` floor in `aggregateClaudeState`.
+    var hasBackgroundActivity: Bool {
+        for pvm in allPanes {
+            for paneID in pvm.splitTree.allLeaves() {
+                if pvm.paneBackgroundActivities[paneID]?.contains(where: { !$0.isStale }) == true {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Aggregate Claude session state driving the sidebar dot: `rawAggregateClaudeState`
+    /// floored to at least `.busy` while any pane still has *fresh* outstanding
+    /// background work (a subagent or a `run_in_background` bash command). A clean
+    /// turn-end therefore reads `busy` rather than `idle` until that work reports
+    /// done — but a higher-priority `needsAttention`/`failed` is never downgraded,
+    /// and once the last snapshot's activities age past `stalenessTTL` the floor
+    /// lifts so a lingering-but-idle session reads idle again.
+    var aggregateClaudeState: ClaudeSessionState? {
+        let raw = rawAggregateClaudeState
+        guard hasBackgroundActivity else { return raw }
+        // Floor to `.busy`, keeping any stronger state. `Swift.max` uses
+        // ClaudeSessionState's priority ordering (needsAttention is greatest),
+        // so needsAttention/failed survive while idle/active are lifted to busy.
+        guard let raw else { return .busy }
+        return Swift.max(raw, .busy)
     }
 
     /// Latest free-form status across this session's panes, read from the
