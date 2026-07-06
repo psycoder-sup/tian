@@ -198,6 +198,14 @@ final class WorkspaceCollection {
         workspaces.insert(workspace, at: destinationIndex)
     }
 
+    /// Maps a drop *slot* (0...count) to the destination index for `reorderWorkspace(from:to:)`,
+    /// accounting for the remove-then-insert shift. A slot is the gap *before* a row, using
+    /// "insert before the hovered row" semantics; `count` is the gap after the last row.
+    /// Dropping into the slot just above/below the item's own position is a no-op (returns `source`).
+    static func reorderDestinationIndex(source: Int, targetSlot: Int) -> Int {
+        targetSlot > source ? targetSlot - 1 : targetSlot
+    }
+
     // MARK: - Private
 
     private func wireWorkspaceClose(_ workspace: Workspace) {

@@ -7,6 +7,19 @@ struct SidebarExpandedContentView: View {
 
     @State private var selectedIndex: Int?
     @State private var disclosedWorkspaces: Set<UUID> = []
+    /// The insertion slot the currently-dragged workspace would land in
+    /// (0...`workspaces.count`), or `nil` when no workspace drag is in progress.
+    /// Drives the reorder insertion indicator. Uses "insert before the hovered
+    /// row" semantics; `count` is the end-of-list slot.
+    @State private var workspaceDropSlot: Int?
+    /// The workspace being reordered via the header drag gesture, or `nil` when
+    /// idle. Only this row lifts and follows the cursor.
+    @State private var draggingWorkspaceID: UUID?
+    /// The dragged row's live vertical offset from its resting position.
+    @State private var dragOffsetY: CGFloat = 0
+    /// Each workspace group's frame in the `sidebarReorder` coordinate space,
+    /// keyed by workspace id. Feeds the pointer-Y → slot math.
+    @State private var workspaceFrames: [UUID: CGRect] = [:]
 
     private var flatItems: [SidebarItem] {
         var items: [SidebarItem] = []
@@ -26,55 +39,93 @@ struct SidebarExpandedContentView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(workspaceCollection.workspaces) { workspace in
-                    SidebarWorkspaceHeaderView(
-                        workspace: workspace,
-                        isExpanded: disclosedWorkspaces.contains(workspace.id),
-                        isActive: workspace.id == workspaceCollection.activeWorkspaceID,
-                        isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
-                        onToggleDisclosure: { toggleDisclosure(workspace.id) },
-                        onAddSession: { addSession(to: workspace) },
-                        onSetDirectory: { url in
-                            workspace.setDefaultWorkingDirectory(url)
-                        },
-                        onClose: { workspaceCollection.removeWorkspace(id: workspace.id) }
-                    )
+                ForEach(Array(workspaceCollection.workspaces.enumerated()), id: \.element.id) { rowIndex, workspace in
+                    // Wrap the header and its disclosed sessions in one container so
+                    // the whole group lifts together while its header is dragged.
+                    VStack(alignment: .leading, spacing: 0) {
+                        SidebarWorkspaceHeaderView(
+                            workspace: workspace,
+                            isExpanded: disclosedWorkspaces.contains(workspace.id),
+                            isActive: workspace.id == workspaceCollection.activeWorkspaceID,
+                            isKeyboardSelected: selectedIndex == flatIndex(for: .workspaceHeader(workspace)),
+                            isDropTargetAbove: workspaceDropSlot == rowIndex,
+                            onToggleDisclosure: { toggleDisclosure(workspace.id) },
+                            onAddSession: { addSession(to: workspace) },
+                            onSetDirectory: { url in
+                                workspace.setDefaultWorkingDirectory(url)
+                            },
+                            onClose: { workspaceCollection.removeWorkspace(id: workspace.id) }
+                        )
+                        // Vertical-only reorder drag lives on the header so drags
+                        // over the session area don't reorder. `minimumDistance: 5`
+                        // lets a click still fall through to the header's tap.
+                        .gesture(workspaceReorderGesture(for: workspace))
 
-                    if disclosedWorkspaces.contains(workspace.id) {
-                        // Zero inter-row spacing so the per-row connector rail
-                        // segments abut into one continuous vertical line.
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(workspace.sessionCollection.hierarchicalOrder(), id: \.session.id) { entry in
-                                SidebarSessionRowView(
-                                    session: entry.session,
-                                    isActive: workspace.id == workspaceCollection.activeWorkspaceID
-                                        && entry.session.id == workspace.sessionCollection.activeSessionID,
-                                    isChild: entry.isChild,
-                                    isOrchestrator: entry.isOrchestrator,
-                                    isKeyboardSelected: selectedIndex == flatIndex(for: .sessionRow(workspace, entry.session)),
-                                    setupProgress: worktreeOrchestrator.setupProgress?.sessionID == entry.session.id
-                                        ? worktreeOrchestrator.setupProgress
-                                        : nil,
-                                    onSelect: { selectSession(workspace: workspace, sessionID: entry.session.id) },
-                                    onSetDirectory: { url in
-                                        entry.session.defaultWorkingDirectory = url
-                                    },
-                                    onClose: { closeSession(entry.session, in: workspace) }
-                                )
+                        if disclosedWorkspaces.contains(workspace.id) {
+                            // Zero inter-row spacing so the per-row connector rail
+                            // segments abut into one continuous vertical line.
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(workspace.sessionCollection.hierarchicalOrder(), id: \.session.id) { entry in
+                                    SidebarSessionRowView(
+                                        session: entry.session,
+                                        isActive: workspace.id == workspaceCollection.activeWorkspaceID
+                                            && entry.session.id == workspace.sessionCollection.activeSessionID,
+                                        isChild: entry.isChild,
+                                        isOrchestrator: entry.isOrchestrator,
+                                        isKeyboardSelected: selectedIndex == flatIndex(for: .sessionRow(workspace, entry.session)),
+                                        setupProgress: worktreeOrchestrator.setupProgress?.sessionID == entry.session.id
+                                            ? worktreeOrchestrator.setupProgress
+                                            : nil,
+                                        onSelect: { selectSession(workspace: workspace, sessionID: entry.session.id) },
+                                        onSetDirectory: { url in
+                                            entry.session.defaultWorkingDirectory = url
+                                        },
+                                        onClose: { closeSession(entry.session, in: workspace) }
+                                    )
+                                }
                             }
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.top, 2)
-                        .padding(.bottom, 4)
-                        .dropDestination(for: SessionDragItem.self) { items, _ in
-                            handleSessionDrop(items: items, sessionCollection: workspace.sessionCollection)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 2)
+                            .padding(.bottom, 4)
                         }
                     }
+                    // Measure this group's frame in the reorder coordinate space so
+                    // the drag can map pointer-Y to an insertion slot.
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: WorkspaceFramePreferenceKey.self,
+                                value: [workspace.id: proxy.frame(in: .named("sidebarReorder"))]
+                            )
+                        }
+                    }
+                    // The dragged group floats and follows the cursor 1:1; every
+                    // other group slides by `shuffleOffset` to open a gap at the
+                    // target slot. The animation is scoped per row: the dragged row
+                    // gets `nil` so it never lags the pointer, while the shuffling
+                    // rows ease into place as the slot changes.
+                    .offset(y: draggingWorkspaceID == workspace.id ? dragOffsetY : shuffleOffset(forRowAt: rowIndex))
+                    .animation(
+                        draggingWorkspaceID == workspace.id ? nil : .easeOut(duration: 0.12),
+                        value: workspaceDropSlot
+                    )
+                    .zIndex(draggingWorkspaceID == workspace.id ? 1 : 0)
+                    .opacity(draggingWorkspaceID == workspace.id ? 0.85 : 1)
                 }
+
+                // End-of-list indicator host: shows where a workspace dropped past
+                // the last row (slot == count) will land. No drop target — the
+                // header drag gesture drives the reorder directly.
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: 12)
+                    .overlay(alignment: .top) {
+                        if workspaceDropSlot == workspaceCollection.workspaces.count {
+                            WorkspaceDropIndicator()
+                        }
+                    }
             }
-            .dropDestination(for: WorkspaceDragItem.self) { items, _ in
-                handleWorkspaceDrop(items: items)
-            }
+            .coordinateSpace(name: "sidebarReorder")
+            .onPreferenceChange(WorkspaceFramePreferenceKey.self) { workspaceFrames = $0 }
         }
         .overlay {
             SidebarKeyboardResponder(
@@ -116,30 +167,73 @@ struct SidebarExpandedContentView: View {
         flatItems.firstIndex(where: { $0.id == target.id })
     }
 
-    // MARK: - Drag and Drop
+    // MARK: - Workspace Reorder
 
-    private func handleWorkspaceDrop(items: [WorkspaceDragItem]) -> Bool {
-        guard let item = items.first,
-              let sourceIndex = workspaceCollection.workspaces.firstIndex(where: { $0.id == item.workspaceID }) else {
-            return false
-        }
-        let destinationIndex = workspaceCollection.workspaces.count - 1
-        if sourceIndex != destinationIndex {
-            workspaceCollection.reorderWorkspace(from: sourceIndex, to: destinationIndex)
-        }
-        return true
+    /// Vertical-only reorder drag for a workspace header. `minimumDistance: 5`
+    /// distinguishes a reorder from a click (which still toggles disclosure via
+    /// the header's own tap). Reads pointer-Y in the `sidebarReorder` space and
+    /// maps it to an insertion slot against each group's measured midpoint.
+    private func workspaceReorderGesture(for workspace: Workspace) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .named("sidebarReorder"))
+            .onChanged { value in
+                if draggingWorkspaceID == nil {
+                    draggingWorkspaceID = workspace.id
+                }
+                dragOffsetY = value.translation.height
+                workspaceDropSlot = currentDropSlot(for: workspace, value: value)
+            }
+            .onEnded { value in
+                guard draggingWorkspaceID != nil else { return }
+                let slot = currentDropSlot(for: workspace, value: value)
+                if let source = workspaceCollection.workspaces.firstIndex(where: { $0.id == workspace.id }) {
+                    let dest = WorkspaceCollection.reorderDestinationIndex(source: source, targetSlot: slot)
+                    workspaceCollection.reorderWorkspace(from: source, to: dest)
+                }
+                draggingWorkspaceID = nil
+                dragOffsetY = 0
+                workspaceDropSlot = nil
+            }
     }
 
-    private func handleSessionDrop(items: [SessionDragItem], sessionCollection: SessionCollection) -> Bool {
-        guard let item = items.first,
-              let sourceIndex = sessionCollection.sessions.firstIndex(where: { $0.id == item.sessionID }) else {
-            return false
+    /// The insertion slot the dragged workspace currently targets, derived from its
+    /// visual center against the measured row midpoints. Shared by `onChanged` (to
+    /// drive the live gap) and `onEnded` (to commit the drop) so both agree.
+    private func currentDropSlot(for workspace: Workspace, value: DragGesture.Value) -> Int {
+        WorkspaceReorderGeometry.insertionSlot(
+            forY: draggedRowCenterY(for: workspace, value: value),
+            rowMidYs: currentRowMidYs()
+        )
+    }
+
+    /// The dragged row's current visual center in the `sidebarReorder` space:
+    /// its measured resting midpoint plus the drag translation. Used for slot
+    /// targeting so the drop tracks the row's body, not the grab point. Falls back
+    /// to the raw pointer if the frame hasn't been measured yet.
+    private func draggedRowCenterY(for workspace: Workspace, value: DragGesture.Value) -> CGFloat {
+        if let midY = workspaceFrames[workspace.id]?.midY {
+            return midY + value.translation.height
         }
-        let destinationIndex = sessionCollection.sessions.count - 1
-        if sourceIndex != destinationIndex {
-            sessionCollection.reorderSession(from: sourceIndex, to: destinationIndex)
-        }
-        return true
+        return value.location.y
+    }
+
+    /// Each workspace's measured vertical midpoint in display order. Rows that
+    /// haven't reported a frame yet fall back to `.greatestFiniteMagnitude`, sorting
+    /// them below any real pointer position so an unmeasured row never counts as
+    /// "above" the pointer and inflates the computed slot.
+    private func currentRowMidYs() -> [CGFloat] {
+        workspaceCollection.workspaces.map { workspaceFrames[$0.id]?.midY ?? .greatestFiniteMagnitude }
+    }
+
+    /// Vertical offset for a non-dragged workspace row at `index`, opening the
+    /// reorder gap where the dragged group will land. Returns 0 when no drag is
+    /// in progress or when the row sits outside the vacated-to-target span.
+    private func shuffleOffset(forRowAt index: Int) -> CGFloat {
+        guard let draggingID = draggingWorkspaceID,
+              let slot = workspaceDropSlot,
+              let source = workspaceCollection.workspaces.firstIndex(where: { $0.id == draggingID })
+        else { return 0 }
+        let h = workspaceFrames[draggingID]?.height ?? 0
+        return WorkspaceReorderGeometry.reorderShuffleOffset(index: index, source: source, slot: slot, draggedHeight: h)
     }
 
     // MARK: - Disclosure
@@ -252,6 +346,19 @@ struct SidebarExpandedContentView: View {
 
     private func handleEscape() {
         sidebarState.focusTarget = .terminal
+    }
+}
+
+// MARK: - Workspace Frame Preference
+
+/// Collects each workspace group's frame (in the `sidebarReorder` coordinate
+/// space) up the view tree, keyed by workspace id, so the reorder drag can map a
+/// pointer-Y to an insertion slot.
+private struct WorkspaceFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 

@@ -276,10 +276,10 @@ struct SidebarSessionRowView: View {
     }
 }
 
-/// Gates drag and context-menu interactions on the Session row. Both are
-/// disabled while the row is rendering setup-progress so the user can't
-/// rename, drag, or close a Session mid-creation. Tap-to-focus is handled
-/// separately at the call site.
+/// Gates the context menu on the Session row. It's disabled while the row is
+/// rendering setup-progress so the user can't rename or close a Session
+/// mid-creation. Session rows intentionally have no drag gesture — reordering is
+/// a workspace-level interaction. Tap-to-focus is handled at the call site.
 private struct SidebarSessionRowMutationGate: ViewModifier {
     let enabled: Bool
     let sessionID: UUID
@@ -292,7 +292,6 @@ private struct SidebarSessionRowMutationGate: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content
-                .draggable(SessionDragItem(sessionID: sessionID))
                 .contextMenu {
                     Button("Rename", action: onRename)
                     Divider()
