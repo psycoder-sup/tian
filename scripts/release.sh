@@ -34,7 +34,21 @@ BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 RELEASE_DIR=".build/release"
 APP_PATH=".build/Build/Products/Release/tian.app"
 DMG_PATH="$RELEASE_DIR/tian-$VERSION.dmg"
-IDENTITY="Developer ID Application: Sanguk Park (S5UNLP3V56)"
+
+# Code-signing config — not committed, so each maintainer signs with their own
+# Apple Developer identity. Provide via .tian/signing.env (gitignored; see
+# .tian/signing.env.example) or the environment.
+if [[ -f .tian/signing.env ]]; then
+  # shellcheck source=/dev/null
+  source .tian/signing.env
+fi
+DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}"
+IDENTITY="${SIGN_IDENTITY:-Developer ID Application}"
+if [[ -z "$DEVELOPMENT_TEAM" ]]; then
+  echo "error: DEVELOPMENT_TEAM is unset. Copy .tian/signing.env.example to" >&2
+  echo "       .tian/signing.env and set your Apple Developer Team ID (or export it)." >&2
+  exit 1
+fi
 
 echo "==> Release $VERSION (CFBundleShortVersionString=$MARKETING_VERSION, CFBundleVersion=$BUILD_NUMBER)"
 mkdir -p "$RELEASE_DIR"
@@ -48,6 +62,7 @@ xcodebuild \
   -scheme tian \
   -configuration Release \
   -derivedDataPath .build \
+  DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
   MARKETING_VERSION="$MARKETING_VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   build

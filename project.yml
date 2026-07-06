@@ -200,7 +200,8 @@ targets:
           INFOPLIST_KEY_CFBundleName: Tian (debug)
           INFOPLIST_KEY_CFBundleDisplayName: Tian (debug)
         Release:
-          DEVELOPMENT_TEAM: S5UNLP3V56
+          # DEVELOPMENT_TEAM is injected by scripts/release.sh at build time
+          # (from .tian/signing.env or the environment) so it isn't hardcoded here.
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"
           OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
@@ -247,7 +248,8 @@ targets:
         PRODUCT_NAME: tian-cli
       configs:
         Release:
-          DEVELOPMENT_TEAM: S5UNLP3V56
+          # DEVELOPMENT_TEAM is injected by scripts/release.sh at build time
+          # (from .tian/signing.env or the environment) so it isn't hardcoded here.
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: "Developer ID Application"
           OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"

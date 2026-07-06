@@ -53,6 +53,7 @@ YES=1 scripts/publish.sh patch    # skip the confirmation prompt
 
 ### Environment
 
+- `DEVELOPMENT_TEAM` / `SIGN_IDENTITY` — Apple Developer Team ID and code-signing identity for signed Release builds. Not committed: copy `.tian/signing.env.example` to `.tian/signing.env` and fill them in (or export them). `release.sh` sources that file and injects `DEVELOPMENT_TEAM` into `xcodebuild`.
 - `NOTARY_PROFILE` — keychain profile for `xcrun notarytool` (default `tian-notary`). Set up once with `xcrun notarytool store-credentials`.
 - `SKIP_NOTARIZE=1` — skip notarization + stapling.
 - `DRAFT=1` / `PRERELEASE=1` — flags for `gh release create`.

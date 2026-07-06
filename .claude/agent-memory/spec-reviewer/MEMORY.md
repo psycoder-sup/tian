@@ -1,1 +1,0 @@
-- [tian architecture context](project_tian_architecture.md) — Key architecture patterns: @MainActor @Observable, WorktreeService subprocess pattern, NotificationCenter events
