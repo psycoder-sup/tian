@@ -112,6 +112,28 @@ final class Session: Identifiable {
     /// region.
     let readerState = SessionReaderState()
 
+    // MARK: - Remote (SSH workspace)
+
+    /// Non-nil when this session lives under a remote (SSH) workspace. Set at
+    /// construction for fresh sessions (so the first Claude pane spawns remotely)
+    /// and via `applyRemoteChannel` for restored ones. Drives remote pane spawn
+    /// and the reader's remote file source.
+    private(set) var remoteChannel: SSHControlChannel?
+
+    /// The spawn spec new panes inherit, derived from `remoteChannel`. nil keeps
+    /// the local spawn path.
+    var remoteSpawn: RemoteSpawnSpec? {
+        remoteChannel.map { RemoteSpawnSpec(channel: $0, remoteDirectory: $0.root) }
+    }
+
+    /// Sets the remote channel and points the reader at its remote file source.
+    /// Used by `SessionCollection.propagateRemoteChannel` for restored sessions
+    /// (whose panes already carry their own baked-in spawn spec).
+    func applyRemoteChannel(_ channel: SSHControlChannel?) {
+        remoteChannel = channel
+        readerState.fileSource = channel.map { RemoteReaderFileSource(channel: $0) }
+    }
+
     // MARK: - Git
 
     /// Filesystem path of the associated git worktree.
@@ -158,13 +180,17 @@ final class Session: Identifiable {
         splitRatio: Double = 0.7,
         focusedArea: PaneKind = .claude,
         defaultWorkingDirectory: URL? = nil,
-        worktreePath: String? = nil
+        worktreePath: String? = nil,
+        remoteChannel: SSHControlChannel? = nil
     ) {
         self.id = id
         self.customName = customName
         self.createdAt = Date()
         self.claudePane = claudePane
         self.terminalPanel = terminalPanel
+        self.remoteChannel = remoteChannel
+        // Point the reader at the remote source before any pane wiring runs.
+        self.readerState.fileSource = remoteChannel.map { RemoteReaderFileSource(channel: $0) }
         self.terminalVisible = terminalVisible
         self.dockPosition = dockPosition
         self.splitRatio = splitRatio.clamped(to: 0.1...0.9)
@@ -194,7 +220,7 @@ final class Session: Identifiable {
     /// later terminal panel) spawns there. A bare `"~"` / empty path is left as
     /// no default, so spawning falls through to the workspace default or `$HOME`
     /// rather than a literal `~` directory.
-    convenience init(customName: String? = nil, workingDirectory: String) {
+    convenience init(customName: String? = nil, workingDirectory: String, remoteChannel: SSHControlChannel? = nil) {
         let defaultDir: URL? = (workingDirectory.isEmpty || workingDirectory == "~")
             ? nil
             : URL(fileURLWithPath: workingDirectory)
@@ -202,7 +228,8 @@ final class Session: Identifiable {
             customName: customName,
             claudePane: nil,
             terminalPanel: nil,
-            defaultWorkingDirectory: defaultDir
+            defaultWorkingDirectory: defaultDir,
+            remoteChannel: remoteChannel
         )
         startClaude()
     }
@@ -218,7 +245,7 @@ final class Session: Identifiable {
         claudePane?.cleanup()
 
         let wd = resolvedWorkingDirectoryForSpawn()
-        let pvm = PaneViewModel(workingDirectory: wd, kind: .claude)
+        let pvm = PaneViewModel(workingDirectory: wd, kind: .claude, remoteSpawn: remoteSpawn)
         wirePane(pvm)
 
         let initialPaneID = pvm.splitTree.focusedPaneID
@@ -258,7 +285,7 @@ final class Session: Identifiable {
             // terminal starts where Claude is actually working, falling back to
             // the session/workspace defaults.
             let wd = resolvedWorkingDirectoryForSpawn(sourcePaneDirectory: claudeWorktreeRoot?.path)
-            let pvm = PaneViewModel(workingDirectory: wd, kind: .terminal)
+            let pvm = PaneViewModel(workingDirectory: wd, kind: .terminal, remoteSpawn: remoteSpawn)
             wirePane(pvm)
             terminalPanel = pvm
         }

@@ -27,4 +27,12 @@ enum WorkspaceCreationFlow {
             return collection.createWorkspace(workingDirectory: standardized.path)
         }
     }
+
+    /// Opens the SSH-workspace creation modal for `collection` (host + remote
+    /// directory can't come from a native directory picker, so this posts a
+    /// notification that `WorkspaceWindowContent` renders `CreateWorkspaceView`
+    /// for).
+    static func requestSSHWorkspace(in collection: WorkspaceCollection) {
+        NotificationCenter.default.post(name: .showCreateSSHWorkspaceInput, object: collection)
+    }
 }

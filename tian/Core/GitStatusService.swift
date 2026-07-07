@@ -40,16 +40,27 @@ enum GitStatusService {
 
             let gitDir = lines[0]
             let rawCommonDir = lines[1]
-            let workingTree = URL(filePath: lines[2]).standardizedFileURL.path
             let directoryURL = URL(filePath: directory, directoryHint: .isDirectory)
 
+            // Remote paths don't exist on the local disk, so `URL.standardizedFileURL`
+            // (which is filesystem-flavored) is the wrong tool — canonicalize the
+            // remote POSIX paths purely textually instead.
+            let isRemote = RemoteExecutionRegistry.shared.channel(forDirectory: directory) != nil
+
             func canonicalize(_ path: String) -> String {
+                if isRemote {
+                    return canonicalizeRemotePath(path, relativeTo: directory)
+                }
                 if path.hasPrefix("/") {
                     return URL(filePath: path).standardizedFileURL.path
                 }
                 return URL(filePath: path, relativeTo: directoryURL)
                     .standardizedFileURL.path
             }
+
+            let workingTree = isRemote
+                ? canonicalizeRemotePath(lines[2], relativeTo: directory)
+                : URL(filePath: lines[2]).standardizedFileURL.path
 
             let absoluteCommonDir = canonicalize(rawCommonDir)
             let absoluteGitDir = canonicalize(gitDir)
@@ -264,6 +275,9 @@ enum GitStatusService {
         }
 
         // 3. Handle untracked files via `git diff --no-index /dev/null <path>`.
+        // Resolved once: for a remote directory the size gate can't stat the
+        // local disk, so it reads the size over the same channel with `wc -c`.
+        let remoteChannel = RemoteExecutionRegistry.shared.channel(forDirectory: directory)
         var untrackedDiffs: [GitFileDiff] = []
         for relativePath in untrackedPaths {
             let absolutePath = (directory as NSString).appendingPathComponent(relativePath)
@@ -271,8 +285,14 @@ enum GitStatusService {
             // Binary/size gate: fail closed — if size > 512 KB OR the size read
             // fails (e.g. permission error on a sandboxed path), treat as binary
             // and never spawn `git diff --no-index`. Plan §6 risk mitigation.
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: absolutePath))
-                .flatMap { $0[.size] as? Int }
+            let fileSize: Int?
+            if let remoteChannel {
+                fileSize = await remoteFileSize(
+                    channel: remoteChannel, relativePath: relativePath, directory: directory)
+            } else {
+                fileSize = (try? FileManager.default.attributesOfItem(atPath: absolutePath))
+                    .flatMap { $0[.size] as? Int }
+            }
             if fileSize == nil || fileSize! > 512 * 1024 {
                 untrackedDiffs.append(GitFileDiff(
                     path: relativePath,
@@ -1052,6 +1072,16 @@ enum GitStatusService {
         arguments: [String],
         workingDirectory: String
     ) async throws -> (exitCode: Int32, stdout: String, stderr: String) {
+        // Remote redirect (mirrors `runGit`): run the tool by basename on the
+        // remote host, letting its PATH resolve it. A tool that isn't installed
+        // there (e.g. `gh`) exits non-zero and the feature degrades gracefully.
+        if let redirected = await remoteRedirect(
+            argv: [(executablePath as NSString).lastPathComponent] + arguments,
+            workingDirectory: workingDirectory
+        ) {
+            return redirected
+        }
+
         let process = Process()
         process.executableURL = URL(filePath: executablePath)
         process.arguments = arguments
@@ -1123,10 +1153,98 @@ enum GitStatusService {
 
     // MARK: - Private
 
+    /// If `workingDirectory` is under a registered SSH root, runs `argv` on that
+    /// host and maps the result back to the local `(exitCode, stdout, stderr)`
+    /// contract; returns nil for a local directory so the caller falls through to
+    /// its local subprocess. The single remote seam shared by `runGit` and
+    /// `runProcess`.
+    private static func remoteRedirect(
+        argv: [String],
+        workingDirectory: String
+    ) async -> (exitCode: Int32, stdout: String, stderr: String)? {
+        guard let channel = RemoteExecutionRegistry.shared.channel(forDirectory: workingDirectory) else {
+            return nil
+        }
+        let result = await channel.run(argv: argv, workingDirectory: workingDirectory)
+        return (result.exitCode, result.stdoutTrimmed, result.stderr)
+    }
+
+    /// Reads a remote file's byte size with `wc -c` (portable across Linux/BSD,
+    /// unlike `stat`'s divergent flags). Returns nil on any failure, which the
+    /// size gate treats as "binary" — the same fail-closed behavior as a local
+    /// stat error.
+    private static func remoteFileSize(
+        channel: SSHControlChannel,
+        relativePath: String,
+        directory: String
+    ) async -> Int? {
+        let result = await channel.run(
+            argv: ["wc", "-c", relativePath],
+            workingDirectory: directory
+        )
+        guard result.exitCode == 0 else { return nil }
+        // `wc -c` prints `  1234 path`; the first whitespace-delimited field is
+        // the size.
+        let firstField = result.stdoutTrimmed
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .first
+        return firstField.flatMap { Int($0) }
+    }
+
+    /// Canonicalizes a remote POSIX path textually (no local filesystem access).
+    /// Absolute paths normalize in place; relative ones join onto `base` first.
+    static func canonicalizeRemotePath(_ path: String, relativeTo base: String) -> String {
+        let absolute: String
+        if path.hasPrefix("/") {
+            absolute = path
+        } else if base.hasSuffix("/") {
+            absolute = base + path
+        } else {
+            absolute = base + "/" + path
+        }
+        return normalizePOSIXPath(absolute)
+    }
+
+    /// Collapses `.`, `..`, and redundant slashes in a POSIX path by pure string
+    /// manipulation — the remote analogue of `URL.standardizedFileURL.path`.
+    static func normalizePOSIXPath(_ path: String) -> String {
+        let isAbsolute = path.hasPrefix("/")
+        var stack: [Substring] = []
+        for component in path.split(separator: "/", omittingEmptySubsequences: true) {
+            switch component {
+            case ".":
+                continue
+            case "..":
+                if let last = stack.last, last != ".." {
+                    stack.removeLast()
+                } else if !isAbsolute {
+                    stack.append("..")
+                }
+                // An absolute path's `..` at the root is simply dropped.
+            default:
+                stack.append(component)
+            }
+        }
+        let joined = stack.joined(separator: "/")
+        return isAbsolute ? "/" + joined : joined
+    }
+
     private static func runGit(
         _ arguments: [String],
         workingDirectory: String
     ) async throws -> (exitCode: Int32, stdout: String, stderr: String) {
+        // Remote redirect: if `workingDirectory` sits under a registered SSH
+        // root, run the exact same git invocation on that host instead. This is
+        // the single seam that makes the whole stateless service remote-aware
+        // without touching any of its callers. `git` resolves from the remote
+        // PATH (not the local `/usr/bin/git`).
+        if let redirected = await remoteRedirect(
+            argv: ["git", "--no-optional-locks"] + arguments,
+            workingDirectory: workingDirectory
+        ) {
+            return redirected
+        }
+
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/git")
         // --no-optional-locks prevents background reads (e.g. `git status`) from

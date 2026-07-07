@@ -38,6 +38,15 @@ final class TerminalSurfaceView: NSView {
     /// Restore command to replay into the shell on surface creation (e.g. "claude --resume <id>").
     var initialInput: String?
 
+    /// For a remote pane: the local command line (an `ssh -tt …` invocation) that
+    /// ghostty runs via `/bin/sh -c` in place of the login shell. nil for a local
+    /// pane, which keeps ghostty's default shell.
+    var initialCommand: String?
+
+    /// Keep the terminal open after `initialCommand` exits (e.g. remote SSH
+    /// disconnect) instead of tearing the pane down immediately.
+    var waitAfterCommand: Bool = false
+
     /// When true, keyboard and mouse input is suppressed (pane is exited/failed).
     var isInputSuppressed: Bool = false
 
@@ -67,7 +76,7 @@ final class TerminalSurfaceView: NSView {
 
         // Create surface when view is attached to a window
         if let terminalSurface, terminalSurface.surface == nil {
-            terminalSurface.createSurface(view: self, workingDirectory: initialWorkingDirectory, environmentVariables: environmentVariables, initialInput: initialInput)
+            terminalSurface.createSurface(view: self, workingDirectory: initialWorkingDirectory, environmentVariables: environmentVariables, initialInput: initialInput, command: initialCommand, waitAfterCommand: waitAfterCommand)
         }
 
         updateSurfaceSize()

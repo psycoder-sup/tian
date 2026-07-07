@@ -6,6 +6,7 @@ struct WorkspaceWindowContent: View {
 
     @State private var showDebugOverlay = false
     @State private var createSessionRequest: CreateSessionRequest?
+    @State private var showCreateSSHWorkspace = false
     @State private var pendingResolveTask: Task<Void, Never>?
     /// Mirrors `GhosttyApp.shared.defaultBackgroundColor` so the root
     /// fills with the same color the Claude pane Metal layer paints.
@@ -111,6 +112,20 @@ struct WorkspaceWindowContent: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
+        .overlay {
+            if showCreateSSHWorkspace {
+                CreateWorkspaceView(
+                    onSubmit: { remote, name in
+                        showCreateSSHWorkspace = false
+                        let derived = RemoteConnection.deriveWorkspaceName(
+                            host: remote.host, remoteDirectory: remote.remoteDirectory)
+                        workspaceCollection.createWorkspace(name: name ?? derived, remote: remote)
+                    },
+                    onCancel: { showCreateSSHWorkspace = false }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+        }
         .alert(
             "Worktree error",
             isPresented: Binding(
@@ -125,6 +140,7 @@ struct WorkspaceWindowContent: View {
         }
         .animation(.easeInOut(duration: 0.15), value: showDebugOverlay)
         .animation(.easeInOut(duration: 0.15), value: createSessionRequest != nil)
+        .animation(.easeInOut(duration: 0.15), value: showCreateSSHWorkspace)
         .animation(.easeInOut(duration: 0.15), value: displayedProgress != nil)
         .onChange(of: worktreeOrchestrator.setupProgress) { _, new in
             if let new {
@@ -156,6 +172,11 @@ struct WorkspaceWindowContent: View {
             guard let obj = notification.object as? WorkspaceCollection,
                   obj === workspaceCollection else { return }
             showDebugOverlay.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showCreateSSHWorkspaceInput)) { notification in
+            guard let obj = notification.object as? WorkspaceCollection,
+                  obj === workspaceCollection else { return }
+            showCreateSSHWorkspace = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .showCreateSessionInput)) { notification in
             guard let obj = notification.object as? WorkspaceCollection,

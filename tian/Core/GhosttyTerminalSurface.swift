@@ -24,7 +24,7 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
     /// - Parameters:
     ///   - view: The NSView that hosts the surface.
     ///   - workingDirectory: Optional initial working directory for the shell.
-    func createSurface(view: TerminalSurfaceView, workingDirectory: String? = nil, environmentVariables: [String: String] = [:], initialInput: String? = nil) {
+    func createSurface(view: TerminalSurfaceView, workingDirectory: String? = nil, environmentVariables: [String: String] = [:], initialInput: String? = nil, command: String? = nil, waitAfterCommand: Bool = false) {
         guard let ghosttyApp = GhosttyApp.shared.app else {
             Log.ghostty.error("Cannot create surface: GhosttyApp not initialized")
             return
@@ -68,6 +68,12 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
         // so all C pointers stay alive for the duration of ghostty_surface_new.
         let clock = ContinuousClock()
         let surfaceStart = clock.now
+        // Remote panes set `command` to an `ssh -tt …` line; ghostty runs it via
+        // `/bin/sh -c` in place of the login shell. An empty string leaves
+        // ghostty on its default login shell (the local case). `wait_after_command`
+        // keeps the terminal readable after the remote session disconnects.
+        config.wait_after_command = waitAfterCommand
+        let commandString = command ?? ""
         let created: ghostty_surface_t? = envVars.withUnsafeMutableBufferPointer { envBuffer in
             config.env_vars = envBuffer.baseAddress
             config.env_var_count = envBuffer.count
@@ -75,7 +81,10 @@ final class GhosttyTerminalSurface: @unchecked Sendable {
                 config.working_directory = cWd
                 return initialInput.withCString { cInput in
                     config.initial_input = cInput
-                    return ghostty_surface_new(ghosttyApp, &config)
+                    return commandString.withCString { cCommand in
+                        config.command = cCommand
+                        return ghostty_surface_new(ghosttyApp, &config)
+                    }
                 }
             }
         }

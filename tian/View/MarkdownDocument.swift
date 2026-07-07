@@ -44,6 +44,10 @@ final class MarkdownDocument {
     private(set) var isLoadingDiff = false
     private(set) var diffHasLoaded = false
 
+    /// Non-nil for a remote workspace: bytes + mtime are fetched over SSH
+    /// instead of the local disk. nil keeps the local read path unchanged.
+    private let remoteSource: ReaderFileSource?
+
     private var lastModified: Date?
     /// Guards against overlapping reloads when a parse outlasts the poll tick.
     private var isReloading = false
@@ -54,28 +58,48 @@ final class MarkdownDocument {
     /// In-flight diff fetch, cancelled before a newer one starts.
     private var diffTask: Task<Void, Never>?
 
-    init(filePath: String) { self.filePath = filePath }
+    init(filePath: String, remoteSource: ReaderFileSource? = nil) {
+        self.filePath = filePath
+        self.remoteSource = remoteSource
+    }
 
     /// Reload from disk only when the file changed (or was never loaded),
     /// parsing off the main thread. A no-op when the modification date is
     /// unchanged, so re-activating the tab or a routine poll stays instant.
     func refreshIfNeeded() async {
-        let mtime = Self.modificationDate(filePath)
+        let mtime = remoteSource != nil
+            ? await remoteSource!.modificationDate(path: filePath)
+            : Self.modificationDate(filePath)
         if hasLoaded && mtime == lastModified { return }
         if isReloading { return }
         isReloading = true
         defer { isReloading = false }
 
         let path = filePath
-        let boxed = await Task.detached(priority: .userInitiated) {
-            () -> Sendbox<Result<(String, MarkdownContent), Error>> in
-            do {
-                let text = try String(contentsOfFile: path, encoding: .utf8)
+        let boxed: Sendbox<Result<(String, MarkdownContent), Error>>
+        if let remoteSource {
+            // Remote: fetch bytes over SSH, then parse off the main thread.
+            let bytes = await remoteSource.readBytes(path: path)
+            boxed = await Task.detached(priority: .userInitiated) {
+                () -> Sendbox<Result<(String, MarkdownContent), Error>> in
+                guard let bytes, let text = String(data: bytes, encoding: .utf8) else {
+                    return Sendbox(value: .failure(NSError(
+                        domain: "MarkdownDocument", code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: "Couldn't read remote file"])))
+                }
                 return Sendbox(value: .success((text, MarkdownContent(text))))
-            } catch {
-                return Sendbox(value: .failure(error))
-            }
-        }.value
+            }.value
+        } else {
+            boxed = await Task.detached(priority: .userInitiated) {
+                () -> Sendbox<Result<(String, MarkdownContent), Error>> in
+                do {
+                    let text = try String(contentsOfFile: path, encoding: .utf8)
+                    return Sendbox(value: .success((text, MarkdownContent(text))))
+                } catch {
+                    return Sendbox(value: .failure(error))
+                }
+            }.value
+        }
 
         switch boxed.value {
         case .success(let (text, parsed)):

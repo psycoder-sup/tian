@@ -82,12 +82,36 @@ final class IPCCommandHandler {
     // MARK: - Workspace Commands
 
     private func handleWorkspaceCreate(_ request: IPCRequest) -> IPCResponse {
-        guard let name = stringParam("name", from: request.params) else {
-            return missingParameter("name")
-        }
-
         guard let collection = resolveCollection() else {
             return .failure(code: 1, message: "No window available.")
+        }
+
+        let ssh = stringParam("ssh", from: request.params)
+        let remoteDir = stringParam("remoteDir", from: request.params)
+
+        // Remote (SSH) workspace: both host and an absolute remote directory.
+        if let ssh, let remoteDir {
+            let remote = RemoteConnection(host: ssh, remoteDirectory: remoteDir)
+            guard remote.isHostSafe else {
+                return .failure(code: 1, message: "Invalid ssh host (must not start with '-').")
+            }
+            guard remote.remoteDirectory.hasPrefix("/") else {
+                return .failure(code: 1, message: "Remote directory must be an absolute path.")
+            }
+            let name = stringParam("name", from: request.params)
+                ?? RemoteConnection.deriveWorkspaceName(host: remote.host, remoteDirectory: remote.remoteDirectory)
+            guard let workspace = collection.createWorkspace(name: name, remote: remote) else {
+                return .failure(code: 1, message: "Invalid workspace name (empty after trimming).")
+            }
+            return .success(["id": .string(workspace.id.uuidString)])
+        }
+        // One of the pair alone is a misuse.
+        if ssh != nil || remoteDir != nil {
+            return .failure(code: 1, message: "Both ssh and remoteDir are required for a remote workspace.")
+        }
+
+        guard let name = stringParam("name", from: request.params) else {
+            return missingParameter("name")
         }
 
         let directory = stringParam("directory", from: request.params)

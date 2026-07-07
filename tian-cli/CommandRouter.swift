@@ -97,18 +97,27 @@ struct WorkspaceGroup: ParsableCommand {
 struct WorkspaceCreate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "create",
-        abstract: "Create a new workspace."
+        abstract: "Create a new workspace (local, or remote over SSH with --ssh)."
     )
 
-    @Argument(help: "Name for the new workspace.")
-    var name: String
+    @Argument(help: "Name for the new workspace. Optional with --ssh (derived from host + dir).")
+    var name: String?
 
     @Option(name: .long, help: "Working directory for the workspace.")
     var directory: String?
 
+    @Option(name: .long, help: "SSH host (an ssh-config alias or user@host) for a remote workspace.")
+    var ssh: String?
+
+    @Option(name: .customLong("remote-dir"), help: "Absolute remote directory (required with --ssh).")
+    var remoteDir: String?
+
     func run() throws {
-        var params: [String: IPCValue] = ["name": .string(name)]
+        var params: [String: IPCValue] = [:]
+        if let name { params["name"] = .string(name) }
         if let directory { params["directory"] = .string(directory) }
+        if let ssh { params["ssh"] = .string(ssh) }
+        if let remoteDir { params["remoteDir"] = .string(remoteDir) }
         let response = try sendRequest(command: "workspace.create", params: params)
         try handleCreateResponse(response)
     }

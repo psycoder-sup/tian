@@ -12,11 +12,16 @@ protocol InspectFileScanning: Sendable {
     /// Returns immediate (non-recursive) children of `absolutePath`. Used to
     /// lazy-load descendants of rolled-up ignored directories on expand.
     func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry]
+    /// Non-nil for scanners whose tree can't be watched with FSEvents (a remote
+    /// host) — the view model polls at this interval instead. Local scanners
+    /// return nil and keep using `WorkingTreeWatcher`.
+    var pollInterval: Duration? { get }
 }
 
 extension InspectFileScanning {
     func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries { .empty }
     func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] { [] }
+    var pollInterval: Duration? { nil }
 }
 
 struct LiveInspectFileScanner: InspectFileScanning {
@@ -80,9 +85,11 @@ final class InspectFileTreeViewModel {
 
         cancelPendingIgnoredChildrenLoads()
 
-        // Tear down old watcher.
+        // Tear down old watcher / poller.
         watcher?.stop()
         watcher = nil
+        pollingRefresher?.stop()
+        pollingRefresher = nil
 
         rootDirectory = url
 
@@ -193,6 +200,8 @@ final class InspectFileTreeViewModel {
         cancelPendingIgnoredChildrenLoads()
         watcher?.stop()
         watcher = nil
+        pollingRefresher?.stop()
+        pollingRefresher = nil
     }
 
     /// Cancels every in-flight lazy children load. Lazy loads are tied to a
@@ -241,6 +250,13 @@ final class InspectFileTreeViewModel {
         self.slowFlagDelay = slowFlagDelay
     }
 
+    /// Swaps in a different scanner. Used by `Workspace.configureRemote` to make
+    /// a remote workspace's tree scan over SSH. Must be called before the first
+    /// `setRoot` (no watcher/poller is running yet).
+    func useScanner(_ scanner: InspectFileScanning) {
+        self.scanner = scanner
+    }
+
     // MARK: - Private
 
     private var scanner: InspectFileScanning
@@ -250,6 +266,9 @@ final class InspectFileTreeViewModel {
     private var scanTask: Task<Void, Never>?
     private var slowFlagTask: Task<Void, Never>?
     private var watcher: WorkingTreeWatcher?
+    /// Used instead of `watcher` for a remote scanner (FSEvents can't watch
+    /// another host).
+    private var pollingRefresher: PollingRefresher?
 
     /// Full unfiltered tree (set after each scan). View-only state derives from
     /// this + `expandedPaths` to produce `visibleRows`.
@@ -448,6 +467,18 @@ final class InspectFileTreeViewModel {
     }
 
     private func startWatcher(for url: URL) {
+        // Remote scanner: FSEvents can't watch another host, so poll on an
+        // interval instead. Each tick does the same in-place `refresh()`.
+        if let interval = scanner.pollInterval {
+            let poller = PollingRefresher(interval: interval) { [weak self] in
+                guard let self, self.rootDirectory == url else { return }
+                self.refresh()
+            }
+            pollingRefresher = poller
+            poller.start()
+            return
+        }
+
         // Each FS-event burst triggers an in-place `refresh()` — the tree
         // stays visible while the rescan runs (no Loading… flicker).
         watcher = WorkingTreeWatcher(root: url.path) { [weak self] in

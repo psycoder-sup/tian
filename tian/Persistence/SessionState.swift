@@ -34,6 +34,9 @@ struct WorkspaceState: Codable, Sendable, Equatable {
     /// panel's selected tab (files / diff / branch), unrelated to the removed
     /// terminal tab bar.
     let activeTab: String?
+    /// Added in schema v8. The SSH target when this is a remote workspace; nil
+    /// (absent key) for a local one, so pre-v8 records decode without migration.
+    let remote: RemoteConnectionState?
 
     init(
         id: UUID,
@@ -45,7 +48,8 @@ struct WorkspaceState: Codable, Sendable, Equatable {
         isFullscreen: Bool?,
         inspectPanelVisible: Bool? = nil,
         inspectPanelWidth: Double? = nil,
-        activeTab: String? = nil
+        activeTab: String? = nil,
+        remote: RemoteConnectionState? = nil
     ) {
         self.id = id
         self.name = name
@@ -57,6 +61,7 @@ struct WorkspaceState: Codable, Sendable, Equatable {
         self.inspectPanelVisible = inspectPanelVisible
         self.inspectPanelWidth = inspectPanelWidth
         self.activeTab = activeTab
+        self.remote = remote
     }
 }
 

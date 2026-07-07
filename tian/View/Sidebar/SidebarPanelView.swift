@@ -25,23 +25,38 @@ struct SidebarPanelView: View {
     }
 
     private var newWorkspaceButton: some View {
-        Button {
-            WorkspaceCreationFlow.createWorkspace(in: workspaceCollection)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .medium))
-                Text("New Workspace")
-                    .font(.system(size: 11))
+        HStack(spacing: 0) {
+            Button {
+                WorkspaceCreationFlow.createWorkspace(in: workspaceCollection)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .medium))
+                    Text("New Workspace")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("new-workspace-button")
+            .accessibilityLabel("New workspace")
+
+            Button {
+                WorkspaceCreationFlow.requestSSHWorkspace(in: workspaceCollection)
+            } label: {
+                Image(systemName: "network")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("New SSH Workspace…")
+            .accessibilityIdentifier("new-ssh-workspace-button")
+            .accessibilityLabel("New SSH workspace")
         }
-        .buttonStyle(.plain)
         .frame(height: 28)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
-        .accessibilityIdentifier("new-workspace-button")
-        .accessibilityLabel("New workspace")
     }
 }

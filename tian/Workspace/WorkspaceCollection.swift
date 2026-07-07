@@ -92,6 +92,30 @@ final class WorkspaceCollection {
         return workspace
     }
 
+    /// Creates a remote (SSH) workspace. The remote directory is stored in
+    /// `defaultWorkingDirectory` — a POSIX path round-trips through `URL.path`
+    /// unchanged — so every working-directory resolver and `inspectPanelRoot`
+    /// keeps working verbatim; only *how* that path is used (SSH vs local) differs.
+    @discardableResult
+    func createWorkspace(name: String, remote: RemoteConnection) -> Workspace? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // Reject a host ssh would parse as an option (argument injection).
+        guard remote.isHostSafe else { return nil }
+
+        workspaceCounter += 1
+
+        let workspace = Workspace(
+            name: trimmed,
+            defaultWorkingDirectory: URL(fileURLWithPath: remote.remoteDirectory),
+            remote: remote
+        )
+        wireWorkspaceClose(workspace)
+        workspaces.append(workspace)
+        activeWorkspaceID = workspace.id
+        return workspace
+    }
+
     func removeWorkspace(id: UUID) {
         guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
         let workspace = workspaces[index]

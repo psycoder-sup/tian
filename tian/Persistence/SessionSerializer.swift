@@ -2,7 +2,7 @@ import Foundation
 
 /// Captures a snapshot of the live workspace model and writes it to disk as JSON.
 enum SessionSerializer {
-    static let currentVersion = 7   // bumped from 6 for the flattened Session model
+    static let currentVersion = 8   // bumped from 7 for remote (SSH) workspaces
 
     static var stateDirectory: URL {
         FileManager.default
@@ -53,7 +53,8 @@ enum SessionSerializer {
                 isFullscreen: isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelState.isVisible,
                 inspectPanelWidth: Double(workspace.inspectPanelState.width),
-                activeTab: workspace.inspectTabState.activeTab.rawValue
+                activeTab: workspace.inspectTabState.activeTab.rawValue,
+                remote: workspace.remote.map(RemoteConnectionState.init)
             )
         }
 

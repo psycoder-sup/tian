@@ -22,6 +22,21 @@ final class SessionCollection {
     /// The owning workspace's ID. Propagated to all sessions.
     var workspaceID: UUID?
 
+    /// Non-nil for a remote (SSH) workspace. Set by `Workspace.configureRemote`
+    /// before the first session is seeded, so every session created here spawns
+    /// remotely. Propagated to existing sessions via `propagateRemoteChannel`.
+    var remoteChannel: SSHControlChannel?
+
+    /// Sets the remote channel and pushes it into every existing session (their
+    /// reader + future panes go remote). New sessions pick it up in
+    /// `createSession`.
+    func propagateRemoteChannel(_ channel: SSHControlChannel?) {
+        remoteChannel = channel
+        for session in sessions {
+            session.applyRemoteChannel(channel)
+        }
+    }
+
     init(workingDirectory: String = "~") {
         // No custom name — the seeded session uses its auto-derived name.
         let initialSession = Session(workingDirectory: workingDirectory)
@@ -63,7 +78,9 @@ final class SessionCollection {
     @discardableResult
     func createSession(name: String? = nil, workingDirectory: String? = nil, focusOnCreate: Bool = true) -> Session {
         // A nil name leaves `customName` nil, so the session uses its auto name.
-        let session = Session(customName: name, workingDirectory: workingDirectory ?? "~")
+        // `remoteChannel` (set before the first seed) makes the session's Claude
+        // pane spawn over SSH.
+        let session = Session(customName: name, workingDirectory: workingDirectory ?? "~", remoteChannel: remoteChannel)
         session.workspaceDefaultDirectory = workspaceDefaultDirectory
         if let workspaceID {
             session.propagateWorkspaceID(workspaceID)
