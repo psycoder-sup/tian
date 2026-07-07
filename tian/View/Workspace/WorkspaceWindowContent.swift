@@ -191,7 +191,7 @@ struct WorkspaceWindowContent: View {
             }()
             guard let workspace else { return }
             let wd = workspace.sessionCollection.resolveWorkingDirectory()
-            // Rapid repeat triggers (⇧⌘T held, or ⇧⌘T after clicking +) used to
+            // Rapid repeat triggers (⌘N held, or ⌘N after clicking +) used to
             // spawn overlapping resolutions; the last to finish would re-open
             // the modal even if the user had already cancelled an earlier one.
             // Cancel the in-flight resolution and replace it.

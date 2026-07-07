@@ -25,8 +25,8 @@ struct KeyBindingRegistryTests {
     }
 
     @Test func charactersBindingResolves() {
-        // Cmd+Shift+T creates a session (Cmd+T is intentionally unbound).
-        let event = keyEvent(keyCode: 17 /* T */, characters: "t", modifiers: [.command, .shift])
+        // Cmd+N creates a session (Cmd+T is intentionally unbound).
+        let event = keyEvent(keyCode: 45 /* N */, characters: "n", modifiers: [.command])
         #expect(KeyBindingRegistry.shared.action(for: event) == .newSession)
     }
 
@@ -37,22 +37,26 @@ struct KeyBindingRegistryTests {
     }
 
     @Test func nonLatinImeResolvesByPhysicalKey() {
-        // Under a Korean (or other non-Latin) IME, the T key reports a composed
+        // Under a Korean (or other non-Latin) IME, the N key reports a composed
         // character for charactersIgnoringModifiers; the binding must still
         // resolve via the ASCII-capable layout translation of the keycode.
-        // Guard on the host layout mapping keyCode 17 -> "t" (true for US/ABC
+        // Guard on the host layout mapping keyCode 45 -> "n" (true for US/ABC
         // and other QWERTY-derived ASCII-capable layouts) to avoid false
         // failures on exotic dev/CI layouts.
-        guard KeyboardLayoutTranslator.shared.character(forKeyCode: 17) == "t" else { return }
-        let event = keyEvent(keyCode: 17 /* T */, characters: "ㅅ", modifiers: [.command, .shift])
+        guard KeyboardLayoutTranslator.shared.character(forKeyCode: 45) == "n" else { return }
+        let event = keyEvent(keyCode: 45 /* N */, characters: "ㅜ", modifiers: [.command])
         #expect(KeyBindingRegistry.shared.action(for: event) == .newSession)
     }
 
-    @Test func cmdTAloneIsUnbound() {
+    @Test func cmdTVariantsAreUnbound() {
         // Cmd+T (no shift) must fall through to the shell, not the tab family
         // that no longer exists.
-        let event = keyEvent(keyCode: 17 /* T */, characters: "t", modifiers: [.command])
-        #expect(KeyBindingRegistry.shared.action(for: event) == nil)
+        let cmdT = keyEvent(keyCode: 17 /* T */, characters: "t", modifiers: [.command])
+        #expect(KeyBindingRegistry.shared.action(for: cmdT) == nil)
+        // Cmd+Shift+T — the former new-session binding — is now unbound too;
+        // new session moved to Cmd+N.
+        let cmdShiftT = keyEvent(keyCode: 17 /* T */, characters: "t", modifiers: [.command, .shift])
+        #expect(KeyBindingRegistry.shared.action(for: cmdShiftT) == nil)
     }
 
     @Test func keyCodeBindingResolves() {

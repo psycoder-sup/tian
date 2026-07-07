@@ -44,7 +44,7 @@ struct SidebarWorkspaceHeaderView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("add-session-\(workspace.id)")
             .accessibilityLabel("New session in \(workspace.name)")
-            .help("New session (⇧⌘T)")
+            .help("New session (⌘N)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)

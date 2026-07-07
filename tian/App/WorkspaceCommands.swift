@@ -27,7 +27,7 @@ struct WorkspaceCommands: Commands {
                     )
                 }
             }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .keyboardShortcut("n", modifiers: [.command])
 
             Button("New Workspace") {
                 if let controller = windowCoordinator.controllerForKeyWindow() {

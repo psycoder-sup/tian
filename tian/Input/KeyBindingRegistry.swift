@@ -104,10 +104,10 @@ struct KeyBindingRegistry {
         var registry = KeyBindingRegistry()
 
         // Session navigation
-        // Cmd+Shift+T creates a session (Cmd+T is intentionally left unbound so
-        // it falls through to the shell).
+        // Cmd+N creates a session. Cmd+T remains intentionally unbound so it
+        // falls through to the shell.
         registry.bindings[.newSession] = [KeyBinding(
-            characters: "t", keyCode: nil, modifiers: [.command, .shift])]
+            characters: "n", keyCode: nil, modifiers: [.command])]
 
         // Session navigation (across workspaces)
         // Cmd+Shift+Down (keyCode 125) / Cmd+Shift+Up (keyCode 126)
