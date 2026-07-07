@@ -125,10 +125,12 @@ struct WorktreeOrchestratorTests {
         #expect(FileManager.default.fileExists(atPath: expectedPath, isDirectory: &isDir))
         #expect(isDir.boolValue)
 
-        // Verify Session was created in the collection
+        // Verify Session was created in the collection. Worktree sessions are
+        // auto-named from the live Claude title (customName stays nil), not pinned
+        // to the branch — the branch shows separately in the header/sidebar.
         let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
         #expect(newSession != nil)
-        #expect(newSession?.customName == "feature/test-config")
+        #expect(newSession?.customName == nil)
         #expect(newSession?.worktreePath != nil)
         #expect(resolvePath(newSession!.worktreePath!.path) == resolvePath(expectedPath))
         #expect(newSession?.defaultWorkingDirectory != nil)
@@ -174,7 +176,8 @@ struct WorktreeOrchestratorTests {
         // (no layout applied → the terminal panel is never split).
         let newSession = workspace.sessionCollection.sessions.first(where: { $0.id == result.sessionID })
         #expect(newSession != nil)
-        #expect(newSession?.customName == "no-config-branch")
+        // Auto-named from the live Claude title, not pinned to the branch.
+        #expect(newSession?.customName == nil)
         #expect(newSession?.claudePane != nil)
         #expect(newSession?.terminalPanel?.splitTree.leafCount == 1)
     }

@@ -228,8 +228,8 @@ final class WorktreeOrchestrator {
         // is read once at spawn), the same timing guarantee `createSession`'s
         // Claude-pane seeding relies on.
         let claudeWorktreeCommand = "claude --worktree"
+        // No name → auto-named from the live Claude pane title (see `continueCreation`).
         let session = targetWorkspace.sessionCollection.createSession(
-            name: "Creating worktree…",
             workingDirectory: repoRoot,
             focusOnCreate: true
         )
@@ -258,7 +258,8 @@ final class WorktreeOrchestrator {
         // Step 5: Bind the Session to the detected worktree, or fall back on timeout.
         if let detected {
             let url = URL(filePath: detected)
-            session.customName = url.lastPathComponent
+            // Leave `customName` nil so the session auto-names from the live Claude
+            // title (falls back to the worktree dir leaf only if no title yet).
             session.defaultWorkingDirectory = url
             session.worktreePath = url
             // Reset the pane's launch override so a future restart/restore runs
@@ -270,10 +271,10 @@ final class WorktreeOrchestrator {
             session.claudeLaunchCommand = PaneSpawner.claudeAutostartCommand
             Log.worktree.info("claude --worktree: detected \(detected); bound Session \(session.id) (name: \(url.lastPathComponent))")
         } else {
-            // Claude is still running — leave the Session in place but give it a
-            // real name. The pane keeps its `claude --worktree` override: we
-            // can't prove a worktree was created, so resetting it could be wrong.
-            session.customName = "worktree"
+            // Claude is still running — leave the Session in place. Its name stays
+            // auto-derived from the live Claude title. The pane keeps its
+            // `claude --worktree` override: we can't prove a worktree was created,
+            // so resetting it could be wrong.
             Log.worktree.warning("claude --worktree: timed out waiting for a worktree under \(repoRoot)/.claude/worktrees; leaving Session \(session.id) running")
         }
 
@@ -562,7 +563,8 @@ final class WorktreeOrchestrator {
             focusOnCreate: !background
         )
         let worktreeURL = URL(filePath: worktreePath)
-        newSession.customName = branchName
+        // Leave `customName` nil so the session auto-names from the live Claude
+        // title; the branch stays visible separately in the header/sidebar.
         newSession.defaultWorkingDirectory = worktreeURL
         newSession.worktreePath = worktreeURL
 
