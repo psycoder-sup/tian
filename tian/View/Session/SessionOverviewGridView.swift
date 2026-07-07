@@ -7,16 +7,24 @@ import SwiftUI
 /// backdrop that the session content behind blurs through.
 ///
 /// Fully keyboard-driven: arrow keys move a visible card selection in true 2D,
-/// Return/keypad Enter opens the selected session, Escape dismisses. Clicking a
-/// card selects that session too.
+/// Return/keypad Enter opens the selected session, `R` renames the selected card
+/// inline, `D` deletes it (via the shared close flow), Escape dismisses. Clicking
+/// a card selects that session too.
 struct SessionOverviewGridView: View {
     let workspaceCollection: WorkspaceCollection
+    /// Used by `D` (delete) — routes through the same close flow as the sidebar
+    /// so worktree teardown dialogs and cascade-close behave identically.
+    let worktreeOrchestrator: WorktreeOrchestrator
     let onSelect: (_ workspaceID: UUID, _ sessionID: UUID) -> Void
     let onDismiss: () -> Void
 
     /// The keyboard-selected card. Defaults to the active session on appear and
     /// is kept valid (falls back to the first card) if the list changes.
     @State private var selectedSessionID: UUID?
+    /// `true` while the selected card's name is in inline-rename mode (driven by
+    /// the `R` shortcut). While set, the keyboard responder yields first responder
+    /// so the rename `TextField` can hold focus.
+    @State private var isRenamingSelection = false
     /// Live column count of the adaptive grid, measured from the overview's
     /// content width. Drives Up/Down (±one row) arrow navigation. Defaults to 1.
     @State private var columnCount = 1
@@ -76,7 +84,10 @@ struct SessionOverviewGridView: View {
             OverviewKeyboardResponder(
                 onArrow: move,
                 onActivate: activateSelection,
-                onEscape: onDismiss
+                onEscape: onDismiss,
+                onDelete: deleteSelection,
+                onRename: beginRenameSelection,
+                isEditing: isRenamingSelection
             )
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
@@ -91,6 +102,9 @@ struct SessionOverviewGridView: View {
             let stillValid = selectedSessionID.map(ids.contains) ?? false
             if !stillValid {
                 selectedSessionID = ids.first
+                // Drop any in-flight rename if its card disappeared (e.g. the
+                // session was deleted mid-edit) so the responder reclaims focus.
+                isRenamingSelection = false
             }
         }
     }
@@ -142,6 +156,12 @@ struct SessionOverviewGridView: View {
                             && entry.session.id == workspace.sessionCollection.activeSessionID,
                         isSelected: entry.session.id == selectedSessionID,
                         isOrchestrator: entry.isOrchestrator,
+                        // Only the selected card renames; committing/cancelling
+                        // clears the shared flag.
+                        isRenaming: Binding(
+                            get: { isRenamingSelection && entry.session.id == selectedSessionID },
+                            set: { if !$0 { isRenamingSelection = false } }
+                        ),
                         onSelect: { onSelect(workspace.id, entry.session.id) }
                     )
                 }
@@ -192,6 +212,30 @@ struct SessionOverviewGridView: View {
         onSelect(card.workspaceID, card.sessionID)
     }
 
+    /// Put the selected card's name into inline-rename mode (the `R` shortcut).
+    /// A no-op when nothing is selected.
+    private func beginRenameSelection() {
+        guard selectedSessionID != nil else { return }
+        isRenamingSelection = true
+    }
+
+    /// Delete the selected session via the shared close flow (the `D` shortcut) —
+    /// worktree sessions get the teardown dialog, plain sessions are removed
+    /// immediately, exactly as the sidebar's close does. A no-op when nothing is
+    /// selected or the selection can no longer be resolved.
+    private func deleteSelection() {
+        guard let id = selectedSessionID,
+              let card = flatCards.first(where: { $0.id == id }),
+              let workspace = workspaceCollection.workspaces.first(where: { $0.id == card.workspaceID }),
+              let session = workspace.sessionCollection.sessions.first(where: { $0.id == card.sessionID })
+        else { return }
+        SessionCloseFlow.run(
+            session: session,
+            in: workspace,
+            worktreeOrchestrator: worktreeOrchestrator
+        )
+    }
+
     /// Columns that fit `width` given the adaptive tile params (`cardMinWidth`
     /// minimum, `cardSpacing` gap). Guards a non-positive width by defaulting to
     /// a single column.
@@ -218,6 +262,12 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
     let onArrow: (OverviewGridNavigation.Direction) -> Void
     let onActivate: () -> Void
     let onEscape: () -> Void
+    let onDelete: () -> Void
+    let onRename: () -> Void
+    /// `true` while the selected card is being renamed inline. The rename
+    /// `TextField` then owns first responder, so this view must NOT reclaim it
+    /// (reclaiming would drop the field's focus and cancel the edit).
+    let isEditing: Bool
 
     func makeNSView(context: Context) -> KeyView {
         KeyView()
@@ -229,10 +279,26 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         nsView.onArrow = onArrow
         nsView.onActivate = onActivate
         nsView.onEscape = onEscape
-        // The overview is only in the hierarchy while visible, so claim first
-        // responder as soon as we're in a window (and keep it if it slips away).
-        if let window = nsView.window, window.firstResponder !== nsView {
-            window.makeFirstResponder(nsView)
+        nsView.onDelete = onDelete
+        nsView.onRename = onRename
+        // While a rename field is up, leave first responder alone so the
+        // TextField keeps focus.
+        guard !isEditing else { return }
+        // Reclaim first responder on the next runloop tick rather than inline:
+        // when a rename ends, this same update pass also tears down the rename
+        // TextField, and reclaiming synchronously here can race that teardown and
+        // leave the window with no first responder (dead keyboard). Deferring runs
+        // after SwiftUI settles. `viewDidMoveToWindow` still claims focus
+        // synchronously on first mount, so initial keyboard control isn't delayed.
+        DispatchQueue.main.async { [weak nsView] in
+            guard let nsView, let window = nsView.window else { return }
+            // A live editor (e.g. a rename field) legitimately owns focus — never
+            // steal it back; the `isEditing` guard above covers the common case,
+            // this covers any stray editor that appears between updates.
+            if window.firstResponder is NSText { return }
+            if window.firstResponder !== nsView {
+                window.makeFirstResponder(nsView)
+            }
         }
     }
 
@@ -240,6 +306,8 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         var onArrow: ((OverviewGridNavigation.Direction) -> Void)?
         var onActivate: (() -> Void)?
         var onEscape: (() -> Void)?
+        var onDelete: (() -> Void)?
+        var onRename: (() -> Void)?
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -268,7 +336,14 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
             case 53 where flags.isEmpty:
                 onEscape?()
             default:
-                super.keyDown(with: event)
+                // Letter shortcuts match the typed character (layout-independent)
+                // with no Cmd/Ctrl/Opt/Shift held. Never reached mid-rename: the
+                // TextField owns first responder then, so these keys go to it.
+                switch bareFlags.isEmpty ? event.charactersIgnoringModifiers?.lowercased() : nil {
+                case "d": onDelete?()
+                case "r": onRename?()
+                default: super.keyDown(with: event)
+                }
             }
         }
     }
