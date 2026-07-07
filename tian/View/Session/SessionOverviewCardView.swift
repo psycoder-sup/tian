@@ -20,6 +20,13 @@ struct SessionOverviewCardView: View {
     /// Drives inline rename of the session name when the overview's `R` shortcut
     /// targets this (selected) card. Cleared on commit/cancel by `InlineRenameView`.
     @Binding var isRenaming: Bool
+    /// Drives the delete-confirmation popover when the overview's `D` shortcut
+    /// arms this (selected) card. Set to `false` by Cancel / click-away, which the
+    /// grid observes to clear its pending id.
+    @Binding var isConfirmingDelete: Bool
+    /// Invoked by the popover's Delete button (and Return) to run the shared close
+    /// flow. The grid clears `isConfirmingDelete` as part of this.
+    let onConfirmDelete: () -> Void
     let onSelect: () -> Void
 
     /// Live preview of the Claude pane's last output lines, refreshed on a
@@ -147,6 +154,14 @@ struct SessionOverviewCardView: View {
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture { onSelect() }
+        // Delete-confirmation popover armed by the overview's `D` shortcut. Anchored
+        // to this card so the confirm reads as "delete *this* session". Return
+        // (default action) confirms, Escape (cancel action) dismisses; both are
+        // also handled by the overview's keyboard responder if the popover does not
+        // take key focus (see `OverviewKeyboardResponder`).
+        .popover(isPresented: $isConfirmingDelete, arrowEdge: .top) {
+            deleteConfirmationPopover
+        }
         // Reads the Claude pane's visible VT text on the MainActor at ~1 Hz per
         // card — fine for a handful of sessions. If session counts grow large
         // this can move to a single shared timer tick driving every card.
@@ -160,5 +175,31 @@ struct SessionOverviewCardView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(session.displayName)
         .accessibilityHint("Double-tap to switch to this session.")
+    }
+
+    /// Compact confirmation shown in the delete popover. The Delete button carries
+    /// the default-action shortcut (Return) and Cancel the cancel-action shortcut
+    /// (Escape) for when the popover owns key focus; the overview's keyboard
+    /// responder mirrors both for when it does not.
+    private var deleteConfirmationPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Delete this session?")
+                .font(.headline)
+            Text(session.displayName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            HStack {
+                Spacer()
+                Button("Cancel") { isConfirmingDelete = false }
+                    .keyboardShortcut(.cancelAction)
+                Button("Delete", role: .destructive) { onConfirmDelete() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 240)
     }
 }
