@@ -18,17 +18,32 @@ enum PaneSpawner {
     ///     read once during `GhosttyTerminalSurface.createSurface`.
     ///   - kind: which kind the pane belongs to. Claude panes receive
     ///     `TIAN_AUTOSTART_CMD = "claude"`; Terminal panes get nothing.
-    ///   - workingDirectory: starting working directory for the shell.
+    ///   - workingDirectory: starting working directory for the shell. For a
+    ///     remote pane this is the remote `cd` target embedded in the ssh line.
     ///   - environmentVariables: pre-built TIAN_* env vars (computed by
     ///     the caller via `EnvironmentBuilder` / `PaneHierarchyContext`).
+    ///   - remoteSpawn: non-nil for a remote workspace — routes the pane through
+    ///     `ssh -tt` instead of a local shell.
     @MainActor
     static func configure(
         view: TerminalSurfaceView,
         kind: PaneKind,
         workingDirectory: String,
-        environmentVariables: [String: String]
+        environmentVariables: [String: String],
+        remoteSpawn: RemoteSpawnSpec? = nil
     ) {
         assert(view.window == nil, "PaneSpawner.configure must be called before the view enters a window")
+
+        if let remoteSpawn {
+            configureRemote(
+                view: view,
+                kind: kind,
+                workingDirectory: workingDirectory,
+                environmentVariables: environmentVariables,
+                remoteSpawn: remoteSpawn
+            )
+            return
+        }
 
         view.initialWorkingDirectory = workingDirectory
         view.environmentVariables = autostartEnvironment(kind: kind, base: environmentVariables)
@@ -37,6 +52,59 @@ enum PaneSpawner {
         // with interactive rc prompts (oh-my-zsh dotenv/auto-update) and get
         // swallowed before `claude` ever runs.
         view.initialInput = nil
+    }
+
+    /// Remote pane configuration: ghostty runs an `ssh -tt … 'cd <dir> && exec
+    /// <cmd>'` line via `/bin/sh -c` in place of a login shell.
+    ///
+    /// Ghostty chdirs *locally* before exec, so the local working directory is
+    /// kept at `$HOME` (a real, always-present local dir) — the remote `cd`
+    /// happens inside the ssh command. There is NO `TIAN_AUTOSTART_CMD`: Claude
+    /// runs on the remote host, launched directly by the ssh line, not by tian's
+    /// bundled local `.zshrc` (which isn't on the remote).
+    @MainActor
+    private static func configureRemote(
+        view: TerminalSurfaceView,
+        kind: PaneKind,
+        workingDirectory: String,
+        environmentVariables: [String: String],
+        remoteSpawn: RemoteSpawnSpec
+    ) {
+        view.initialWorkingDirectory = NSHomeDirectory()
+        view.environmentVariables = environmentVariables
+        view.initialInput = nil
+        view.initialCommand = RemoteCommandBuilder.interactiveSSHCommandLine(
+            host: remoteSpawn.channel.host,
+            workingDirectory: workingDirectory,
+            remoteCommand: remoteCommand(kind: kind)
+        )
+        view.waitAfterCommand = true
+    }
+
+    /// The command a remote pane execs on the host. The builder prepends `exec `,
+    /// so these are the bare target (no leading `exec`); both are inserted into
+    /// the remote-shell fragment unquoted, so `$SHELL` expands remotely.
+    ///
+    /// Both run through a **login + interactive** shell (`-lic` / `-l` with a
+    /// tty). `ssh host <cmd>` otherwise runs a non-login, non-interactive shell
+    /// whose PATH is the bare `/usr/bin:/bin:…`, so a direct `exec claude` fails
+    /// with "command not found" (Claude typically lives in `~/.local/bin`, put on
+    /// PATH by the user's `.zshrc`). Routing Claude through `$SHELL -lic` sources
+    /// the user's rc files first — the remote analogue of the local pane's
+    /// bundled-`.zshrc` autostart.
+    @MainActor
+    static func remoteCommand(kind: PaneKind) -> String {
+        switch kind {
+        case .claude:
+            // `$SHELL -lic '<claude command>'` — the launch command is passed as a
+            // single `-c` argument (single-quoted for that login shell); the
+            // builder's outer quoting escapes these quotes for the layers above.
+            return "\"${SHELL:-/bin/sh}\" -lic " + ShellQuoting.singleQuote(claudeAutostartCommand)
+        case .terminal:
+            // A login shell with a tty is already interactive (sources .zshrc),
+            // so the user's normal environment/PATH is present.
+            return "\"${SHELL:-/bin/sh}\" -l"
+        }
     }
 
     /// Returns `base` with `TIAN_AUTOSTART_CMD` added for Claude panes so the

@@ -110,6 +110,10 @@ enum SessionStateMigrator {
         // attached terminal panel. Reader tabs and non-active Terminal tabs are
         // dropped. See `migrateV6ToV7` for the per-space rules.
         6: { json in try SessionStateMigrator.migrateV6ToV7(json) },
+        // v7 → v8: Added optional `remote: RemoteConnectionState?` to
+        // `WorkspaceState`. The field is optional so v7 decodes as nil (a local
+        // workspace) with no transformation.
+        7: { json in json },
     ]
 
     // MARK: - v6 → v7 Migration

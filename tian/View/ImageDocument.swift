@@ -23,25 +23,56 @@ final class ImageDocument {
     private(set) var loadError: String?
     private(set) var hasLoaded = false
 
+    /// Non-nil for a remote workspace: bytes + mtime are fetched over SSH
+    /// instead of the local disk. nil keeps the local read path unchanged.
+    private let remoteSource: ReaderFileSource?
+
     private var lastModified: Date?
     /// Guards against overlapping reloads when a decode outlasts the poll tick.
     private var isReloading = false
 
-    init(filePath: String) { self.filePath = filePath }
+    init(filePath: String, remoteSource: ReaderFileSource? = nil) {
+        self.filePath = filePath
+        self.remoteSource = remoteSource
+    }
 
     /// Reload from disk only when the file changed (or was never loaded),
     /// decoding off the main thread. A no-op when the modification date is
     /// unchanged, so re-activating the tab or a routine poll stays instant.
     func refreshIfNeeded() async {
-        let mtime = Self.modificationDate(filePath)
+        let mtime = remoteSource != nil
+            ? await remoteSource!.modificationDate(path: filePath)
+            : Self.modificationDate(filePath)
         if hasLoaded && mtime == lastModified { return }
         if isReloading { return }
         isReloading = true
         defer { isReloading = false }
 
         let path = filePath
+        // Remote images are fetched over SSH as bytes and decoded from Data;
+        // local images decode straight from the file URL.
+        let remoteBytes: Data? = remoteSource != nil
+            ? await remoteSource!.readBytes(path: path)
+            : nil
+        let usingRemote = remoteSource != nil
         let boxed = await Task.detached(priority: .userInitiated) {
             () -> Sendbox<Result<NSImage, Error>> in
+            let failure = Sendbox<Result<NSImage, Error>>(value: .failure(NSError(
+                domain: "ImageDocument", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported or unreadable image"])))
+            if usingRemote {
+                guard let remoteBytes else { return failure }
+                if let source = CGImageSourceCreateWithData(remoteBytes as CFData, nil),
+                   let cg = CGImageSourceCreateImageAtIndex(
+                    source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) {
+                    let size = CGSize(width: cg.width, height: cg.height)
+                    return Sendbox(value: .success(NSImage(cgImage: cg, size: size)))
+                }
+                if let img = NSImage(data: remoteBytes) {
+                    return Sendbox(value: .success(img))
+                }
+                return failure
+            }
             let url = URL(fileURLWithPath: path)
             // Decode fully now (off-main) so the first draw is a cheap GPU
             // upload with no main-thread hitch.
@@ -55,9 +86,7 @@ final class ImageDocument {
             if let img = NSImage(contentsOf: url) {
                 return Sendbox(value: .success(img))
             }
-            return Sendbox(value: .failure(NSError(
-                domain: "ImageDocument", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Unsupported or unreadable image"])))
+            return failure
         }.value
 
         switch boxed.value {

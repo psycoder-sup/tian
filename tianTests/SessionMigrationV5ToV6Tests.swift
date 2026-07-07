@@ -9,9 +9,9 @@ struct SessionMigrationV5ToV6Tests {
         #expect(SessionStateMigrator.migrations[5] != nil)
     }
 
-    // FR-T31 — current schema version is 7 (the flatten refactor bumped it).
-    @Test func currentVersionIsSeven() {
-        #expect(SessionSerializer.currentVersion == 7)
+    // FR-T31 — current schema version (bumped to 8 for remote SSH workspaces).
+    @Test func currentVersionIsEight() {
+        #expect(SessionSerializer.currentVersion == 8)
     }
 
     // FR-T29 / FR-T31 — a v5 fixture (no activeTab field) migrates to v6;

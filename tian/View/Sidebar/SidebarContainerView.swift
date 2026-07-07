@@ -7,6 +7,7 @@ extension Notification.Name {
     static let focusSidebar = Notification.Name("focusSidebar")
     static let toggleDebugOverlay = Notification.Name("toggleDebugOverlay")
     static let showCreateSessionInput = Notification.Name("showCreateSessionInput")
+    static let showCreateSSHWorkspaceInput = Notification.Name("showCreateSSHWorkspaceInput")
     static let toggleSessionOverview = Notification.Name("toggleSessionOverview")
     static let renameSession = Notification.Name("renameSession")
 }

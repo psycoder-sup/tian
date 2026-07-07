@@ -29,6 +29,14 @@ struct WorkspaceEmptyStateView: View {
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
             .padding(.top, 8)
+
+            Button {
+                WorkspaceCreationFlow.requestSSHWorkspace(in: workspaceCollection)
+            } label: {
+                Label("New SSH Workspace…", systemImage: "network")
+            }
+            .controlSize(.large)
+            .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)

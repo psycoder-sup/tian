@@ -94,6 +94,13 @@ enum SessionRestorer {
                 throw RestoreError.emptySessions(workspaceName: workspace.name)
             }
 
+            // A remote workspace's paths live on another host, so they can't be
+            // validated (or nulled) against the local disk — pass them through.
+            let isRemote = workspace.remote != nil
+            func validateDir(_ path: String?) -> String? {
+                isRemote ? path : resolveDirectory(path)
+            }
+
             // IDs of every Session in this workspace, for validating parent
             // links. Validation never drops individual Sessions (empty
             // workspaces throw), so the original ID set matches the restored one.
@@ -103,6 +110,7 @@ enum SessionRestorer {
                 // A nil Claude pane is legal — it persists the empty-claude
                 // placeholder state, so there is no "claude must exist" invariant.
                 let validatedClaude: PaneLeafState? = session.claudePane.map { claude in
+                    guard !isRemote else { return claude }
                     let resolved = resolveWorkingDirectories(
                         in: .pane(claude),
                         fallback: workspace.defaultWorkingDirectory,
@@ -117,7 +125,7 @@ enum SessionRestorer {
                 let validatedTerminalRoot: PaneNodeState?
                 let validatedTerminalFocusedPaneId: UUID?
                 if let root = session.terminalRoot {
-                    let resolvedRoot = resolveWorkingDirectories(
+                    let resolvedRoot = isRemote ? root : resolveWorkingDirectories(
                         in: root,
                         fallback: workspace.defaultWorkingDirectory,
                         metrics: &metrics
@@ -143,7 +151,7 @@ enum SessionRestorer {
                 let focusedArea: PaneKind = hasTerminal ? session.focusedArea : .claude
 
                 let validatedWorktreePath: String?
-                if let wt = session.worktreePath, resolveDirectory(wt) == nil {
+                if !isRemote, let wt = session.worktreePath, resolveDirectory(wt) == nil {
                     Log.worktree.warning("Worktree path \(wt) no longer exists on disk for Session '\(session.customName ?? "(auto)")'. Removing association.")
                     validatedWorktreePath = nil
                 } else {
@@ -165,7 +173,7 @@ enum SessionRestorer {
                 return SessionRecord(
                     id: session.id,
                     customName: session.customName,
-                    defaultWorkingDirectory: resolveDirectory(session.defaultWorkingDirectory),
+                    defaultWorkingDirectory: validateDir(session.defaultWorkingDirectory),
                     worktreePath: validatedWorktreePath,
                     claudePane: validatedClaude,
                     terminalRoot: validatedTerminalRoot,
@@ -191,13 +199,14 @@ enum SessionRestorer {
                 id: workspace.id,
                 name: workspace.name,
                 activeSessionId: fixedActiveSessionId,
-                defaultWorkingDirectory: resolveDirectory(workspace.defaultWorkingDirectory),
+                defaultWorkingDirectory: validateDir(workspace.defaultWorkingDirectory),
                 sessions: validatedSessions,
                 windowFrame: workspace.windowFrame,
                 isFullscreen: workspace.isFullscreen,
                 inspectPanelVisible: workspace.inspectPanelVisible,
                 inspectPanelWidth: workspace.inspectPanelWidth,
-                activeTab: workspace.activeTab
+                activeTab: workspace.activeTab,
+                remote: workspace.remote
             )
         }
         metrics.workspaceCount = validatedWorkspaces.count
@@ -224,6 +233,17 @@ enum SessionRestorer {
     @MainActor
     static func buildWorkspaceCollection(from state: SessionState) -> WorkspaceCollection {
         let workspaces = state.workspaces.map { ws -> Workspace in
+            // Build the SSH connection first (this registers its channel), then
+            // derive the spawn spec the restored panes bake in — so a restored
+            // remote pane spawns over SSH exactly like a fresh one.
+            let remoteConnection = ws.remote?.remoteConnection
+            let transport = remoteConnection.map {
+                SSHConnection(host: $0.host, remoteDirectory: $0.remoteDirectory)
+            }
+            let remoteSpawn = transport.map {
+                RemoteSpawnSpec(channel: $0.channel, remoteDirectory: $0.channel.root)
+            }
+
             let sessions = ws.sessions.map { rec -> Session in
                 // Every restored session gets a live Claude pane. A nil persisted
                 // claudePane (e.g. an old placeholder record, or a v6→v7 terminal-
@@ -239,13 +259,15 @@ enum SessionRestorer {
                     claudeSessionState: nil
                 )
                 let claudePVM = PaneViewModel.fromState(
-                    .pane(claudeLeaf), focusedPaneID: claudeLeaf.paneID, kind: .claude
+                    .pane(claudeLeaf), focusedPaneID: claudeLeaf.paneID, kind: .claude,
+                    remoteSpawn: remoteSpawn
                 )
                 let terminalPVM = rec.terminalRoot.map { root in
                     PaneViewModel.fromState(
                         root,
                         focusedPaneID: rec.terminalFocusedPaneId ?? root.firstLeaf.paneID,
-                        kind: .terminal
+                        kind: .terminal,
+                        remoteSpawn: remoteSpawn
                     )
                 }
                 let session = Session(
@@ -258,7 +280,8 @@ enum SessionRestorer {
                     splitRatio: rec.splitRatio,
                     focusedArea: rec.focusedArea,
                     defaultWorkingDirectory: rec.defaultWorkingDirectory.map { URL(fileURLWithPath: $0) },
-                    worktreePath: rec.worktreePath
+                    worktreePath: rec.worktreePath,
+                    remoteChannel: transport?.channel
                 )
                 session.parentSessionID = rec.parentSessionID
                 return session
@@ -283,6 +306,8 @@ enum SessionRestorer {
                 name: ws.name,
                 defaultWorkingDirectory: wdURL,
                 sessionCollection: sessionCollection,
+                remote: remoteConnection,
+                transport: transport,
                 inspectPanelState: inspectPanelState,
                 inspectTabState: inspectTabState
             )

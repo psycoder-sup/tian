@@ -91,6 +91,13 @@ final class PaneViewModel {
     /// the kind to `makeEmpty` / `fromState`.
     let kind: PaneKind
 
+    /// Non-nil when this pane belongs to a remote (SSH) workspace: every surface
+    /// spawns through `ssh -tt` instead of a local shell. Must be set at
+    /// construction (before any surface view is configured), so it's threaded
+    /// through the initializers — `splitPane` reads it to inherit remoteness into
+    /// new splits. nil keeps the local spawn path unchanged.
+    let remoteSpawn: RemoteSpawnSpec?
+
     /// Whether this pane may be split. Only terminal panes split; a Claude pane
     /// is always a single leaf (FR: Claude pane never splittable).
     var allowsSplits: Bool { kind == .terminal }
@@ -111,17 +118,19 @@ final class PaneViewModel {
 
     // MARK: - Init
 
-    init(workingDirectory: String = "~", kind: PaneKind = .terminal) {
+    init(workingDirectory: String = "~", kind: PaneKind = .terminal, remoteSpawn: RemoteSpawnSpec? = nil) {
         let initialID = UUID()
         let surface = GhosttyTerminalSurface()
         let surfaceView = TerminalSurfaceView()
         surfaceView.terminalSurface = surface
         self.kind = kind
+        self.remoteSpawn = remoteSpawn
         PaneSpawner.configure(
             view: surfaceView,
             kind: kind,
             workingDirectory: workingDirectory,
-            environmentVariables: [:]
+            environmentVariables: [:],
+            remoteSpawn: remoteSpawn
         )
         self.splitTree = SplitTree(paneID: initialID, workingDirectory: workingDirectory)
         self.surfaces[initialID] = surface
@@ -138,19 +147,19 @@ final class PaneViewModel {
     /// serialization, but creates no `GhosttyTerminalSurface` — so `PaneSpawner`
     /// never runs and no `claude`/shell process is launched. The leaf is never
     /// rendered.
-    static func makeEmpty(workingDirectory: String = "~", kind: PaneKind = .claude) -> PaneViewModel {
+    static func makeEmpty(workingDirectory: String = "~", kind: PaneKind = .claude, remoteSpawn: RemoteSpawnSpec? = nil) -> PaneViewModel {
         let splitTree = SplitTree(paneID: UUID(), workingDirectory: workingDirectory)
-        return PaneViewModel(splitTree: splitTree, surfaces: [:], surfaceViews: [:], kind: kind)
+        return PaneViewModel(splitTree: splitTree, surfaces: [:], surfaceViews: [:], kind: kind, remoteSpawn: remoteSpawn)
     }
 
-    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, kind: PaneKind = .terminal) -> PaneViewModel {
+    static func fromState(_ root: PaneNodeState, focusedPaneID: UUID, kind: PaneKind = .terminal, remoteSpawn: RemoteSpawnSpec? = nil) -> PaneViewModel {
         var surfaces: [UUID: GhosttyTerminalSurface] = [:]
         var surfaceViews: [UUID: TerminalSurfaceView] = [:]
         var restoreCommands: [UUID: String] = [:]
         var sessionStates: [UUID: ClaudeSessionState] = [:]
-        let paneNode = Self.buildPaneNode(from: root, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+        let paneNode = Self.buildPaneNode(from: root, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates, remoteSpawn: remoteSpawn)
         let splitTree = SplitTree(root: paneNode, focusedPaneID: focusedPaneID)
-        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews, kind: kind)
+        let pvm = PaneViewModel(splitTree: splitTree, surfaces: surfaces, surfaceViews: surfaceViews, kind: kind, remoteSpawn: remoteSpawn)
         pvm.restoreCommands = restoreCommands
         for (paneID, state) in sessionStates {
             PaneStatusManager.shared.setSessionState(paneID: paneID, state: state)
@@ -162,12 +171,14 @@ final class PaneViewModel {
         splitTree: SplitTree,
         surfaces: [UUID: GhosttyTerminalSurface],
         surfaceViews: [UUID: TerminalSurfaceView],
-        kind: PaneKind = .terminal
+        kind: PaneKind = .terminal,
+        remoteSpawn: RemoteSpawnSpec? = nil
     ) {
         self.splitTree = splitTree
         self.surfaces = surfaces
         self.surfaceViews = surfaceViews
         self.kind = kind
+        self.remoteSpawn = remoteSpawn
         self.paneStates = Dictionary(uniqueKeysWithValues: surfaces.keys.map { ($0, PaneState.running) })
         installObservers()
         for paneID in splitTree.allLeaves() {
@@ -192,9 +203,14 @@ final class PaneViewModel {
                   let surfaceId = notification.userInfo?["surfaceId"] as? UUID,
                   let exitCode = notification.userInfo?["exitCode"] as? UInt32 else { return }
             guard let paneID = self.paneID(forSurfaceID: surfaceId) else { return }
-            // FR-06: Claude panes close on any exit code (no exit-code overlay).
-            // Terminal panes show the exit-code overlay for non-zero codes.
-            if exitCode == 0 || self.kind == .claude {
+            // FR-06: a local Claude pane closes on any exit code (Claude quitting
+            // ends the session). A REMOTE Claude pane instead keeps a non-zero
+            // exit visible via the exit-code overlay — otherwise an ssh failure
+            // (host down, auth, `claude` not on PATH) would close the session
+            // instantly, hiding the error. Terminal panes always show the overlay
+            // for non-zero codes.
+            let closeOnExit = exitCode == 0 || (self.kind == .claude && self.remoteSpawn == nil)
+            if closeOnExit {
                 self.closePane(paneID: paneID)
             } else {
                 self.paneStates[paneID] = .exited(code: exitCode)
@@ -258,19 +274,22 @@ final class PaneViewModel {
         surfaces: inout [UUID: GhosttyTerminalSurface],
         surfaceViews: inout [UUID: TerminalSurfaceView],
         restoreCommands: inout [UUID: String],
-        sessionStates: inout [UUID: ClaudeSessionState]
+        sessionStates: inout [UUID: ClaudeSessionState],
+        remoteSpawn: RemoteSpawnSpec? = nil
     ) -> PaneNode {
         switch state {
         case .pane(let leaf):
             let surface = GhosttyTerminalSurface()
             let surfaceView = TerminalSurfaceView()
             surfaceView.terminalSurface = surface
-            // Route through PaneSpawner so Claude panes get their autostart env.
+            // Route through PaneSpawner so Claude panes get their autostart env
+            // (or, for a remote workspace, their ssh spawn line).
             PaneSpawner.configure(
                 view: surfaceView,
                 kind: kind,
                 workingDirectory: leaf.workingDirectory,
-                environmentVariables: [:]
+                environmentVariables: [:],
+                remoteSpawn: remoteSpawn
             )
             surfaces[leaf.paneID] = surface
             surfaceViews[leaf.paneID] = surfaceView
@@ -295,10 +314,10 @@ final class PaneViewModel {
         case .split(let split):
             guard let direction = SplitDirection.from(stateValue: split.direction) else {
                 // Invalid direction — treat as a single pane with the first leaf
-                return buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+                return buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates, remoteSpawn: remoteSpawn)
             }
-            let first = buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
-            let second = buildPaneNode(from: split.second, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates)
+            let first = buildPaneNode(from: split.first, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates, remoteSpawn: remoteSpawn)
+            let second = buildPaneNode(from: split.second, kind: kind, surfaces: &surfaces, surfaceViews: &surfaceViews, restoreCommands: &restoreCommands, sessionStates: &sessionStates, remoteSpawn: remoteSpawn)
             return .split(id: UUID(), direction: direction, ratio: split.ratio, first: first, second: second)
         }
     }
@@ -332,7 +351,9 @@ final class PaneViewModel {
                 view: view,
                 workingDirectory: view.initialWorkingDirectory,
                 environmentVariables: view.environmentVariables,
-                initialInput: view.initialInput
+                initialInput: view.initialInput,
+                command: view.initialCommand,
+                waitAfterCommand: view.waitAfterCommand
             )
             // A background realize must not claim ghostty focus; real focus is set
             // when the view becomes first responder on screen.
@@ -380,13 +401,15 @@ final class PaneViewModel {
 
         let workingDirectory = resolveWorkingDirectory(for: splitTree.focusedPaneID)
 
-        // Route through PaneSpawner so the new pane inherits this pane's kind.
+        // Route through PaneSpawner so the new pane inherits this pane's kind
+        // (and remoteness — a split in a remote workspace is also remote).
         // (Only terminal panes reach here — Claude splits are rejected above.)
         PaneSpawner.configure(
             view: newSurfaceView,
             kind: kind,
             workingDirectory: workingDirectory,
-            environmentVariables: buildEnvironmentVariables(forPaneID: newPaneID)
+            environmentVariables: buildEnvironmentVariables(forPaneID: newPaneID),
+            remoteSpawn: remoteSpawn
         )
 
         guard splitTree.insertSplit(
@@ -511,20 +534,35 @@ final class PaneViewModel {
         // cannot precondition-check `view.window == nil` here because it
         // may still be attached. Set the fields directly rather than via
         // PaneSpawner.configure (which asserts window==nil).
-        surfaceView.initialWorkingDirectory = workingDirectory
-        // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches on restart
-        // (via the bundled .zshrc) — resuming its session if a restore command is
-        // registered, otherwise bare `claude` — while a Terminal pane gets a clean
-        // shell. initialInput stays nil — see PaneSpawner.
-        surfaceView.environmentVariables = PaneSpawner.autostartEnvironment(
-            kind: kind,
-            base: buildEnvironmentVariables(forPaneID: paneID),
-            restoreCommand: restoreCommands[paneID]
-        )
-        surfaceView.initialInput = nil
+        if let remoteSpawn {
+            // Remote restart: re-establish the ssh spawn line (ghostty chdirs
+            // locally, so keep the local cwd at $HOME). No TIAN_AUTOSTART_CMD —
+            // Claude runs remotely, launched by the ssh line.
+            surfaceView.initialWorkingDirectory = NSHomeDirectory()
+            surfaceView.environmentVariables = buildEnvironmentVariables(forPaneID: paneID)
+            surfaceView.initialInput = nil
+            surfaceView.initialCommand = RemoteCommandBuilder.interactiveSSHCommandLine(
+                host: remoteSpawn.channel.host,
+                workingDirectory: workingDirectory,
+                remoteCommand: PaneSpawner.remoteCommand(kind: kind)
+            )
+            surfaceView.waitAfterCommand = true
+        } else {
+            surfaceView.initialWorkingDirectory = workingDirectory
+            // Re-seed TIAN_AUTOSTART_CMD so a Claude-kind pane re-launches on restart
+            // (via the bundled .zshrc) — resuming its session if a restore command is
+            // registered, otherwise bare `claude` — while a Terminal pane gets a clean
+            // shell. initialInput stays nil — see PaneSpawner.
+            surfaceView.environmentVariables = PaneSpawner.autostartEnvironment(
+                kind: kind,
+                base: buildEnvironmentVariables(forPaneID: paneID),
+                restoreCommand: restoreCommands[paneID]
+            )
+            surfaceView.initialInput = nil
+        }
 
         if surfaceView.window != nil {
-            newSurface.createSurface(view: surfaceView, workingDirectory: workingDirectory, environmentVariables: surfaceView.environmentVariables, initialInput: surfaceView.initialInput)
+            newSurface.createSurface(view: surfaceView, workingDirectory: surfaceView.initialWorkingDirectory, environmentVariables: surfaceView.environmentVariables, initialInput: surfaceView.initialInput, command: surfaceView.initialCommand, waitAfterCommand: surfaceView.waitAfterCommand)
         }
     }
 

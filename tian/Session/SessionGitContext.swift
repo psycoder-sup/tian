@@ -104,6 +104,20 @@ final class SessionGitContext {
     /// Active FSEvents watchers per repo.
     private var watchers: [GitRepoID: GitRepoWatcher] = [:]
 
+    /// Interval pollers standing in for FSEvents on remote repos (FSEvents can't
+    /// watch another host). Mutually exclusive with `watchers` per repo.
+    private var remotePollers: [GitRepoID: PollingRefresher] = [:]
+    /// Per-repo tick counter so the remote poller can do the heavier
+    /// FSEvents-only work (PR-cache evict + branch-graph dirty) only every Nth
+    /// tick instead of every refresh.
+    private var remotePollTicks: [GitRepoID: Int] = [:]
+
+    /// Remote git-context refresh cadence. Every tick reschedules a status/branch
+    /// refresh; every `remotePollHeavyEvery`-th tick also raises the signals a
+    /// local FSEvents batch would (PR re-fetch, branch-graph re-render).
+    private static let remotePollInterval: Duration = .seconds(5)
+    private static let remotePollHeavyEvery = 6
+
     // MARK: - Public Computed
 
     /// Number of active FSEvents watchers. Exposed for testing.
@@ -327,6 +341,9 @@ final class SessionGitContext {
         repoRoots.removeAll()
         for watcher in watchers.values { watcher.stop() }
         watchers.removeAll()
+        for poller in remotePollers.values { poller.stop() }
+        remotePollers.removeAll()
+        remotePollTicks.removeAll()
         prCache.evictAll()
     }
 
@@ -669,8 +686,33 @@ final class SessionGitContext {
     // MARK: - Watcher Management
 
     private func startWatcher(repoID: GitRepoID, location: RepoLocation) {
-        // Don't start a duplicate watcher if one already exists
-        guard watchers[repoID] == nil else { return }
+        // Don't start a duplicate watcher/poller if one already exists
+        guard watchers[repoID] == nil, remotePollers[repoID] == nil else { return }
+
+        // Remote repo: FSEvents can't watch another host, so poll instead. Each
+        // tick reschedules the same status/branch refresh a local watcher would;
+        // `refreshRepo`/`refreshWorktreeStatus` are transparently remote via the
+        // registry, so no other change is needed.
+        if RemoteExecutionRegistry.shared.channel(forDirectory: location.workingTree) != nil {
+            let poller = PollingRefresher(interval: Self.remotePollInterval) { [weak self] in
+                guard let self, self.repoDirectories[repoID] != nil else { return }
+                let tick = (self.remotePollTicks[repoID] ?? 0) + 1
+                self.remotePollTicks[repoID] = tick
+                if tick % Self.remotePollHeavyEvery == 0 {
+                    // The signals a local FSEvents batch raises on ref/HEAD
+                    // changes — undetectable remotely, so raise them on a cadence
+                    // to force PR re-fetch and branch-graph re-render.
+                    self.prCache.evict(repoID: repoID)
+                    if !self.branchGraphDirty.contains(repoID) {
+                        self.branchGraphDirty.insert(repoID)
+                    }
+                }
+                self.refreshScheduler.schedule(key: repoID)
+            }
+            remotePollers[repoID] = poller
+            poller.start()
+            return
+        }
 
         let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
         // Canonicalize once so `pathsAffectPRState` / `pathsAffectBranchGraph`
@@ -714,5 +756,8 @@ final class SessionGitContext {
     private func stopWatcher(repoID: GitRepoID) {
         watchers[repoID]?.stop()
         watchers.removeValue(forKey: repoID)
+        remotePollers[repoID]?.stop()
+        remotePollers.removeValue(forKey: repoID)
+        remotePollTicks.removeValue(forKey: repoID)
     }
 }

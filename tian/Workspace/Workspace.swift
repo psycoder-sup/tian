@@ -32,6 +32,14 @@ final class Workspace: Identifiable {
 
     let sessionCollection: SessionCollection
 
+    /// The SSH target when this is a remote workspace; nil for a local one.
+    let remote: RemoteConnection?
+
+    /// Owns the SSH ControlMaster lifecycle for a remote workspace. nil locally.
+    /// Registered into `RemoteExecutionRegistry` at construction; torn down in
+    /// `cleanup()`.
+    let transport: SSHConnection?
+
     /// Inspect panel visibility and width for this workspace's window.
     let inspectPanelState: InspectPanelState
 
@@ -52,12 +60,13 @@ final class Workspace: Identifiable {
 
     // MARK: - Init
 
-    convenience init(name: String, defaultWorkingDirectory: URL? = nil) {
+    convenience init(name: String, defaultWorkingDirectory: URL? = nil, remote: RemoteConnection? = nil) {
         self.init(
             id: UUID(),
             name: name,
             defaultWorkingDirectory: defaultWorkingDirectory,
             createdAt: Date(),
+            remote: remote,
             inspectPanelState: InspectPanelState(),
             inspectTabState: InspectTabState()
         )
@@ -68,6 +77,7 @@ final class Workspace: Identifiable {
         name: String,
         defaultWorkingDirectory: URL?,
         createdAt: Date,
+        remote: RemoteConnection? = nil,
         inspectPanelState: InspectPanelState = InspectPanelState(),
         inspectTabState: InspectTabState = InspectTabState()
     ) {
@@ -78,6 +88,10 @@ final class Workspace: Identifiable {
         self.inspectPanelState = inspectPanelState
         self.inspectTabState = inspectTabState
         self.inspectFileTreeViewModel = InspectFileTreeViewModel()
+        self.remote = remote
+        // Building the connection registers its channel synchronously, so git &
+        // the file tree can resolve remoteness the instant this workspace exists.
+        self.transport = remote.map { SSHConnection(host: $0.host, remoteDirectory: $0.remoteDirectory) }
 
         let workingDir = defaultWorkingDirectory?.path
             ?? ProcessInfo.processInfo.environment["HOME"]
@@ -88,6 +102,9 @@ final class Workspace: Identifiable {
             workspaceDefaultDirectory: defaultWorkingDirectory
         )
         self.sessionCollection.propagateWorkspaceID(id)
+        // Wire remoteness (file tree scanner + session-collection channel) BEFORE
+        // seeding, so the first session's Claude pane spawns over SSH.
+        configureRemote()
         // Seed the workspace's first session (a fresh Claude session). No custom
         // name — it uses its auto-derived name (Claude title / directory leaf).
         self.sessionCollection.createSession(workingDirectory: workingDir)
@@ -98,11 +115,17 @@ final class Workspace: Identifiable {
     }
 
     /// Restore a workspace with a pre-built SessionCollection.
+    ///
+    /// For a remote workspace, `transport` is the SSH connection built by
+    /// `SessionRestorer` (so the restored sessions' panes already carry their
+    /// baked-in spawn spec, derived from the same channel).
     init(
         id: UUID,
         name: String,
         defaultWorkingDirectory: URL?,
         sessionCollection: SessionCollection,
+        remote: RemoteConnection? = nil,
+        transport: SSHConnection? = nil,
         inspectPanelState: InspectPanelState = InspectPanelState(),
         inspectTabState: InspectTabState = InspectTabState()
     ) {
@@ -113,13 +136,27 @@ final class Workspace: Identifiable {
         self.inspectPanelState = inspectPanelState
         self.inspectTabState = inspectTabState
         self.inspectFileTreeViewModel = InspectFileTreeViewModel()
+        self.remote = remote
+        self.transport = transport
         self.sessionCollection = sessionCollection
         self.sessionCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
         self.sessionCollection.propagateWorkspaceID(id)
+        configureRemote()
 
         self.sessionCollection.onEmpty = { [weak self] in
             self?.onEmpty?()
         }
+    }
+
+    /// Wires this workspace's remote transport (if any) into the file tree and
+    /// session collection, then opens the ControlMaster. A no-op for a local
+    /// workspace. Called from every init *before* the local seed / after the
+    /// restored sessions are attached.
+    private func configureRemote() {
+        guard let transport else { return }
+        inspectFileTreeViewModel.useScanner(RemoteInspectFileScanner(channel: transport.channel))
+        sessionCollection.propagateRemoteChannel(transport.channel)
+        transport.open()
     }
 
     /// Updates the default working directory and propagates to all sessions.
@@ -143,6 +180,8 @@ final class Workspace: Identifiable {
         for session in sessionCollection.sessions {
             session.allPanes.forEach { $0.cleanup() }
         }
+        // Tear down the ControlMaster and unregister the channel (no-op locally).
+        transport?.close()
     }
 
     // MARK: - Inspect Panel

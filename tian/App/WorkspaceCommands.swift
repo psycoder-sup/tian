@@ -36,6 +36,13 @@ struct WorkspaceCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
 
+            Button("New SSH Workspace…") {
+                if let controller = windowCoordinator.controllerForKeyWindow() {
+                    WorkspaceCreationFlow.requestSSHWorkspace(in: controller.workspaceCollection)
+                }
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift, .option])
+
             Button("Close Workspace") {
                 if let controller = windowCoordinator.controllerForKeyWindow(),
                    let id = controller.workspaceCollection.activeWorkspaceID {

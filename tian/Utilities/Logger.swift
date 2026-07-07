@@ -15,4 +15,5 @@ enum Log {
     static let view = Logger(subsystem: subsystem, category: "view")
     static let ghostty = Logger(subsystem: subsystem, category: "ghostty")
     static let perf = Logger(subsystem: subsystem, category: "perf")
+    static let remote = Logger(subsystem: subsystem, category: "remote")
 }
