@@ -400,6 +400,7 @@ struct SidebarContainerView: View {
             // surface keeps its live state while the overview is open.
             .modifier(SessionOverviewOverlayModifier(
                 workspaceCollection: workspaceCollection,
+                worktreeOrchestrator: worktreeOrchestrator,
                 sidebarState: sidebarState,
                 isOverviewVisible: $isOverviewVisible
             ))
@@ -494,6 +495,7 @@ private struct SidebarNotificationModifier: ViewModifier {
 /// every session's live terminal surface — mounted while the overview is visible.
 private struct SessionOverviewOverlayModifier: ViewModifier {
     let workspaceCollection: WorkspaceCollection
+    let worktreeOrchestrator: WorktreeOrchestrator
     let sidebarState: SidebarState
     @Binding var isOverviewVisible: Bool
 
@@ -502,6 +504,7 @@ private struct SessionOverviewOverlayModifier: ViewModifier {
             if isOverviewVisible {
                 SessionOverviewGridView(
                     workspaceCollection: workspaceCollection,
+                    worktreeOrchestrator: worktreeOrchestrator,
                     onSelect: { workspaceID, sessionID in
                         workspaceCollection.activateWorkspace(id: workspaceID)
                         workspaceCollection.workspaces

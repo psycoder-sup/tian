@@ -17,6 +17,9 @@ struct SessionOverviewCardView: View {
     /// Defaulted like `SidebarSessionRowView`'s `isOrchestrator`; the grid
     /// supplies the real value from `hierarchicalOrder()`.
     var isOrchestrator: Bool = false
+    /// Drives inline rename of the session name when the overview's `R` shortcut
+    /// targets this (selected) card. Cleared on commit/cancel by `InlineRenameView`.
+    @Binding var isRenaming: Bool
     let onSelect: () -> Void
 
     /// Live preview of the Claude pane's last output lines, refreshed on a
@@ -48,10 +51,15 @@ struct SessionOverviewCardView: View {
             // `SidebarSessionRowView`'s rule: shown only for an orchestrator).
             // Status is carried by the card border, not a dot.
             HStack(spacing: 8) {
-                Text(session.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                InlineRenameView(
+                    text: session.displayName,
+                    isRenaming: $isRenaming,
+                    font: .headline,
+                    // Matches the sidebar row: empty resets to the auto-derived name.
+                    onCommit: { session.customName = $0.isEmpty ? nil : $0 }
+                )
+                .lineLimit(1)
+                .truncationMode(.tail)
 
                 if isOrchestrator {
                     Image(systemName: "house")

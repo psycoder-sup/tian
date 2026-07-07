@@ -1,10 +1,14 @@
 import SwiftUI
 
 /// A view that toggles between a text label and an inline text field for renaming.
-/// Used by both space bar and tab bar items.
+/// Used by the sidebar (workspace header, session row) and the session-overview card.
 struct InlineRenameView: View {
     let text: String
     @Binding var isRenaming: Bool
+    /// Font for both the label and the edit field. Defaults to the sidebar's
+    /// size-11 style; callers with a larger name (e.g. the overview card) pass
+    /// their own so the field matches the label it replaces.
+    var font: Font = .system(size: 11)
     let onCommit: (String) -> Void
 
     @State private var editText: String = ""
@@ -14,7 +18,7 @@ struct InlineRenameView: View {
         if isRenaming {
             TextField("", text: $editText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11))
+                .font(font)
                 .focused($isFocused)
                 .onSubmit(commit)
                 .onExitCommand(perform: cancel)
@@ -33,7 +37,7 @@ struct InlineRenameView: View {
                 }
         } else {
             Text(text)
-                .font(.system(size: 11))
+                .font(font)
                 .lineLimit(1)
         }
     }
