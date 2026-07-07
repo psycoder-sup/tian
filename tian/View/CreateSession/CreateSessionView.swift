@@ -18,7 +18,16 @@ struct CreateSessionView: View {
     @State private var inputText: String = ""
     @State private var worktreeEnabled: Bool
     @State private var viewModel = BranchListViewModel()
-    @FocusState private var isFocused: Bool
+    /// Guards against double submission when both the text field's `.onSubmit`
+    /// and the container's `.onKeyPress(.return)` observe the same Return, or a
+    /// branch-row tap races the keyboard.
+    @State private var isSubmitting = false
+    @FocusState private var focus: Field?
+
+    /// Keyboard-focus targets. The name/branch field takes focus when visible;
+    /// the dialog container holds focus when the field is hidden (claude
+    /// --worktree mode) so Enter/Esc still route to the modal.
+    private enum Field: Hashable { case name, dialog }
 
     init(
         workspace: Workspace,
@@ -107,7 +116,7 @@ struct CreateSessionView: View {
                 if !claudeWorktreeMode {
                     TextField(worktreeEnabled ? "Branch name" : "Session name (optional)", text: $inputText)
                         .textFieldStyle(.roundedBorder)
-                        .focused($isFocused)
+                        .focused($focus, equals: .name)
                         .onChange(of: inputText) { _, new in
                             // Live sanitization (worktree mode only).
                             if worktreeEnabled {
@@ -147,6 +156,9 @@ struct CreateSessionView: View {
                     } else {
                         viewModel.query = ""
                     }
+                    // Toggling worktree may hide/show the text field; keep a
+                    // focused responder so Enter/Esc keep working.
+                    focus = (new && claudeEngine) ? .dialog : .name
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -170,6 +182,18 @@ struct CreateSessionView: View {
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            // Container-level key handling so Enter/Esc work regardless of which
+            // subview is focused — including claude --worktree mode where the
+            // text field (and its own onSubmit/onExitCommand) is hidden.
+            .focusable()
+            .focusEffectDisabled()
+            .focused($focus, equals: .dialog)
+            .onExitCommand { onCancel() }
+            .onKeyPress(.return) {
+                guard canSubmit else { return .ignored }
+                handleSubmit()
+                return .handled
+            }
         }
         .task {
             guard let repoRoot else { return }
@@ -178,7 +202,9 @@ struct CreateSessionView: View {
             await viewModel.load(repoRoot: repoRoot.path)
         }
         .onAppear {
-            DispatchQueue.main.async { isFocused = true }
+            DispatchQueue.main.async {
+                focus = claudeWorktreeMode ? .dialog : .name
+            }
         }
     }
 
@@ -314,12 +340,15 @@ struct CreateSessionView: View {
     // MARK: - Submit
 
     private func handleSubmit() {
+        guard !isSubmitting else { return }
         switch submitAction {
         case .blocked:
             return
         case .claudeWorktree:
+            isSubmitting = true
             onSubmitClaudeWorktree()
         case .plain(let name):
+            isSubmitting = true
             onSubmitPlain(name)
         case .createBranch(let name):
             submit(branch: name, existing: false, remoteRef: nil)
@@ -329,6 +358,8 @@ struct CreateSessionView: View {
     }
 
     private func submit(branch: String, existing: Bool, remoteRef: String?) {
+        guard !isSubmitting else { return }
+        isSubmitting = true
         onSubmitWorktree(
             CreateWorktreeSubmission(
                 branchName: branch,
