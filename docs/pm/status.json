@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.3.0) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.4.0) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -14,6 +14,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-07",
+      "summary": "Released v1.4.0 — bundles SSH-connected workspaces (PR #66), Session-Overview D/R (delete/rename) keyboard shortcuts (PR #67), and auto-naming worktree sessions from the live Claude title (PR #68). Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
+      "commit": "dd7aa8b",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.4.0"
+    },
     {
       "date": "2026-07-07",
       "summary": "SSH-connected workspaces (PR #66): a workspace bound to an SSH host runs every session against that host — terminal, Claude pane, git status/branch, Inspect file tree, and reader — over a multiplexed ssh ControlMaster, with the local path unchanged. Git routes remote via a single RemoteExecutionRegistry lookup at GitStatusService's runGit/runProcess choke points; the file tree gets an injected RemoteInspectFileScanner + poller; panes exec `ssh -tt … 'cd <dir> && exec <cmd>'` with Claude launched through `$SHELL -lic` so rc-file PATH resolves and a non-zero remote exit stays visible; the reader fetches bytes via base64/stat. Remote target persisted via schema v7→v8. Security: reject `-`-prefixed ssh hosts (arg-injection) + per-uid mode-700 ControlPath. Verified end-to-end against a live host; full build + 1021 tianTests green. Deferred: remote Claude live busy/idle, auto-title, OSC-7.",
@@ -25,12 +31,6 @@
       "summary": "Busy Session-Overview cards now show a spinning rainbow border (PR #65) — reviving the early-stage pane highlight. Reused the previously-unused RainbowBorder (a sharp 2px spinning AngularGradient with a Reduce-Motion static fallback), which gained a cornerRadius knob + continuous corners to hug the 12pt card; SessionOverviewCardView branches its border overlay on aggregateClaudeState == .busy while every other state keeps its solid status-color stroke. Two-file wiring change, no new component. Verified: BUILD SUCCEEDED + 980 tianTests green.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/65"
-    },
-    {
-      "date": "2026-07-06",
-      "summary": "Released v1.3.0 — session & sidebar UX batch (PRs #60/#62/#63/#64). Surfaces background subagents + run_in_background bash per session with the false-idle fix (Session.aggregateClaudeState floors to .busy while non-stale background work runs, and IPC session.list reports the same floored state so a CLI-polling orchestrator agrees with the sidebar dot); adds ⌘R to rename the active session, workspace drag-to-reorder in the sidebar, and auto-unfold of the focused session with session-nav rebound to ⌘⇧↑/↓. Also prepped the repo for open-sourcing (MIT LICENSE + THIRD-PARTY-NOTICES, clean 397-commit secrets scan). Built, notarized, stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
-      "commit": "cf8ca59",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.3.0"
     }
   ]
 }
