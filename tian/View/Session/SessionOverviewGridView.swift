@@ -6,9 +6,11 @@ import SwiftUI
 /// the whole session area with a full-bleed `.ultraThinMaterial` frosted
 /// backdrop that the session content behind blurs through.
 ///
-/// Fully keyboard-driven: arrow keys move a visible card selection in true 2D,
-/// Return/keypad Enter opens the selected session, `R` renames the selected card
-/// inline, `D` deletes it (via the shared close flow), Escape dismisses. Clicking
+/// Fully keyboard-driven: arrow keys — or vim-style `h`/`j`/`k`/`l` — move a
+/// visible card selection in true 2D, Return/keypad Enter opens the selected
+/// session, `R` renames the selected card inline, `D` arms a delete-confirmation
+/// popover on the card (Return/Delete confirms and runs the shared close flow,
+/// Escape/Cancel dismisses it), Escape otherwise dismisses the overview. Clicking
 /// a card selects that session too.
 struct SessionOverviewGridView: View {
     let workspaceCollection: WorkspaceCollection
@@ -25,6 +27,11 @@ struct SessionOverviewGridView: View {
     /// the `R` shortcut). While set, the keyboard responder yields first responder
     /// so the rename `TextField` can hold focus.
     @State private var isRenamingSelection = false
+    /// The session whose delete-confirmation popover is currently armed (driven by
+    /// the `D` shortcut), or `nil` when no confirm is pending. While set, the card
+    /// shows a "Delete this session?" popover and the keyboard responder is in
+    /// confirming mode (Return confirms, Escape cancels, everything else swallowed).
+    @State private var confirmingDeleteSessionID: UUID?
     /// Live column count of the adaptive grid, measured from the overview's
     /// content width. Drives Up/Down (±one row) arrow navigation. Defaults to 1.
     @State private var columnCount = 1
@@ -85,9 +92,12 @@ struct SessionOverviewGridView: View {
                 onArrow: move,
                 onActivate: activateSelection,
                 onEscape: onDismiss,
-                onDelete: deleteSelection,
+                onDelete: requestDeleteSelection,
                 onRename: beginRenameSelection,
-                isEditing: isRenamingSelection
+                onConfirmDelete: confirmPendingDelete,
+                onCancelDelete: cancelPendingDelete,
+                isEditing: isRenamingSelection,
+                isConfirming: confirmingDeleteSessionID != nil
             )
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
@@ -105,6 +115,12 @@ struct SessionOverviewGridView: View {
                 // Drop any in-flight rename if its card disappeared (e.g. the
                 // session was deleted mid-edit) so the responder reclaims focus.
                 isRenamingSelection = false
+            }
+            // Likewise drop a pending delete confirm whose card is gone (the
+            // session was closed — possibly by the confirm itself), so the
+            // popover tears down and the responder leaves confirming mode.
+            if let pending = confirmingDeleteSessionID, !ids.contains(pending) {
+                confirmingDeleteSessionID = nil
             }
         }
     }
@@ -162,6 +178,14 @@ struct SessionOverviewGridView: View {
                             get: { isRenamingSelection && entry.session.id == selectedSessionID },
                             set: { if !$0 { isRenamingSelection = false } }
                         ),
+                        // Only the card whose id matches the armed confirm shows
+                        // the popover; dismissing it (Cancel / click-away) clears
+                        // the shared id.
+                        isConfirmingDelete: Binding(
+                            get: { confirmingDeleteSessionID == entry.session.id },
+                            set: { if !$0 { confirmingDeleteSessionID = nil } }
+                        ),
+                        onConfirmDelete: confirmPendingDelete,
                         onSelect: { onSelect(workspace.id, entry.session.id) }
                     )
                 }
@@ -219,13 +243,25 @@ struct SessionOverviewGridView: View {
         isRenamingSelection = true
     }
 
-    /// Delete the selected session via the shared close flow (the `D` shortcut) —
-    /// worktree sessions get the teardown dialog, plain sessions are removed
-    /// immediately, exactly as the sidebar's close does. A no-op when nothing is
-    /// selected or the selection can no longer be resolved.
-    private func deleteSelection() {
-        guard let id = selectedSessionID,
-              let card = flatCards.first(where: { $0.id == id }),
+    /// Arm the delete-confirmation popover on the selected card (the `D`
+    /// shortcut). Deleting no longer happens on a single keypress — the popover
+    /// guards it, and `confirmPendingDelete()` performs the actual close. A no-op
+    /// when nothing is selected.
+    private func requestDeleteSelection() {
+        guard let id = selectedSessionID else { return }
+        confirmingDeleteSessionID = id
+    }
+
+    /// Confirm the armed delete (the popover's Delete button / Return) and run the
+    /// shared close flow — worktree sessions then get the teardown dialog, plain
+    /// sessions are removed immediately, exactly as the sidebar's close does. The
+    /// pending id is cleared **first** so the popover tears down before any close
+    /// dialog appears. Idempotent — a no-op once cleared or if the selection can
+    /// no longer be resolved.
+    private func confirmPendingDelete() {
+        guard let id = confirmingDeleteSessionID else { return }
+        confirmingDeleteSessionID = nil
+        guard let card = flatCards.first(where: { $0.id == id }),
               let workspace = workspaceCollection.workspaces.first(where: { $0.id == card.workspaceID }),
               let session = workspace.sessionCollection.sessions.first(where: { $0.id == card.sessionID })
         else { return }
@@ -234,6 +270,12 @@ struct SessionOverviewGridView: View {
             in: workspace,
             worktreeOrchestrator: worktreeOrchestrator
         )
+    }
+
+    /// Dismiss the delete-confirmation popover without deleting (the popover's
+    /// Cancel button / Escape).
+    private func cancelPendingDelete() {
+        confirmingDeleteSessionID = nil
     }
 
     /// Columns that fit `width` given the adaptive tile params (`cardMinWidth`
@@ -264,10 +306,20 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
     let onEscape: () -> Void
     let onDelete: () -> Void
     let onRename: () -> Void
+    /// Confirm the pending delete (Return / keypad Enter while a confirm is armed).
+    let onConfirmDelete: () -> Void
+    /// Cancel the pending delete (Escape while a confirm is armed).
+    let onCancelDelete: () -> Void
     /// `true` while the selected card is being renamed inline. The rename
     /// `TextField` then owns first responder, so this view must NOT reclaim it
     /// (reclaiming would drop the field's focus and cancel the edit).
     let isEditing: Bool
+    /// `true` while a delete-confirmation popover is armed. Like `isEditing`, this
+    /// view yields first responder (so it never steals focus back from a popover
+    /// that grabbed it), and while set, `keyDown` routes Return→confirm,
+    /// Escape→cancel and swallows everything else — covering the case where the
+    /// popover did NOT take key focus and the events land here instead.
+    let isConfirming: Bool
 
     func makeNSView(context: Context) -> KeyView {
         KeyView()
@@ -281,9 +333,12 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         nsView.onEscape = onEscape
         nsView.onDelete = onDelete
         nsView.onRename = onRename
-        // While a rename field is up, leave first responder alone so the
-        // TextField keeps focus.
-        guard !isEditing else { return }
+        nsView.onConfirmDelete = onConfirmDelete
+        nsView.onCancelDelete = onCancelDelete
+        nsView.isConfirming = isConfirming
+        // While a rename field or a delete-confirm popover is up, leave first
+        // responder alone so the TextField / popover keeps focus.
+        guard !isEditing && !isConfirming else { return }
         // Reclaim first responder on the next runloop tick rather than inline:
         // when a rename ends, this same update pass also tears down the rename
         // TextField, and reclaiming synchronously here can race that teardown and
@@ -308,6 +363,9 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         var onEscape: (() -> Void)?
         var onDelete: (() -> Void)?
         var onRename: (() -> Void)?
+        var onConfirmDelete: (() -> Void)?
+        var onCancelDelete: (() -> Void)?
+        var isConfirming = false
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -321,6 +379,20 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
             // Arrow keys carry the .numericPad (and often .function) flag even
             // without a real modifier held; subtract those before the empty check.
             let bareFlags = flags.subtracting([.numericPad, .function])
+
+            // While a delete confirm is armed the responder is modal: Return
+            // confirms, Escape cancels, and every other key is swallowed so no
+            // navigation / activation leaks through. (Normally the popover owns
+            // key focus and handles Return/Escape itself; this covers the case
+            // where it didn't and the events arrive here.)
+            if isConfirming {
+                switch event.keyCode {
+                case 36, 76: onConfirmDelete?()
+                case 53: onCancelDelete?()
+                default: break
+                }
+                return
+            }
 
             switch event.keyCode {
             case 123 where bareFlags.isEmpty:
@@ -339,7 +411,12 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
                 // Letter shortcuts match the typed character (layout-independent)
                 // with no Cmd/Ctrl/Opt/Shift held. Never reached mid-rename: the
                 // TextField owns first responder then, so these keys go to it.
+                // h/j/k/l mirror the arrow keys (vim-style) for card navigation.
                 switch bareFlags.isEmpty ? event.charactersIgnoringModifiers?.lowercased() : nil {
+                case "h": onArrow?(.left)
+                case "j": onArrow?(.down)
+                case "k": onArrow?(.up)
+                case "l": onArrow?(.right)
                 case "d": onDelete?()
                 case "r": onRename?()
                 default: super.keyDown(with: event)
