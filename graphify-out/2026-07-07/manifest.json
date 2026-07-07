@@ -75,9 +75,9 @@
     "semantic_hash": "34009d405fe2c1b843b8e32c9b0a406d"
   },
   "docs/pm/status.json": {
-    "mtime": 1783408401.2701902,
-    "ast_hash": "05c2a609111fc45d7cb79bc2f0fad7c3",
-    "semantic_hash": "05c2a609111fc45d7cb79bc2f0fad7c3"
+    "mtime": 1783414451.8086221,
+    "ast_hash": "346fe11e2a3af26f4cbd6a64144c5823",
+    "semantic_hash": ""
   },
   "scripts/build-ghostty.sh": {
     "mtime": 1776139973.8248885,
