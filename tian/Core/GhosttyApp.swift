@@ -384,6 +384,12 @@ final class GhosttyApp: @unchecked Sendable {
             let surfaceId = ctx.surfaceId
             let mgr = self.notificationManager
             Task { @MainActor in
+                // Claude panes get precise, de-duped, focus-gated banners from
+                // ClaudeSessionNotifier (driven by session-state transitions).
+                // Forwarding their raw OSC desktop notifications too would just
+                // re-introduce the firehose, so drop them here. Terminal panes
+                // (and any unregistered surface) keep the passthrough.
+                guard PaneStatusManager.shared.paneKind(forSurfaceID: surfaceId) != .claude else { return }
                 try? await mgr.sendNotification(
                     message: body ?? "",
                     title: title,

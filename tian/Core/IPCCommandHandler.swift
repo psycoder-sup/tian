@@ -7,6 +7,7 @@ final class IPCCommandHandler {
     private let statusManager: PaneStatusManager
     private let notificationManager: NotificationManager
     private let worktreeOrchestrator: WorktreeOrchestrator
+    private let claudeNotifier: ClaudeSessionNotifier
 
     init(
         windowCoordinator: WindowCoordinator,
@@ -17,6 +18,11 @@ final class IPCCommandHandler {
         self.statusManager = statusManager
         self.notificationManager = notificationManager
         self.worktreeOrchestrator = WorktreeOrchestrator(workspaceProvider: windowCoordinator)
+        self.claudeNotifier = ClaudeSessionNotifier(
+            windowCoordinator: windowCoordinator,
+            statusManager: statusManager,
+            notificationManager: notificationManager
+        )
     }
 
     func handle(_ request: IPCRequest) async -> IPCResponse {
@@ -534,12 +540,27 @@ final class IPCCommandHandler {
             return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
-        guard resolvePane(id: paneId) != nil else {
+        guard let (session, pvm, _) = resolvePane(id: paneId) else {
             return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
         }
 
         if let sessionState {
+            // Capture the effective transition around the write: `setSessionState`
+            // may suppress it (canReplace), in which case old == new and the
+            // notifier no-ops. Background work gates the "done" notification.
+            let old = statusManager.sessionState(for: paneId)
             statusManager.setSessionState(paneID: paneId, state: sessionState)
+            if let new = statusManager.sessionState(for: paneId) {
+                let hasBackgroundWork = !(statusManager.backgroundActivities[paneId] ?? []).isEmpty
+                claudeNotifier.sessionStateChanged(
+                    paneID: paneId,
+                    session: session,
+                    pvm: pvm,
+                    old: old,
+                    new: new,
+                    hasBackgroundWork: hasBackgroundWork
+                )
+            }
         }
         if let label {
             statusManager.setStatus(paneID: paneId, label: label)
