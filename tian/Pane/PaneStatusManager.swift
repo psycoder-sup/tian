@@ -217,6 +217,20 @@ final class PaneStatusManager {
         ownersByPane[paneID] = WeakBox(owner)
     }
 
+    /// The area (Claude vs terminal) of the pane owning the surface with this
+    /// surface id, or nil when no registered pane owns it. Resolves surface id →
+    /// owning pane (surface ids differ from leaf pane ids), then reports that
+    /// pane's kind — lets notification routing tell a Claude surface apart from a
+    /// terminal one (to suppress the raw OSC firehose for Claude panes in GhosttyApp).
+    func paneKind(forSurfaceID surfaceID: UUID) -> PaneKind? {
+        for box in ownersByPane.values {
+            if let pvm = box.value, pvm.paneID(forSurfaceID: surfaceID) != nil {
+                return pvm.kind
+            }
+        }
+        return nil
+    }
+
     /// Unregister a pane (e.g., on close or PVM deinit).
     func unregisterPane(_ paneID: UUID) {
         ownersByPane.removeValue(forKey: paneID)
