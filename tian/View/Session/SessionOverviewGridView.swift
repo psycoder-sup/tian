@@ -56,12 +56,18 @@ struct SessionOverviewGridView: View {
         workspaceCollection.workspaces.allSatisfy { $0.sessionCollection.sessions.isEmpty }
     }
 
-    /// Every card in render order (each workspace's `hierarchicalOrder()`,
-    /// concatenated in `workspaces` order) flattened for index-based 2D nav.
-    private var flatCards: [FlatCard] {
+    /// Every card in flat render order (each workspace's `hierarchicalOrder()`,
+    /// concatenated in `workspaces` order). Drives both the single unified grid
+    /// and the index-based 2D keyboard navigation. Carries the owning workspace so
+    /// each card can render its workspace chip and route selection/close.
+    private var cardEntries: [CardEntry] {
         workspaceCollection.workspaces.flatMap { workspace in
             workspace.sessionCollection.hierarchicalOrder().map { entry in
-                FlatCard(workspaceID: workspace.id, sessionID: entry.session.id)
+                CardEntry(
+                    workspace: workspace,
+                    session: entry.session,
+                    isOrchestrator: entry.isOrchestrator
+                )
             }
         }
     }
@@ -108,7 +114,7 @@ struct SessionOverviewGridView: View {
         // Keep the selection valid as sessions come or go while the overview is
         // up: a missing (nil) selection, or one whose id is no longer present,
         // falls back to the first card — and stays nil only when there are none.
-        .onChange(of: flatCards.map(\.id)) { _, ids in
+        .onChange(of: cardEntries.map(\.id)) { _, ids in
             let stillValid = selectedSessionID.map(ids.contains) ?? false
             if !stillValid {
                 selectedSessionID = ids.first
@@ -132,9 +138,12 @@ struct SessionOverviewGridView: View {
     private var gridContent: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(workspaceCollection.workspaces) { workspace in
-                        workspaceSection(workspace)
+                // One unified grid across every workspace — cards flow to fill the
+                // width regardless of which workspace they belong to (each carries
+                // its own workspace chip), replacing the old per-workspace bands.
+                LazyVGrid(columns: columns, alignment: .leading, spacing: cardSpacing) {
+                    ForEach(cardEntries) { entry in
+                        card(for: entry)
                     }
                 }
                 .padding(contentPadding)
@@ -153,44 +162,34 @@ struct SessionOverviewGridView: View {
         }
     }
 
-    /// One workspace's cards, with a section header when more than one
-    /// workspace is present (a single workspace needs no label).
+    /// One session's card, wired for selection, inline rename, and the
+    /// delete-confirmation popover. Its workspace chip and active/selection state
+    /// come from the `CardEntry`'s owning workspace.
     @ViewBuilder
-    private func workspaceSection(_ workspace: Workspace) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if workspaceCollection.workspaces.count > 1 {
-                Text(workspace.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                ForEach(workspace.sessionCollection.hierarchicalOrder(), id: \.session.id) { entry in
-                    SessionOverviewCardView(
-                        session: entry.session,
-                        isActive: workspace.id == workspaceCollection.activeWorkspaceID
-                            && entry.session.id == workspace.sessionCollection.activeSessionID,
-                        isSelected: entry.session.id == selectedSessionID,
-                        isOrchestrator: entry.isOrchestrator,
-                        // Only the selected card renames; committing/cancelling
-                        // clears the shared flag.
-                        isRenaming: Binding(
-                            get: { isRenamingSelection && entry.session.id == selectedSessionID },
-                            set: { if !$0 { isRenamingSelection = false } }
-                        ),
-                        // Only the card whose id matches the armed confirm shows
-                        // the popover; dismissing it (Cancel / click-away) clears
-                        // the shared id.
-                        isConfirmingDelete: Binding(
-                            get: { confirmingDeleteSessionID == entry.session.id },
-                            set: { if !$0 { confirmingDeleteSessionID = nil } }
-                        ),
-                        onConfirmDelete: confirmPendingDelete,
-                        onSelect: { onSelect(workspace.id, entry.session.id) }
-                    )
-                }
-            }
-        }
+    private func card(for entry: CardEntry) -> some View {
+        let workspace = entry.workspace
+        let session = entry.session
+        SessionOverviewCardView(
+            session: session,
+            workspaceName: workspace.name,
+            isActive: workspace.id == workspaceCollection.activeWorkspaceID
+                && session.id == workspace.sessionCollection.activeSessionID,
+            isSelected: session.id == selectedSessionID,
+            isOrchestrator: entry.isOrchestrator,
+            // Only the selected card renames; committing/cancelling clears the shared flag.
+            isRenaming: Binding(
+                get: { isRenamingSelection && session.id == selectedSessionID },
+                set: { if !$0 { isRenamingSelection = false } }
+            ),
+            // Only the card whose id matches the armed confirm shows the popover;
+            // dismissing it (Cancel / click-away) clears the shared id.
+            isConfirmingDelete: Binding(
+                get: { confirmingDeleteSessionID == session.id },
+                set: { if !$0 { confirmingDeleteSessionID = nil } }
+            ),
+            onConfirmDelete: confirmPendingDelete,
+            onSelect: { onSelect(workspace.id, session.id) }
+        )
     }
 
     // MARK: - Selection & navigation
@@ -198,7 +197,7 @@ struct SessionOverviewGridView: View {
     /// The card to select when the overview appears: the active workspace's
     /// active session if it's on screen, otherwise the first card.
     private func defaultSelection() -> UUID? {
-        let cards = flatCards
+        let cards = cardEntries
         guard !cards.isEmpty else { return nil }
         if let activeWorkspace = workspaceCollection.workspaces.first(where: {
             $0.id == workspaceCollection.activeWorkspaceID
@@ -210,14 +209,13 @@ struct SessionOverviewGridView: View {
         return cards.first?.id
     }
 
-    /// Move the selection one step in `direction` across the overview's stacked
-    /// per-workspace grids (see `OverviewGridNavigation`): Left/Right walk the
-    /// flat render order, Up/Down step between visual rows across workspace
-    /// section boundaries preserving the column. Clamped to bounds (no wrap).
+    /// Move the selection one step in `direction` across the single unified
+    /// overview grid (see `OverviewGridNavigation`): Left/Right walk the flat
+    /// render order, Up/Down step between visual rows preserving the column.
+    /// Clamped to bounds (no wrap). Every card now flows into one continuous grid,
+    /// so the nav is fed a single section spanning all workspaces.
     private func move(_ direction: OverviewGridNavigation.Direction) {
-        let sections = workspaceCollection.workspaces.map { workspace in
-            workspace.sessionCollection.hierarchicalOrder().map(\.session.id)
-        }
+        let sections = [cardEntries.map(\.session.id)]
         if let next = OverviewGridNavigation.move(
             direction,
             from: selectedSessionID,
@@ -232,8 +230,8 @@ struct SessionOverviewGridView: View {
     /// overlay via the existing `onSelect`). A no-op when nothing is selected.
     private func activateSelection() {
         guard let id = selectedSessionID,
-              let card = flatCards.first(where: { $0.id == id }) else { return }
-        onSelect(card.workspaceID, card.sessionID)
+              let card = cardEntries.first(where: { $0.id == id }) else { return }
+        onSelect(card.workspace.id, card.session.id)
     }
 
     /// Put the selected card's name into inline-rename mode (the `R` shortcut).
@@ -261,13 +259,10 @@ struct SessionOverviewGridView: View {
     private func confirmPendingDelete() {
         guard let id = confirmingDeleteSessionID else { return }
         confirmingDeleteSessionID = nil
-        guard let card = flatCards.first(where: { $0.id == id }),
-              let workspace = workspaceCollection.workspaces.first(where: { $0.id == card.workspaceID }),
-              let session = workspace.sessionCollection.sessions.first(where: { $0.id == card.sessionID })
-        else { return }
+        guard let card = cardEntries.first(where: { $0.id == id }) else { return }
         SessionCloseFlow.run(
-            session: session,
-            in: workspace,
+            session: card.session,
+            in: card.workspace,
             worktreeOrchestrator: worktreeOrchestrator
         )
     }
@@ -286,11 +281,14 @@ struct SessionOverviewGridView: View {
         return max(1, Int((width + cardSpacing) / (cardMinWidth + cardSpacing)))
     }
 
-    /// One card's place in the flat, render-order nav list.
-    private struct FlatCard: Identifiable {
-        let workspaceID: UUID
-        let sessionID: UUID
-        var id: UUID { sessionID }
+    /// One card's place in the flat, render-order list: the session plus the
+    /// workspace that owns it (for the workspace chip and selection/close routing)
+    /// and whether it orchestrates nested implementers.
+    private struct CardEntry: Identifiable {
+        let workspace: Workspace
+        let session: Session
+        let isOrchestrator: Bool
+        var id: UUID { session.id }
     }
 }
 
