@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.1) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.2) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -14,6 +14,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-08",
+      "summary": "Released v1.5.2 — Claude session macOS notifications de-noised: a banner now fires only when a session needs you (task done / input needed / AskUserQuestion), driven by ClaudeSessionState transitions instead of forwarding every OSC desktop notification, and suppressed for the session you're actively viewing (PR #72). Also gitignored graphify dated-snapshot + AST-cache dirs (#73, #74). Medium code-review caught a surface-id→pane wiring bug (fixed pre-merge); live-verified in a debug build. Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 449) live.",
+      "commit": "19d853f",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.2"
+    },
     {
       "date": "2026-07-08",
       "summary": "Released v1.5.1 — Session Overview redesigned as one unified card grid that fills the width regardless of workspace (was per-workspace stacked grids + section headers); workspace identity moved into a per-card, width-capped chip and the keyboard-selected card gets a blue glow. Ported from the 'Cards Grid' Claude Design; medium code-review pass applied (chip-vs-title layout, VoiceOver label, doc). PR #71. Built, notarized (Accepted), stapled; GitHub Release + Sparkle appcast live.",
@@ -25,12 +31,6 @@
       "summary": "Released v1.5.0 — Cmd+N binds new-session + fixes Enter/Esc in the create-session popover (e7769b4), and the Session-Overview grid gains a confirm-delete popover plus vim hjkl navigation (13a2b85). Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 436) live.",
       "commit": "3aa3e62",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.0"
-    },
-    {
-      "date": "2026-07-07",
-      "summary": "Released v1.4.0 — bundles SSH-connected workspaces (PR #66), Session-Overview D/R (delete/rename) keyboard shortcuts (PR #67), and auto-naming worktree sessions from the live Claude title (PR #68). Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
-      "commit": "dd7aa8b",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.4.0"
     }
   ]
 }
