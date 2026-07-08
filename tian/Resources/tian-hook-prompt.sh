@@ -4,7 +4,9 @@
 # Reads the Claude Code UserPromptSubmit JSON payload from stdin, extracts
 # `.prompt`, collapses whitespace and caps its length, then invokes
 # `tian prompt set --text "<prompt>"` so the latest user prompt can be shown
-# on the Session Overview card.
+# on the Session Overview card. Harness-injected synthetic turns (e.g. a
+# <task-notification> wrapper delivered to a background subagent) are
+# filtered out so they never clobber the card with non-user text.
 #
 # Always exits 0 so a forwarding failure never blocks prompt submission.
 
@@ -17,6 +19,13 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // ""' 2>/dev/null)
 [ -z "$PROMPT" ] && exit 0
+
+# Reject harness-injected synthetic turns: if the prompt (after stripping
+# leading whitespace) opens with a known wrapper tag, it's not something the
+# user typed — leave the card untouched rather than forward it.
+if printf '%s' "$PROMPT" | sed 's/^[[:space:]]*//' | grep -qiE '^<(task-notification|system-reminder|local-command-(stdout|stderr|caveat)|command-(name|message|args)|bash-(input|stdout|stderr))([[:space:]/>])'; then
+  exit 0
+fi
 
 # Collapse newlines/tabs to spaces and cap length so a huge multi-line prompt
 # can't bloat the UI or a command line. Run the truncation under a UTF-8 locale

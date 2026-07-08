@@ -164,7 +164,9 @@
   "162": "ClaudeLaunchBadge",
   "163": "MarkdownFileType",
   "164": "InspectPanelStatusStrip",
+  "165": ".installKeyboardMonitor",
   "166": "child_branch",
+  "167": "TerminalSurfaceViewDelegate",
   "168": "now",
   "169": "publish",
   "170": "SessionRestorer",
@@ -176,6 +178,8 @@
   "176": "date",
   "177": "done",
   "178": "item",
+  "179": "TianApp",
+  "180": "tian-hook-prompt-test.sh",
   "181": "Glowing Vertical Cursor Bar Motif",
   "182": "WeakBox",
   "183": "tian-hook-activity",
@@ -827,5 +831,8 @@
   "829": "Sendable",
   "830": "MainActor",
   "831": "T",
-  "832": "Int32"
+  "832": "Int32",
+  "833": "GitRepoWatcherTests.swift",
+  "834": "IPCTestError",
+  "835": "tian-hook-prompt.sh"
 }
