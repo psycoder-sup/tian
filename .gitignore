@@ -40,3 +40,6 @@ tian/Vendor/ghostty/lib/
 tian/Vendor/GhosttyKit.xcframework/
 tian/Vendor/ghostty.h
 tian/Vendor/resources/
+
+# graphify per-run dated snapshots (regenerated on every rebuild — churn only)
+graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
