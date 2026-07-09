@@ -51,6 +51,7 @@ struct SidebarExpandedContentView: View {
                             isDropTargetAbove: workspaceDropSlot == rowIndex,
                             onToggleDisclosure: { toggleDisclosure(workspace.id) },
                             onAddSession: { addSession(to: workspace) },
+                            onSelectWorkspace: { selectWorkspace(workspace) },
                             onSetDirectory: { url in
                                 workspace.setDefaultWorkingDirectory(url)
                             },
@@ -274,6 +275,12 @@ struct SidebarExpandedContentView: View {
         SessionCloseFlow.run(session: session, in: workspace, worktreeOrchestrator: worktreeOrchestrator)
     }
 
+    // MARK: - Workspace Selection
+
+    private func selectWorkspace(_ workspace: Workspace) {
+        workspaceCollection.activateWorkspace(id: workspace.id)
+    }
+
     // MARK: - Session Selection
 
     private func selectSession(workspace: Workspace, sessionID: UUID) {
@@ -338,7 +345,7 @@ struct SidebarExpandedContentView: View {
         guard index < items.count else { return }
         switch items[index] {
         case .workspaceHeader(let ws):
-            addSession(to: ws)
+            selectWorkspace(ws)
         case .sessionRow(let ws, let session):
             selectSession(workspace: ws, sessionID: session.id)
         }
