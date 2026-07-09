@@ -338,7 +338,7 @@ struct SidebarExpandedContentView: View {
         guard index < items.count else { return }
         switch items[index] {
         case .workspaceHeader(let ws):
-            toggleDisclosure(ws.id)
+            addSession(to: ws)
         case .sessionRow(let ws, let session):
             selectSession(workspace: ws, sessionID: session.id)
         }
