@@ -885,8 +885,8 @@
     "semantic_hash": ""
   },
   "tian/View/Sidebar/SidebarExpandedContentView.swift": {
-    "mtime": 1783584679.8522675,
-    "ast_hash": "432e6a8f29c6d391b7123e654bf4405e",
+    "mtime": 1783586156.2698517,
+    "ast_hash": "bb75580af0006273423f3288d8fa90b6",
     "semantic_hash": ""
   },
   "tian/View/Sidebar/SidebarOverviewButton.swift": {
@@ -915,8 +915,8 @@
     "semantic_hash": "af91ca9629e5153b3b836a162c53774d"
   },
   "tian/View/Sidebar/SidebarWorkspaceHeaderView.swift": {
-    "mtime": 1783584678.6370003,
-    "ast_hash": "d33a015fe4dc4a5f2be948911030d781",
+    "mtime": 1783586149.2249815,
+    "ast_hash": "67971b7fe8ed44c03ce0ac0b5ee9fd59",
     "semantic_hash": ""
   },
   "tian/View/Sidebar/WorkspaceReorderGeometry.swift": {
