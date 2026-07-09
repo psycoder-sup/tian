@@ -94,4 +94,61 @@ struct OverviewGridNavigationTests {
         #expect(OverviewGridNavigation.move(.down, from: c1, sections: sections, columnCount: 3) == c2)
         #expect(OverviewGridNavigation.move(.up, from: c2, sections: sections, columnCount: 3) == c1)
     }
+
+    // MARK: - selectionAfterRemoval
+
+    @Test func removingMiddleCardSelectsTheCardThatTookItsSlot() {
+        let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+        // b (index 1) is deleted; c slides into slot 1.
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: b, oldIDs: [a, b, c, d], newIDs: [a, c, d]
+            ) == c
+        )
+    }
+
+    @Test func removingLastCardClampsToTheNewLast() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // c (index 2) is deleted; the new list only has indices 0-1, so clamp.
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: c, oldIDs: [a, b, c], newIDs: [a, b]
+            ) == b
+        )
+    }
+
+    @Test func removingFirstCardSelectsTheNewFirst() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // a (index 0) is deleted; b slides into slot 0.
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: a, oldIDs: [a, b, c], newIDs: [b, c]
+            ) == b
+        )
+    }
+
+    @Test func removingTheOnlyRemainingCardReturnsNil() {
+        let a = UUID()
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: a, oldIDs: [a], newIDs: []
+            ) == nil
+        )
+    }
+
+    @Test func missingOrUnresolvablePreviousFallsBackToFirst() {
+        let a = UUID(), b = UUID(), c = UUID()
+        // No previous selection at all.
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: nil, oldIDs: [a, b, c], newIDs: [b, c]
+            ) == b
+        )
+        // Previous id isn't found in oldIDs (stale/unknown selection).
+        #expect(
+            OverviewGridNavigation.selectionAfterRemoval(
+                previous: UUID(), oldIDs: [a, b, c], newIDs: [b, c]
+            ) == b
+        )
+    }
 }

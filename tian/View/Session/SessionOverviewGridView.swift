@@ -21,7 +21,7 @@ struct SessionOverviewGridView: View {
     let onDismiss: () -> Void
 
     /// The keyboard-selected card. Defaults to the active session on appear and
-    /// is kept valid (falls back to the first card) if the list changes.
+    /// is kept valid (falls back to the adjacent card) if the list changes.
     @State private var selectedSessionID: UUID?
     /// `true` while the selected card's name is in inline-rename mode (driven by
     /// the `R` shortcut). While set, the keyboard responder yields first responder
@@ -113,11 +113,17 @@ struct SessionOverviewGridView: View {
         .onAppear { selectedSessionID = defaultSelection() }
         // Keep the selection valid as sessions come or go while the overview is
         // up: a missing (nil) selection, or one whose id is no longer present,
-        // falls back to the first card — and stays nil only when there are none.
-        .onChange(of: cardEntries.map(\.id)) { _, ids in
+        // falls back to the adjacent card — the neighbor that slid into the
+        // vanished card's slot (or the new last card, if it was the last one) —
+        // and stays nil only when there are none.
+        .onChange(of: cardEntries.map(\.id)) { oldIDs, ids in
             let stillValid = selectedSessionID.map(ids.contains) ?? false
             if !stillValid {
-                selectedSessionID = ids.first
+                selectedSessionID = OverviewGridNavigation.selectionAfterRemoval(
+                    previous: selectedSessionID,
+                    oldIDs: oldIDs,
+                    newIDs: ids
+                )
                 // Drop any in-flight rename if its card disappeared (e.g. the
                 // session was deleted mid-edit) so the responder reclaims focus.
                 isRenamingSelection = false
