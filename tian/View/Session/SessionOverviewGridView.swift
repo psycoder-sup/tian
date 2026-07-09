@@ -36,6 +36,9 @@ struct SessionOverviewGridView: View {
     /// content width. Drives Up/Down (±one row) arrow navigation. Defaults to 1.
     @State private var columnCount = 1
 
+    /// Persisted card order for the overview grid — survives app restarts.
+    @AppStorage("sessionOverviewSortMode") private var sortMode: SessionOverviewSortMode = .defaultOrder
+
     /// Inner padding around the scrolling grid content.
     private let contentPadding: CGFloat = 20
 
@@ -57,11 +60,12 @@ struct SessionOverviewGridView: View {
     }
 
     /// Every card in flat render order (each workspace's `hierarchicalOrder()`,
-    /// concatenated in `workspaces` order). Drives both the single unified grid
-    /// and the index-based 2D keyboard navigation. Carries the owning workspace so
-    /// each card can render its workspace chip and route selection/close.
+    /// concatenated in `workspaces` order), then reordered by `sortMode`. Drives
+    /// both the single unified grid and the index-based 2D keyboard navigation,
+    /// so both reflect the chosen sort. Carries the owning workspace so each
+    /// card can render its workspace chip and route selection/close.
     private var cardEntries: [CardEntry] {
-        workspaceCollection.workspaces.flatMap { workspace in
+        let base = workspaceCollection.workspaces.flatMap { workspace in
             workspace.sessionCollection.hierarchicalOrder().map { entry in
                 CardEntry(
                     workspace: workspace,
@@ -70,6 +74,7 @@ struct SessionOverviewGridView: View {
                 )
             }
         }
+        return SessionOverviewSort.ordered(base, mode: sortMode) { $0.session.aggregateClaudeState }
     }
 
     var body: some View {
@@ -85,7 +90,10 @@ struct SessionOverviewGridView: View {
                 Text("No sessions")
                     .foregroundStyle(.secondary)
             } else {
-                gridContent
+                VStack(spacing: 0) {
+                    sortControl
+                    gridContent
+                }
             }
         }
         // The live terminal NSView behind this overlay stays the window's
@@ -102,6 +110,7 @@ struct SessionOverviewGridView: View {
                 onRename: beginRenameSelection,
                 onConfirmDelete: confirmPendingDelete,
                 onCancelDelete: cancelPendingDelete,
+                onCycleSort: cycleSort,
                 isEditing: isRenamingSelection,
                 isConfirming: confirmingDeleteSessionID != nil
             )
@@ -135,6 +144,64 @@ struct SessionOverviewGridView: View {
                 confirmingDeleteSessionID = nil
             }
         }
+    }
+
+    /// Header row above the scrolling grid: a capsule segmented control picking
+    /// `sortMode` (Default | Session State), trailing-aligned. Also toggleable
+    /// via the `s` keyboard shortcut (`cycleSort()`).
+    @ViewBuilder
+    private var sortControl: some View {
+        HStack {
+            Spacer()
+            HStack(spacing: 2) {
+                sortSegment(.defaultOrder)
+                sortSegment(.sessionState)
+            }
+            .padding(3)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                    )
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+
+    /// One pill of `sortControl`, matching `InspectPanelTabRow`'s tab-button style.
+    @ViewBuilder
+    private func sortSegment(_ mode: SessionOverviewSortMode) -> some View {
+        let isActive = sortMode == mode
+        Button {
+            sortMode = mode
+        } label: {
+            Text(mode.label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(isActive ? Color.primary.opacity(0.9) : Color.primary.opacity(0.4))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background {
+                    if isActive {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.10), Color.white.opacity(0.04)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                            )
+                    }
+                }
+        }
+        .buttonStyle(.plain)
     }
 
     /// The scrolling card grid, wrapped in a `ScrollViewReader` so keyboard
@@ -279,6 +346,19 @@ struct SessionOverviewGridView: View {
         confirmingDeleteSessionID = nil
     }
 
+    /// Cycle `sortMode` to the next case in `SessionOverviewSortMode.allCases`,
+    /// wrapping around (the `s` shortcut). With today's two modes this is a
+    /// plain toggle, but rotates cleanly if a third mode is ever added.
+    private func cycleSort() {
+        let cases = SessionOverviewSortMode.allCases
+        guard let currentIndex = cases.firstIndex(of: sortMode) else {
+            sortMode = .defaultOrder
+            return
+        }
+        let nextIndex = cases.index(after: currentIndex)
+        sortMode = nextIndex == cases.endIndex ? cases[cases.startIndex] : cases[nextIndex]
+    }
+
     /// Columns that fit `width` given the adaptive tile params (`cardMinWidth`
     /// minimum, `cardSpacing` gap). Guards a non-positive width by defaulting to
     /// a single column.
@@ -314,6 +394,8 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
     let onConfirmDelete: () -> Void
     /// Cancel the pending delete (Escape while a confirm is armed).
     let onCancelDelete: () -> Void
+    /// Cycle the grid's sort mode (the `s` shortcut).
+    let onCycleSort: () -> Void
     /// `true` while the selected card is being renamed inline. The rename
     /// `TextField` then owns first responder, so this view must NOT reclaim it
     /// (reclaiming would drop the field's focus and cancel the edit).
@@ -339,6 +421,7 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         nsView.onRename = onRename
         nsView.onConfirmDelete = onConfirmDelete
         nsView.onCancelDelete = onCancelDelete
+        nsView.onCycleSort = onCycleSort
         nsView.isConfirming = isConfirming
         // While a rename field or a delete-confirm popover is up, leave first
         // responder alone so the TextField / popover keeps focus.
@@ -369,6 +452,7 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
         var onRename: (() -> Void)?
         var onConfirmDelete: (() -> Void)?
         var onCancelDelete: (() -> Void)?
+        var onCycleSort: (() -> Void)?
         var isConfirming = false
 
         override var acceptsFirstResponder: Bool { true }
@@ -423,6 +507,7 @@ private struct OverviewKeyboardResponder: NSViewRepresentable {
                 case "l": onArrow?(.right)
                 case "d": onDelete?()
                 case "r": onRename?()
+                case "s": onCycleSort?()
                 default: super.keyDown(with: event)
                 }
             }
