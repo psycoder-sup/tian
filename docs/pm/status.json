@@ -16,6 +16,12 @@
   "shipped": [
     {
       "date": "2026-07-09",
+      "summary": "Session overview grid (Cmd+Shift+O) gains a sort/view-type control: pick Default order or Session State — cards sorted by Claude state priority needs-input > busy > idle > fresh (nil aggregate state = fresh, sorts last), reusing the existing ClaudeSessionState ordering. Pure flat sort (orchestrator grouping ignored), persisted across restarts via @AppStorage, `s` cycles the mode. Sort applied in cardEntries so both grid and keyboard nav follow. Pure ordering logic extracted to tian/Session/SessionOverviewSort.swift (decorate-sort-undecorate key, unit-tested). Clean Debug build + 1038 tianTests green; /code-review medium applied 3 cleanups, no correctness bugs. GUI open→reorder→persist path not yet human-verified (overlay automation permission-blocked).",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/78"
+    },
+    {
+      "date": "2026-07-09",
       "summary": "Released v1.5.4 — workspace now survives its last session — closing the last session no longer closes the workspace; its content area shows a new create-session empty state (SessionEmptyStateView) where the Claude pane renders. Removed the session→workspace auto-close cascade (SessionCollection.onEmpty/shouldQuit, Workspace.onEmpty, WorkspaceCollection.wireWorkspaceClose); explicit workspace close unchanged. Medium code-review caught a HIGH persistence data-loss (an empty workspace made SessionRestorer.validate discard the whole state file on restore) — fixed by dropping zero-session workspaces in SessionSerializer.snapshot; plus a session-overview flag desync (PR #76). 1032 tianTests pass (one WorktreeOrchestrator wall-clock flake, green in isolation). Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
       "commit": "701a925",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.4"
