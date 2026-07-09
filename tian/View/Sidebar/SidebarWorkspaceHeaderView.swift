@@ -10,6 +10,7 @@ struct SidebarWorkspaceHeaderView: View {
     var isDropTargetAbove: Bool = false
     let onToggleDisclosure: () -> Void
     let onAddSession: () -> Void
+    let onSelectWorkspace: () -> Void
     let onSetDirectory: (URL?) -> Void
     let onClose: () -> Void
 
@@ -76,7 +77,7 @@ struct SidebarWorkspaceHeaderView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { onAddSession() }
+        .onTapGesture { onSelectWorkspace() }
         .contextMenu {
             Button("Rename") { isRenaming = true }
             Divider()
@@ -94,7 +95,7 @@ struct SidebarWorkspaceHeaderView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("workspace-header-\(workspace.id)")
         .accessibilityLabel("\(workspace.name), \(workspace.sessionCollection.sessions.count) sessions, \(isExpanded ? "expanded" : "collapsed")")
-        .accessibilityHint("Double-tap to create a new session")
+        .accessibilityHint("Double-tap to open this workspace")
         .accessibilityAction(named: Text(isExpanded ? "Collapse" : "Expand")) { onToggleDisclosure() }
     }
 }
