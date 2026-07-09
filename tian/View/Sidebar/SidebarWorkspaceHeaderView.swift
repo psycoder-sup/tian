@@ -18,6 +18,19 @@ struct SidebarWorkspaceHeaderView: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            Button(action: onToggleDisclosure) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.easeInOut(duration: 0.15), value: isExpanded)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("workspace-disclosure-\(workspace.id)")
+            .accessibilityLabel(isExpanded ? "Collapse \(workspace.name)" : "Expand \(workspace.name)")
+
             Circle()
                 .fill(Color.accentColor)
                 .frame(width: 6, height: 6)
@@ -63,7 +76,7 @@ struct SidebarWorkspaceHeaderView: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { onToggleDisclosure() }
+        .onTapGesture { onAddSession() }
         .contextMenu {
             Button("Rename") { isRenaming = true }
             Divider()
@@ -81,7 +94,8 @@ struct SidebarWorkspaceHeaderView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("workspace-header-\(workspace.id)")
         .accessibilityLabel("\(workspace.name), \(workspace.sessionCollection.sessions.count) sessions, \(isExpanded ? "expanded" : "collapsed")")
-        .accessibilityHint("Double-tap to expand or collapse")
+        .accessibilityHint("Double-tap to create a new session")
+        .accessibilityAction(named: Text(isExpanded ? "Collapse" : "Expand")) { onToggleDisclosure() }
     }
 }
 

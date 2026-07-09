@@ -50,6 +50,14 @@ struct SidebarContainerView: View {
         displayedSessionCollection?.activeSession
     }
 
+    /// `true` when at least one session exists in ANY workspace of this window's
+    /// collection. Drives the overview overlay's global (not per-workspace)
+    /// auto-dismiss so deleting the active workspace's last card doesn't close the
+    /// overview while other workspaces still have cards.
+    private var hasAnySession: Bool {
+        workspaceCollection.workspaces.contains { !$0.sessionCollection.sessions.isEmpty }
+    }
+
     /// Top-gutter floor when the sidebar is collapsed: 80pt traffic-lights + 6pt
     /// spacing + ~18pt sidebar toggle + 6pt + ~18pt overview toggle.
     private let topGutterFloor: CGFloat = 130
@@ -119,12 +127,11 @@ struct SidebarContainerView: View {
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
         }
-        .onChange(of: displayedSessionCollection?.sessions.isEmpty ?? true) { _, isEmpty in
-            // The session-overview overlay is mounted only in the populated
-            // branch of `sessionContentStack`. If the active workspace drains to
-            // empty while the overview is open, clear the flag so it doesn't pop
-            // back up over the empty state or a freshly created session.
-            if isEmpty { isOverviewVisible = false }
+        .onChange(of: hasAnySession) { _, hasAny in
+            // The overview overlay now sits above every branch of sessionContentStack,
+            // so an active-workspace drain no longer unmounts it. Only auto-close when
+            // NO workspace has any session (zero cards to show).
+            if !hasAny { isOverviewVisible = false }
         }
         .modifier(InspectPanelWiringModifier(
             activeSession: activeSession,
@@ -369,62 +376,68 @@ struct SidebarContainerView: View {
 
     @ViewBuilder
     private var sessionContentStack: some View {
-        if let sessionCollection = displayedSessionCollection {
-            if sessionCollection.sessions.isEmpty, let workspace = activeWorkspace {
-                // The workspace outlived its last session (closing the last
-                // session no longer closes the workspace). Offer a create-session
-                // action where the Claude pane would normally render.
-                SessionEmptyStateView(
-                    workspaceCollection: workspaceCollection,
-                    workspace: workspace
-                )
-            } else {
-                ZStack {
-                    ForEach(sessionCollection.sessions) { session in
-                        let isActive = session.id == sessionCollection.activeSessionID
-                        SessionContentView(
-                            session: session,
-                            isActive: isActive,
-                            windowLeadingInset: windowLeadingInset,
-                            windowTrailingInset: windowTrailingInset
-                        )
-                        .opacity(isActive ? 1 : 0)
-                        .allowsHitTesting(isActive)
+        // The overview grid is applied as a single `.overlay` on the whole
+        // branch `Group` (not an if/else swap) so it can sit above EVERY branch —
+        // the empty-state, the populated ZStack, and the workspace-empty state.
+        // The populated ZStack (and every session's live Metal terminal surface)
+        // stays mounted beneath the overlay, keeping live state while it's open;
+        // lifting the overlay here also lets Cmd+Shift+O open it from the empty
+        // create-session page.
+        Group {
+            if let sessionCollection = displayedSessionCollection {
+                if sessionCollection.sessions.isEmpty, let workspace = activeWorkspace {
+                    // The workspace outlived its last session (closing the last
+                    // session no longer closes the workspace). Offer a create-session
+                    // action where the Claude pane would normally render.
+                    SessionEmptyStateView(
+                        workspaceCollection: workspaceCollection,
+                        workspace: workspace
+                    )
+                } else {
+                    ZStack {
+                        ForEach(sessionCollection.sessions) { session in
+                            let isActive = session.id == sessionCollection.activeSessionID
+                            SessionContentView(
+                                session: session,
+                                isActive: isActive,
+                                windowLeadingInset: windowLeadingInset,
+                                windowTrailingInset: windowTrailingInset
+                            )
+                            .opacity(isActive ? 1 : 0)
+                            .allowsHitTesting(isActive)
+                        }
                     }
-                }
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { handleContainerSizeChange(geo.size) }
-                            .onChange(of: geo.size) { _, newSize in
-                                lastContainerSize = newSize
-                                if !sidebarState.isAnimating {
-                                    handleContainerSizeChange(newSize)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { handleContainerSizeChange(geo.size) }
+                                .onChange(of: geo.size) { _, newSize in
+                                    lastContainerSize = newSize
+                                    if !sidebarState.isAnimating {
+                                        handleContainerSizeChange(newSize)
+                                    }
                                 }
-                            }
+                        }
+                    )
+                    .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
+                        if wasAnimating && !isAnimating {
+                            handleContainerSizeChange(lastContainerSize)
+                        }
                     }
-                )
-                .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
-                    if wasAnimating && !isAnimating {
-                        handleContainerSizeChange(lastContainerSize)
+                    .onChange(of: sessionCollection.activeSessionID) { _, _ in
+                        handleSessionChanged()
                     }
                 }
-                .onChange(of: sessionCollection.activeSessionID) { _, _ in
-                    handleSessionChanged()
-                }
-                // Overview grid is applied as an .overlay (not an if/else swap) so
-                // the ZStack above stays mounted — every session's Metal terminal
-                // surface keeps its live state while the overview is open.
-                .modifier(SessionOverviewOverlayModifier(
-                    workspaceCollection: workspaceCollection,
-                    worktreeOrchestrator: worktreeOrchestrator,
-                    sidebarState: sidebarState,
-                    isOverviewVisible: $isOverviewVisible
-                ))
+            } else if workspaceCollection.workspaces.isEmpty {
+                WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
             }
-        } else if workspaceCollection.workspaces.isEmpty {
-            WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
         }
+        .modifier(SessionOverviewOverlayModifier(
+            workspaceCollection: workspaceCollection,
+            worktreeOrchestrator: worktreeOrchestrator,
+            sidebarState: sidebarState,
+            isOverviewVisible: $isOverviewVisible
+        ))
     }
 
     // MARK: - Focus
