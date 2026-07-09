@@ -41,18 +41,22 @@ struct WorkspaceTests {
         #expect(ws.activeSession?.id == ws.sessionCollection.activeSession?.id)
     }
 
-    @Test func onEmptyFiredWhenLastSessionExplicitlyClosed() async {
-        // `ws.onEmpty` fires when the last session is removed. Session removal
-        // requires an explicit user close (requestSessionClose), not a
-        // pane-exit cascade.
+    @Test func lastSessionCloseLeavesWorkspaceAliveButEmpty() async {
+        // Closing the last session no longer closes the workspace. The
+        // workspace stays alive with an empty session collection (its content
+        // area renders the create-session empty state), and can seed a new
+        // session immediately.
         let ws = Workspace(name: "project")
-        var fired = false
-        ws.onEmpty = { fired = true }
 
         let session = ws.sessionCollection.sessions[0]
         await session.requestSessionClose()
 
-        #expect(fired)
+        #expect(ws.sessionCollection.sessions.isEmpty)
+        #expect(ws.activeSessionID == nil)
+
+        // The workspace is still usable — a new session can be created.
+        ws.sessionCollection.createSession()
+        #expect(ws.sessionCollection.sessions.count == 1)
     }
 
     @Test func snapshotProducesValidJSON() throws {
@@ -547,13 +551,13 @@ struct WorkspaceCollectionTests {
         #expect(collection.activeSessionCollection === ws.sessionCollection)
     }
 
-    // MARK: - Cascading Close
+    // MARK: - Session Close (workspace survives)
 
-    @Test func explicitCloseCascadesFromSessionToOnEmpty() async {
-        // Closing the last pane no longer cascades to session close. An explicit
-        // `requestSessionClose` fires onSessionClose → removeSession, which in
-        // turn cascades upward to the workspace collection when the last
-        // workspace's last session goes away.
+    @Test func explicitSessionCloseLeavesWorkspaceAlive() async {
+        // An explicit `requestSessionClose` on the last session empties the
+        // workspace's session collection but does NOT remove the workspace or
+        // empty the collection — the workspace stays alive with a create-session
+        // empty state.
         let collection = WorkspaceCollection()
         var emptyCalled = false
         collection.onEmpty = { emptyCalled = true }
@@ -563,8 +567,8 @@ struct WorkspaceCollectionTests {
         await session.requestSessionClose()
 
         #expect(ws.sessionCollection.sessions.isEmpty)
-        #expect(collection.workspaces.isEmpty)
-        #expect(emptyCalled)
+        #expect(collection.workspaces.count == 1)
+        #expect(!emptyCalled)
     }
 
     @Test func terminalPaneCloseDoesNotCascade() throws {
@@ -583,10 +587,10 @@ struct WorkspaceCollectionTests {
         #expect(collection.workspaces.count == 1)
     }
 
-    @Test func claudePaneCloseClosesSessionAndCascades() throws {
-        // Closing the Claude pane now closes the whole session (the Claude
-        // process already exited). As the workspace's last session, this cascades
-        // up and removes the workspace too.
+    @Test func claudePaneCloseClosesSessionButKeepsWorkspace() throws {
+        // Closing the Claude pane closes the whole session (the Claude process
+        // already exited). As the workspace's last session, this empties the
+        // session collection but the workspace itself stays in the collection.
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]
         let session = ws.sessionCollection.sessions[0]
@@ -595,7 +599,7 @@ struct WorkspaceCollectionTests {
         claude.closePane(paneID: claude.splitTree.focusedPaneID)
 
         #expect(ws.sessionCollection.sessions.isEmpty)
-        #expect(collection.workspaces.isEmpty)
+        #expect(collection.workspaces.count == 1)
     }
 
     @Test func cascadeStopsWhenSessionsRemain() async {
@@ -612,9 +616,9 @@ struct WorkspaceCollectionTests {
         #expect(collection.workspaces.count == 1)
     }
 
-    @Test func cascadeStopsWhenWorkspacesRemain() async {
-        // Closing workspace 1's last session removes that workspace, but the
-        // collection is not emptied because a second workspace remains.
+    @Test func closingWorkspacesLastSessionKeepsBothWorkspaces() async {
+        // Closing workspace 1's last session empties it but does NOT remove it,
+        // so both workspaces remain in the collection.
         let collection = WorkspaceCollection()
         let ws1 = collection.workspaces[0]
         collection.createWorkspace(name: "second")
@@ -622,6 +626,7 @@ struct WorkspaceCollectionTests {
 
         await session.requestSessionClose()
 
-        #expect(collection.workspaces.count == 1)
+        #expect(collection.workspaces.count == 2)
+        #expect(ws1.sessionCollection.sessions.isEmpty)
     }
 }

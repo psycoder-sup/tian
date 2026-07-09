@@ -25,7 +25,6 @@ final class WorkspaceCollection {
         )
         self.workspaces = [workspace]
         self.activeWorkspaceID = workspace.id
-        wireWorkspaceClose(workspace)
     }
 
     /// Empty collection for fresh-launch empty-state windows.
@@ -44,10 +43,6 @@ final class WorkspaceCollection {
             self.activeWorkspaceID = id
         } else {
             self.activeWorkspaceID = workspaces[0].id
-        }
-
-        for workspace in workspaces {
-            wireWorkspaceClose(workspace)
         }
     }
 
@@ -86,7 +81,6 @@ final class WorkspaceCollection {
             name: trimmed,
             defaultWorkingDirectory: wdURL
         )
-        wireWorkspaceClose(workspace)
         workspaces.append(workspace)
         activeWorkspaceID = workspace.id
         return workspace
@@ -110,7 +104,6 @@ final class WorkspaceCollection {
             defaultWorkingDirectory: URL(fileURLWithPath: remote.remoteDirectory),
             remote: remote
         )
-        wireWorkspaceClose(workspace)
         workspaces.append(workspace)
         activeWorkspaceID = workspace.id
         return workspace
@@ -228,13 +221,5 @@ final class WorkspaceCollection {
     /// Dropping into the slot just above/below the item's own position is a no-op (returns `source`).
     static func reorderDestinationIndex(source: Int, targetSlot: Int) -> Int {
         targetSlot > source ? targetSlot - 1 : targetSlot
-    }
-
-    // MARK: - Private
-
-    private func wireWorkspaceClose(_ workspace: Workspace) {
-        workspace.onEmpty = { [weak self, workspaceID = workspace.id] in
-            self?.removeWorkspace(id: workspaceID)
-        }
     }
 }
