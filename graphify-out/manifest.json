@@ -1,76 +1,76 @@
 {
   ".claude/settings.json": {
-    "mtime": 1783584090.7310584,
+    "mtime": 1783416965.7586322,
     "ast_hash": "a09f904eb23b223cbbd5f38571939520",
     "semantic_hash": "a09f904eb23b223cbbd5f38571939520"
   },
   ".claude/settings.local.json": {
-    "mtime": 1783584090.9794493,
+    "mtime": 1782447629.144483,
     "ast_hash": "d0f9049346845c80220d49b441bef8d7",
     "semantic_hash": "d0f9049346845c80220d49b441bef8d7"
   },
   ".claude/skills/session-audit/analyze.py": {
-    "mtime": 1783584090.7375402,
+    "mtime": 1782809550.2455826,
     "ast_hash": "23bea859b485aec54b29897b57a074d2",
     "semantic_hash": "23bea859b485aec54b29897b57a074d2"
   },
   ".claude/skills/tian/implement-log.py": {
-    "mtime": 1783584090.7387838,
+    "mtime": 1783067372.5132678,
     "ast_hash": "13e5cd15ab3b2df4dd84cfb0d416fccd",
     "semantic_hash": "13e5cd15ab3b2df4dd84cfb0d416fccd"
   },
   ".claude/skills/tian/implement-logrec.sh": {
-    "mtime": 1783584090.739558,
+    "mtime": 1783067372.513739,
     "ast_hash": "dea54e471732f85c57e51aad721b2882",
     "semantic_hash": "dea54e471732f85c57e51aad721b2882"
   },
   ".claude/skills/tian/implement-wait.sh": {
-    "mtime": 1783584090.7400415,
+    "mtime": 1782809550.24791,
     "ast_hash": "62cab4872bedd7235e6055798829c54a",
     "semantic_hash": "62cab4872bedd7235e6055798829c54a"
   },
   ".claude/skills/tian/implement.sh": {
-    "mtime": 1783584090.7404716,
+    "mtime": 1783067372.51417,
     "ast_hash": "d50dcc6abd2a9b7b1c0dc346c1bea3db",
     "semantic_hash": "d50dcc6abd2a9b7b1c0dc346c1bea3db"
   },
   "docs/pm/dashboard/serve.py": {
-    "mtime": 1783584090.7518973,
+    "mtime": 1782636356.9393394,
     "ast_hash": "2bf53922f0672789efcfcd9d8bad3196",
     "semantic_hash": "2bf53922f0672789efcfcd9d8bad3196"
   },
   "docs/pm/decisions/0001-initial-direction.json": {
-    "mtime": 1783584090.7524595,
+    "mtime": 1782636356.9397886,
     "ast_hash": "9496368f5c48508f0efb518aefca4ddf",
     "semantic_hash": "9496368f5c48508f0efb518aefca4ddf"
   },
   "docs/pm/decisions/0002-binary-scope-orchestration-in-skill.json": {
-    "mtime": 1783584090.7530005,
+    "mtime": 1782636356.9403014,
     "ast_hash": "5ec79ca085811243130781c76bcf15a7",
     "semantic_hash": "5ec79ca085811243130781c76bcf15a7"
   },
   "docs/pm/decisions/0003-defer-delegation-token-optimization.json": {
-    "mtime": 1783584090.7532911,
+    "mtime": 1782636356.940595,
     "ast_hash": "c0e052d7362972ee4db8abf67402525f",
     "semantic_hash": "c0e052d7362972ee4db8abf67402525f"
   },
   "docs/pm/decisions/0004-flatten-hierarchy-to-sessions.json": {
-    "mtime": 1783584090.7538042,
+    "mtime": 1783067372.5150998,
     "ast_hash": "ef47e2ae301b40166a274130b02f1705",
     "semantic_hash": "ef47e2ae301b40166a274130b02f1705"
   },
   "docs/pm/decisions/_template.json": {
-    "mtime": 1783584090.7548225,
+    "mtime": 1782636356.94132,
     "ast_hash": "ecdfb49f437e7c1321c6bf82f74cfc73",
     "semantic_hash": "ecdfb49f437e7c1321c6bf82f74cfc73"
   },
   "docs/pm/schema/decision.schema.json": {
-    "mtime": 1783584090.7553022,
+    "mtime": 1782636356.9416869,
     "ast_hash": "1ecee953ad5cbb500e76a85fcbf4c5fa",
     "semantic_hash": "1ecee953ad5cbb500e76a85fcbf4c5fa"
   },
   "docs/pm/schema/status.schema.json": {
-    "mtime": 1783584090.7555313,
+    "mtime": 1782636356.941882,
     "ast_hash": "34009d405fe2c1b843b8e32c9b0a406d",
     "semantic_hash": "34009d405fe2c1b843b8e32c9b0a406d"
   },
@@ -80,1613 +80,1623 @@
     "semantic_hash": ""
   },
   "scripts/build-ghostty.sh": {
-    "mtime": 1783584090.7716622,
+    "mtime": 1776139973.8248885,
     "ast_hash": "5f62fdc83451cb46a13d0542d0e59c55",
     "semantic_hash": "5f62fdc83451cb46a13d0542d0e59c55"
   },
   "scripts/build.sh": {
-    "mtime": 1783584090.771785,
+    "mtime": 1776139973.8251433,
     "ast_hash": "52152fed9244e1c088a2cbf9f0d34eae",
     "semantic_hash": "52152fed9244e1c088a2cbf9f0d34eae"
   },
   "scripts/install.sh": {
-    "mtime": 1783584090.7718983,
+    "mtime": 1776139973.8253415,
     "ast_hash": "3ce942a857e1a37bd7370b2428579687",
     "semantic_hash": "3ce942a857e1a37bd7370b2428579687"
   },
   "scripts/publish.sh": {
-    "mtime": 1783584090.7727153,
+    "mtime": 1779077765.3372529,
     "ast_hash": "ed0a581a7f938339f5f1d8d43e6205ef",
     "semantic_hash": "ed0a581a7f938339f5f1d8d43e6205ef"
   },
   "scripts/release.sh": {
-    "mtime": 1783584090.7732294,
+    "mtime": 1783301759.8391178,
     "ast_hash": "99af1cba7421d9714188fcd9a36b71bd",
     "semantic_hash": "99af1cba7421d9714188fcd9a36b71bd"
   },
   "tian-cli/AutoSetPayload.swift": {
-    "mtime": 1783584090.7738109,
+    "mtime": 1783067372.517262,
     "ast_hash": "664764d6ee0b70c22f90762068e1fc9d",
     "semantic_hash": "664764d6ee0b70c22f90762068e1fc9d"
   },
   "tian-cli/AutoSetPrompt.swift": {
-    "mtime": 1783584090.774373,
+    "mtime": 1782293954.8227444,
     "ast_hash": "fc96f1c9339225ced7578ca8a572303b",
     "semantic_hash": "fc96f1c9339225ced7578ca8a572303b"
   },
   "tian-cli/CLIError+IPC.swift": {
-    "mtime": 1783584090.7749426,
+    "mtime": 1777476559.8210554,
     "ast_hash": "0406e13b8add7e8f16400004d96e683e",
     "semantic_hash": "0406e13b8add7e8f16400004d96e683e"
   },
   "tian-cli/CLIError.swift": {
-    "mtime": 1783584090.7753642,
+    "mtime": 1777476559.8214862,
     "ast_hash": "402d1b2971adbc2983b41f5dd659bab9",
     "semantic_hash": "402d1b2971adbc2983b41f5dd659bab9"
   },
   "tian-cli/ClaudeInvoker.swift": {
-    "mtime": 1783584090.7761438,
+    "mtime": 1776916595.9556968,
     "ast_hash": "b3ad6634a003443525c69ca7e92d5617",
     "semantic_hash": "b3ad6634a003443525c69ca7e92d5617"
   },
   "tian-cli/CommandLogger.swift": {
-    "mtime": 1783584090.7762458,
+    "mtime": 1776139973.8255284,
     "ast_hash": "2aa59dab16ec9d6499cc54add131275d",
     "semantic_hash": "2aa59dab16ec9d6499cc54add131275d"
   },
   "tian-cli/CommandRouter.swift": {
-    "mtime": 1783584090.7767994,
+    "mtime": 1783393150.1630955,
     "ast_hash": "eb87ff9bd4215e5d8c73570e7fbeb4af",
     "semantic_hash": "eb87ff9bd4215e5d8c73570e7fbeb4af"
   },
   "tian-cli/ConfigAutoSetRunner.swift": {
-    "mtime": 1783584090.777269,
+    "mtime": 1782293954.8236742,
     "ast_hash": "9007c393dcf06eb08b1426cd270a30df",
     "semantic_hash": "9007c393dcf06eb08b1426cd270a30df"
   },
   "tian-cli/ConfigGroup.swift": {
-    "mtime": 1783584090.777759,
+    "mtime": 1777209576.3163457,
     "ast_hash": "54fe6a6b6b517364db973b86f293d4cb",
     "semantic_hash": "54fe6a6b6b517364db973b86f293d4cb"
   },
   "tian-cli/IPCClient.swift": {
-    "mtime": 1783584090.7778578,
+    "mtime": 1776139973.8256984,
     "ast_hash": "0bb46da9daac5f9e3a30dd939b295089",
     "semantic_hash": "0bb46da9daac5f9e3a30dd939b295089"
   },
   "tian-cli/IPCMessage.swift": {
-    "mtime": 1783584090.7781441,
+    "mtime": 1783067372.5181816,
     "ast_hash": "a829337de67b6077ea70357af6396a04",
     "semantic_hash": "a829337de67b6077ea70357af6396a04"
   },
   "tian-cli/OpenCommand.swift": {
-    "mtime": 1783584090.778571,
+    "mtime": 1782293954.8239546,
     "ast_hash": "964f1dc00c19429e74b09a606caaacfd",
     "semantic_hash": "964f1dc00c19429e74b09a606caaacfd"
   },
   "tian-cli/OutputFormatter.swift": {
-    "mtime": 1783584090.7786534,
+    "mtime": 1776139973.8258388,
     "ast_hash": "3979ee3c767c939cd3d7b1a1ca137436",
     "semantic_hash": "3979ee3c767c939cd3d7b1a1ca137436"
   },
   "tian-cli/main.swift": {
-    "mtime": 1783584090.7794483,
+    "mtime": 1783311062.8160186,
     "ast_hash": "a838e216307ce77b721ba22c0cab923b",
     "semantic_hash": "a838e216307ce77b721ba22c0cab923b"
   },
   "tian/App/CheckForUpdatesView.swift": {
-    "mtime": 1783584090.780061,
+    "mtime": 1779077622.3594034,
     "ast_hash": "5e2cf5e56e5538cbfc34a179b806c425",
     "semantic_hash": "5e2cf5e56e5538cbfc34a179b806c425"
   },
   "tian/App/TianApp.swift": {
-    "mtime": 1783584090.780579,
+    "mtime": 1782181712.874522,
     "ast_hash": "b5fa56c81e0abca2efe8f63dc7a9b4aa",
     "semantic_hash": "b5fa56c81e0abca2efe8f63dc7a9b4aa"
   },
   "tian/App/WorkspaceCommands.swift": {
-    "mtime": 1783584090.781217,
+    "mtime": 1783408957.463168,
     "ast_hash": "db10ce845d3e9dede53dbf7778a34c0c",
     "semantic_hash": "db10ce845d3e9dede53dbf7778a34c0c"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/Contents.json": {
-    "mtime": 1783584090.7845466,
+    "mtime": 1776139973.8272555,
     "ast_hash": "1f822a3f5defc16effcaef08f58b3de9",
     "semantic_hash": "1f822a3f5defc16effcaef08f58b3de9"
   },
   "tian/Assets.xcassets/Contents.json": {
-    "mtime": 1783584090.7870772,
+    "mtime": 1776139973.829529,
     "ast_hash": "9deb2ada1cc834bbebf8bbad9c8978a1",
     "semantic_hash": "9deb2ada1cc834bbebf8bbad9c8978a1"
   },
   "tian/Core/ANSIStripper.swift": {
-    "mtime": 1783584090.7872021,
+    "mtime": 1776139973.8296435,
     "ast_hash": "58356de89da5b072ba17de2ddef280bf",
     "semantic_hash": "58356de89da5b072ba17de2ddef280bf"
   },
   "tian/Core/ClaudeSessionState.swift": {
-    "mtime": 1783584090.7894297,
+    "mtime": 1782373251.1729932,
     "ast_hash": "4d0a27c86621d5ca12cb35c49a0ecc03",
     "semantic_hash": "4d0a27c86621d5ca12cb35c49a0ecc03"
   },
   "tian/Core/EnvironmentBuilder.swift": {
-    "mtime": 1783584090.789767,
+    "mtime": 1783067372.5205553,
     "ast_hash": "87b41d2cdcec09dcb3218c3001f3424f",
     "semantic_hash": "87b41d2cdcec09dcb3218c3001f3424f"
   },
   "tian/Core/GhosttyApp.swift": {
-    "mtime": 1783584090.7902777,
+    "mtime": 1783493637.806083,
     "ast_hash": "7da7bc52ea433b9443790233a5925963",
     "semantic_hash": ""
   },
   "tian/Core/GhosttyTerminalSurface.swift": {
-    "mtime": 1783584090.7905407,
+    "mtime": 1783393150.1647894,
     "ast_hash": "88fd850684a3745159d1c8790e6c4124",
     "semantic_hash": "88fd850684a3745159d1c8790e6c4124"
   },
   "tian/Core/GitRepoWatcher.swift": {
-    "mtime": 1783584090.7910683,
+    "mtime": 1778132476.1434975,
     "ast_hash": "242a7febba1661001fdb1a9cca112e9b",
     "semantic_hash": "242a7febba1661001fdb1a9cca112e9b"
   },
   "tian/Core/GitStatusService.swift": {
-    "mtime": 1783584090.7914102,
+    "mtime": 1783393150.165749,
     "ast_hash": "093f62a9d1da1c9c51e43019bfe0fb6d",
     "semantic_hash": "093f62a9d1da1c9c51e43019bfe0fb6d"
   },
   "tian/Core/GitTypes.swift": {
-    "mtime": 1783584090.7915692,
+    "mtime": 1778488104.801805,
     "ast_hash": "19f75904e7fe1faeeb8dcb70c04020d8",
     "semantic_hash": "19f75904e7fe1faeeb8dcb70c04020d8"
   },
   "tian/Core/IPCCommandHandler.swift": {
-    "mtime": 1783584090.7922838,
+    "mtime": 1783493637.8068895,
     "ast_hash": "2ab766cbf6e12ff2c43d797e0682913a",
     "semantic_hash": ""
   },
   "tian/Core/IPCMessage.swift": {
-    "mtime": 1783584090.7926035,
+    "mtime": 1783067372.5213246,
     "ast_hash": "93e8841eb8efd1dc87c837248e3f5771",
     "semantic_hash": "93e8841eb8efd1dc87c837248e3f5771"
   },
   "tian/Core/IPCServer.swift": {
-    "mtime": 1783584090.7929296,
+    "mtime": 1776139973.830548,
     "ast_hash": "ca8d0de36a26ea32b1bba6c56dba9e79",
     "semantic_hash": "ca8d0de36a26ea32b1bba6c56dba9e79"
   },
   "tian/Core/InspectPanel/FileTreeNode.swift": {
-    "mtime": 1783584090.7935624,
+    "mtime": 1777955673.7805917,
     "ast_hash": "8780f6ba595f0737c6cc85a4a4b3143e",
     "semantic_hash": "8780f6ba595f0737c6cc85a4a4b3143e"
   },
   "tian/Core/InspectPanel/InspectBranchViewModel.swift": {
-    "mtime": 1783584090.7938282,
+    "mtime": 1783067372.5216665,
     "ast_hash": "8850f5608050bdb85789c0804f655fa4",
     "semantic_hash": "8850f5608050bdb85789c0804f655fa4"
   },
   "tian/Core/InspectPanel/InspectDiffViewModel.swift": {
-    "mtime": 1783584090.7942622,
+    "mtime": 1783067372.5221095,
     "ast_hash": "b964868f3179c1a2a49fd51bde720dac",
     "semantic_hash": "b964868f3179c1a2a49fd51bde720dac"
   },
   "tian/Core/InspectPanel/InspectFileScanner.swift": {
-    "mtime": 1783584090.7947638,
+    "mtime": 1778135647.6461327,
     "ast_hash": "159e53baf735ae25ce7851475f9fb600",
     "semantic_hash": "159e53baf735ae25ce7851475f9fb600"
   },
   "tian/Core/InspectPanel/InspectFileTreeViewModel.swift": {
-    "mtime": 1783584090.7951949,
+    "mtime": 1783393150.1676233,
     "ast_hash": "ccc5c681abf011feb9d2e421e16c7ed9",
     "semantic_hash": "ccc5c681abf011feb9d2e421e16c7ed9"
   },
   "tian/Core/InspectPanel/InspectPanelState.swift": {
-    "mtime": 1783584090.7955577,
+    "mtime": 1777955673.7812245,
     "ast_hash": "92d8dad3675e3dcfa842eea10826e425",
     "semantic_hash": "92d8dad3675e3dcfa842eea10826e425"
   },
   "tian/Core/InspectPanel/InspectTab.swift": {
-    "mtime": 1783584090.7957716,
+    "mtime": 1778132476.14653,
     "ast_hash": "9043dded1fe37edcba891715a1737ad5",
     "semantic_hash": "9043dded1fe37edcba891715a1737ad5"
   },
   "tian/Core/InspectPanel/InspectTabState.swift": {
-    "mtime": 1783584090.7958958,
+    "mtime": 1778132476.1465921,
     "ast_hash": "b16c67bc4b53aaa49dc73e95e05232b6",
     "semantic_hash": "b16c67bc4b53aaa49dc73e95e05232b6"
   },
   "tian/Core/InspectPanel/RemoteInspectFileScanner.swift": {
-    "mtime": 1783584090.7964509,
+    "mtime": 1783393150.1680024,
     "ast_hash": "d39a0d019435a8c103188b6c307ed0e5",
     "semantic_hash": "d39a0d019435a8c103188b6c307ed0e5"
   },
   "tian/Core/InspectPanel/WorkingTreeWatcher.swift": {
-    "mtime": 1783584090.796945,
+    "mtime": 1777955673.781501,
     "ast_hash": "4003c6dd7406f98c4db2d6f9a3f7cdcb",
     "semantic_hash": "4003c6dd7406f98c4db2d6f9a3f7cdcb"
   },
   "tian/Core/InspectPanel/WorktreeKind.swift": {
-    "mtime": 1783584090.7974849,
+    "mtime": 1777955673.7816873,
     "ast_hash": "085867cc2c62248b66b1ac7000993348",
     "semantic_hash": "085867cc2c62248b66b1ac7000993348"
   },
   "tian/Core/MarkdownInlineDiff.swift": {
-    "mtime": 1783584090.7980592,
+    "mtime": 1781520342.6330602,
     "ast_hash": "25264bb07c8d538c90547b5f03b4b1d7",
     "semantic_hash": "25264bb07c8d538c90547b5f03b4b1d7"
   },
   "tian/Core/NotificationManager.swift": {
-    "mtime": 1783584090.798152,
+    "mtime": 1776139973.8306139,
     "ast_hash": "4a65b9a306ee917d1e2393c0f3480799",
     "semantic_hash": "4a65b9a306ee917d1e2393c0f3480799"
   },
   "tian/Core/PRStatusCache.swift": {
-    "mtime": 1783584090.798661,
+    "mtime": 1776860562.8404193,
     "ast_hash": "adda391309daa041d30126a2f7f12c19",
     "semantic_hash": "adda391309daa041d30126a2f7f12c19"
   },
   "tian/Input/KeyAction.swift": {
-    "mtime": 1783584090.7992556,
+    "mtime": 1783302516.2789621,
     "ast_hash": "4d8c907da0b7024f679a6a1cdb8e2041",
     "semantic_hash": "4d8c907da0b7024f679a6a1cdb8e2041"
   },
   "tian/Input/KeyBindingRegistry.swift": {
-    "mtime": 1783584090.7997382,
+    "mtime": 1783408957.4637754,
     "ast_hash": "56fb649c63a7a334b1e506c6899b13a2",
     "semantic_hash": "56fb649c63a7a334b1e506c6899b13a2"
   },
   "tian/Input/KeyboardLayoutTranslator.swift": {
-    "mtime": 1783584090.8002923,
+    "mtime": 1781427235.5085573,
     "ast_hash": "e1d87acdc7f92d3e39de5d9f4d15f880",
     "semantic_hash": "e1d87acdc7f92d3e39de5d9f4d15f880"
   },
   "tian/Pane/BackgroundActivity.swift": {
-    "mtime": 1783584090.800762,
+    "mtime": 1783323969.021396,
     "ast_hash": "17e3e501678cc04e96151e0aff163fba",
     "semantic_hash": "17e3e501678cc04e96151e0aff163fba"
   },
   "tian/Pane/PaneHierarchyContext.swift": {
-    "mtime": 1783584090.8013499,
+    "mtime": 1783067372.5236225,
     "ast_hash": "4880699d5d6ad69638a780c9c90e6c29",
     "semantic_hash": "4880699d5d6ad69638a780c9c90e6c29"
   },
   "tian/Pane/PaneKind.swift": {
-    "mtime": 1783584090.801858,
+    "mtime": 1783067372.524146,
     "ast_hash": "b4f00670c8a33a4935c2d8d53027ebf3",
     "semantic_hash": "b4f00670c8a33a4935c2d8d53027ebf3"
   },
   "tian/Pane/PaneNode.swift": {
-    "mtime": 1783584090.8019795,
+    "mtime": 1776139973.8313255,
     "ast_hash": "0265b99a7c45ae0b914f60d7b4f61f83",
     "semantic_hash": "0265b99a7c45ae0b914f60d7b4f61f83"
   },
   "tian/Pane/PaneState.swift": {
-    "mtime": 1783584090.8020573,
+    "mtime": 1776139973.8313925,
     "ast_hash": "ef4bff99629efff3235b120616737396",
     "semantic_hash": "ef4bff99629efff3235b120616737396"
   },
   "tian/Pane/PaneStatusManager.swift": {
-    "mtime": 1783584090.8024845,
+    "mtime": 1783493637.807494,
     "ast_hash": "d890395b393ceec736f184f5fb5bb4d0",
     "semantic_hash": ""
   },
   "tian/Pane/PaneViewModel.swift": {
-    "mtime": 1783584090.8030725,
+    "mtime": 1783393150.168563,
     "ast_hash": "eb0efd0f8c1d5a1b953dce15ea503aa1",
     "semantic_hash": "eb0efd0f8c1d5a1b953dce15ea503aa1"
   },
   "tian/Pane/RemoteSpawnSpec.swift": {
-    "mtime": 1783584090.8034842,
+    "mtime": 1783393150.1688502,
     "ast_hash": "de56e593e7736741908448925e8e38a5",
     "semantic_hash": "de56e593e7736741908448925e8e38a5"
   },
   "tian/Pane/SessionSplitNavigation.swift": {
-    "mtime": 1783584090.8038645,
+    "mtime": 1783067372.525336,
     "ast_hash": "bea9329dcf2306466cec75f3e9708544",
     "semantic_hash": "bea9329dcf2306466cec75f3e9708544"
   },
   "tian/Pane/SplitLayout.swift": {
-    "mtime": 1783584090.8039362,
+    "mtime": 1776139973.8316455,
     "ast_hash": "57e4204ffbaa1832765775ecfe9c180a",
     "semantic_hash": "57e4204ffbaa1832765775ecfe9c180a"
   },
   "tian/Pane/SplitNavigation.swift": {
-    "mtime": 1783584090.8040402,
+    "mtime": 1776139973.8317273,
     "ast_hash": "deaa18789813e8422433f4e497cd4336",
     "semantic_hash": "deaa18789813e8422433f4e497cd4336"
   },
   "tian/Pane/SplitTree.swift": {
-    "mtime": 1783584090.8043962,
+    "mtime": 1782370587.002281,
     "ast_hash": "d9a1c16a8063eee75160688f62db8b8d",
     "semantic_hash": "d9a1c16a8063eee75160688f62db8b8d"
   },
   "tian/Persistence/ProcessDetector.swift": {
-    "mtime": 1783584090.8048468,
+    "mtime": 1783067372.5255818,
     "ast_hash": "efeb18e8445e93bfb741acda46a5c04a",
     "semantic_hash": "efeb18e8445e93bfb741acda46a5c04a"
   },
   "tian/Persistence/RemoteConnectionState.swift": {
-    "mtime": 1783584090.8052616,
+    "mtime": 1783393150.1691031,
     "ast_hash": "a1fd9e66401d9a0ea1a45e9ef4a0bd28",
     "semantic_hash": "a1fd9e66401d9a0ea1a45e9ef4a0bd28"
   },
   "tian/Persistence/RestoreMetrics.swift": {
-    "mtime": 1783584090.8055477,
+    "mtime": 1783067372.5258007,
     "ast_hash": "d608c012bdefb6c4fad6d90baf7d8a9e",
     "semantic_hash": "d608c012bdefb6c4fad6d90baf7d8a9e"
   },
   "tian/Persistence/SessionRestorer.swift": {
-    "mtime": 1783584090.8058615,
+    "mtime": 1783393150.1697109,
     "ast_hash": "2b135bf783b27fa1cf599ef4564bb3e7",
     "semantic_hash": "2b135bf783b27fa1cf599ef4564bb3e7"
   },
   "tian/Persistence/SessionSerializer.swift": {
-    "mtime": 1783584090.8062615,
+    "mtime": 1783564137.7241893,
     "ast_hash": "e4e794cf966577c0d3a296fc59b32988",
     "semantic_hash": ""
   },
   "tian/Persistence/SessionState.swift": {
-    "mtime": 1783584090.8065832,
+    "mtime": 1783393150.1706445,
     "ast_hash": "220b5196c72c33263685d6e5dc8e71a1",
     "semantic_hash": "220b5196c72c33263685d6e5dc8e71a1"
   },
   "tian/Persistence/SessionStateMigrator.swift": {
-    "mtime": 1783584090.8069038,
+    "mtime": 1783393150.1712217,
     "ast_hash": "1c4eb5178d86bc0f3014d6c17f6d460d",
     "semantic_hash": "1c4eb5178d86bc0f3014d6c17f6d460d"
   },
   "tian/Reader/ReaderFileSource.swift": {
-    "mtime": 1783584090.8072188,
+    "mtime": 1783393150.1714647,
     "ast_hash": "02bffdd3f988990ed7067dbf255abb55",
     "semantic_hash": "02bffdd3f988990ed7067dbf255abb55"
   },
   "tian/Remote/RemoteCommandBuilder.swift": {
-    "mtime": 1783584090.8076093,
+    "mtime": 1783393150.1716974,
     "ast_hash": "951d6c03582e9e926a54aa36d2be2101",
     "semantic_hash": "951d6c03582e9e926a54aa36d2be2101"
   },
   "tian/Remote/RemoteExecutionRegistry.swift": {
-    "mtime": 1783584090.808153,
+    "mtime": 1783393150.1718729,
     "ast_hash": "a3d6ef10aab4451730edd279d8af0ad6",
     "semantic_hash": "a3d6ef10aab4451730edd279d8af0ad6"
   },
   "tian/Remote/SSHConnection.swift": {
-    "mtime": 1783584090.8084419,
+    "mtime": 1783393150.1720335,
     "ast_hash": "f61688d04e9d22a27ff625ecac2792e6",
     "semantic_hash": "f61688d04e9d22a27ff625ecac2792e6"
   },
   "tian/Remote/SSHControlChannel.swift": {
-    "mtime": 1783584090.8086848,
+    "mtime": 1783393150.172214,
     "ast_hash": "e35a3c2853bd2bae1535af536d475c29",
     "semantic_hash": "e35a3c2853bd2bae1535af536d475c29"
   },
   "tian/Resources/claude": {
-    "mtime": 1783584090.808937,
+    "mtime": 1776139973.8325644,
     "ast_hash": "ecc356fbf28f4ef37e6c98d7ca979272",
     "semantic_hash": "ecc356fbf28f4ef37e6c98d7ca979272"
   },
   "tian/Resources/shell-integration/tian-bash-integration.bash": {
-    "mtime": 1783584090.8090703,
+    "mtime": 1776139973.8326848,
     "ast_hash": "b91aca6e1762d48a9275d4d5949da886",
     "semantic_hash": "b91aca6e1762d48a9275d4d5949da886"
   },
   "tian/Resources/tian-claude-settings.json": {
-    "mtime": 1783584090.8111978,
+    "mtime": 1783323969.0222557,
     "ast_hash": "e588a7d22b42e177de9d322b92d0222b",
     "semantic_hash": "e588a7d22b42e177de9d322b92d0222b"
   },
   "tian/Resources/tian-hook-activity.sh": {
-    "mtime": 1783584090.811683,
+    "mtime": 1783323969.0228229,
     "ast_hash": "3ae9fb1e59e9536444e0ccbcfbb367a8",
     "semantic_hash": "3ae9fb1e59e9536444e0ccbcfbb367a8"
   },
   "tian/Resources/tian-hook-log.sh": {
-    "mtime": 1783584090.812028,
+    "mtime": 1782293954.8263075,
     "ast_hash": "a9167472bb145cc49d514592ac011428",
     "semantic_hash": "a9167472bb145cc49d514592ac011428"
   },
   "tian/Resources/tian-hook-pr-refresh.sh": {
-    "mtime": 1783584090.8123562,
+    "mtime": 1782293954.8265116,
     "ast_hash": "51c86d42ed6d9fe09ce3c310d86435dd",
     "semantic_hash": "51c86d42ed6d9fe09ce3c310d86435dd"
   },
   "tian/Resources/tian-hook-prompt.sh": {
-    "mtime": 1783584090.8126776,
+    "mtime": 1783507923.7626023,
     "ast_hash": "953805b5bd9630e71d87afb769cf9ade",
     "semantic_hash": ""
   },
   "tian/Session/ClaudeLaunchBadge.swift": {
-    "mtime": 1783584090.8130484,
+    "mtime": 1783067372.5276694,
     "ast_hash": "734c2e6ad591389129883e73e47b2a9e",
     "semantic_hash": "734c2e6ad591389129883e73e47b2a9e"
   },
   "tian/Session/DockPosition.swift": {
-    "mtime": 1783584090.813386,
+    "mtime": 1783067372.5278497,
     "ast_hash": "40a53f8b0a5038755006dbd5ebd4a749",
     "semantic_hash": "40a53f8b0a5038755006dbd5ebd4a749"
   },
   "tian/Session/PaneSpawner.swift": {
-    "mtime": 1783584090.8136358,
+    "mtime": 1783393150.1726787,
     "ast_hash": "c9b3870060e8b5368f28dd5869d28f69",
     "semantic_hash": "c9b3870060e8b5368f28dd5869d28f69"
   },
   "tian/Session/Session.swift": {
-    "mtime": 1783584090.813938,
+    "mtime": 1783393150.1730237,
     "ast_hash": "1e626da37f0e0170b5eabf117aefdb1f",
     "semantic_hash": "1e626da37f0e0170b5eabf117aefdb1f"
   },
   "tian/Session/SessionCollection.swift": {
-    "mtime": 1783584090.8142269,
+    "mtime": 1783564137.7247853,
     "ast_hash": "8dd447c3972fc3d054e3d6eee1f42bc8",
     "semantic_hash": ""
   },
   "tian/Session/SessionDividerDragController.swift": {
-    "mtime": 1783584090.8146422,
+    "mtime": 1783067372.5292764,
     "ast_hash": "a9d78d0ed22f86587b2331b938c6cc2a",
     "semantic_hash": "a9d78d0ed22f86587b2331b938c6cc2a"
   },
   "tian/Session/SessionGitContext.swift": {
-    "mtime": 1783584090.8150399,
+    "mtime": 1783393150.1738274,
     "ast_hash": "77a525e7d65188b8cdfb62615588293b",
     "semantic_hash": "77a525e7d65188b8cdfb62615588293b"
   },
   "tian/Session/SessionReaderState.swift": {
-    "mtime": 1783584090.8157642,
+    "mtime": 1783393150.1740506,
     "ast_hash": "774d2df2660448ba7f2e52c7f874286e",
     "semantic_hash": "774d2df2660448ba7f2e52c7f874286e"
   },
   "tian/Settings/SettingsView.swift": {
-    "mtime": 1783584090.8161533,
+    "mtime": 1782800801.3955736,
     "ast_hash": "d775c57dce7207858b29329ae51100ff",
     "semantic_hash": "d775c57dce7207858b29329ae51100ff"
   },
   "tian/Settings/TianSettings.swift": {
-    "mtime": 1783584090.8164785,
+    "mtime": 1783067372.530335,
     "ast_hash": "0c0da162bfe1ce6f034f9ab866fa518a",
     "semantic_hash": "0c0da162bfe1ce6f034f9ab866fa518a"
   },
   "tian/Utilities/AppMetrics.swift": {
-    "mtime": 1783584090.8169692,
+    "mtime": 1776139973.8341246,
     "ast_hash": "a4f667ba87bfd9bf09378140d1f3f60a",
     "semantic_hash": "a4f667ba87bfd9bf09378140d1f3f60a"
   },
   "tian/Utilities/Colors.swift": {
-    "mtime": 1783584090.8174155,
+    "mtime": 1778135774.4258442,
     "ast_hash": "b051aaf299f440e6b797a13bed5fed58",
     "semantic_hash": "b051aaf299f440e6b797a13bed5fed58"
   },
   "tian/Utilities/DirectoryPicker.swift": {
-    "mtime": 1783584090.817489,
+    "mtime": 1776139973.8342674,
     "ast_hash": "c0b55d3261093b25736cdd0f9f3418db",
     "semantic_hash": "c0b55d3261093b25736cdd0f9f3418db"
   },
   "tian/Utilities/EventCoalescer.swift": {
-    "mtime": 1783584090.8178012,
+    "mtime": 1777434438.587587,
     "ast_hash": "0a1c174bc26f382d5e650f77bf6f8cf2",
     "semantic_hash": "0a1c174bc26f382d5e650f77bf6f8cf2"
   },
   "tian/Utilities/FileLogWriter.swift": {
-    "mtime": 1783584090.8181632,
+    "mtime": 1780970177.229924,
     "ast_hash": "05941f7c7f977fa7bcc3d0488b7cb0cf",
     "semantic_hash": "05941f7c7f977fa7bcc3d0488b7cb0cf"
   },
   "tian/Utilities/FileLogger.swift": {
-    "mtime": 1783584090.818235,
+    "mtime": 1776139973.8344035,
     "ast_hash": "05778e0633149d84d5a827bc76256c83",
     "semantic_hash": "05778e0633149d84d5a827bc76256c83"
   },
   "tian/Utilities/FuzzyMatch.swift": {
-    "mtime": 1783584090.818315,
+    "mtime": 1776139973.8344765,
     "ast_hash": "8cf32580f53f45c859aa5924cd868404",
     "semantic_hash": "8cf32580f53f45c859aa5924cd868404"
   },
   "tian/Utilities/HtmlFileType.swift": {
-    "mtime": 1783584090.818636,
+    "mtime": 1782107138.4738138,
     "ast_hash": "f0bf2fcc0cecc6440f9ee6be90f144b8",
     "semantic_hash": "f0bf2fcc0cecc6440f9ee6be90f144b8"
   },
   "tian/Utilities/ImageFileType.swift": {
-    "mtime": 1783584090.8190107,
+    "mtime": 1782043040.0057652,
     "ast_hash": "3f2141250245d38ecc7e5d8c1456045e",
     "semantic_hash": "3f2141250245d38ecc7e5d8c1456045e"
   },
   "tian/Utilities/Logger.swift": {
-    "mtime": 1783584090.8191626,
+    "mtime": 1783393150.1758862,
     "ast_hash": "cfefa13a8ba1072f8aa1b06c4ec21566",
     "semantic_hash": "cfefa13a8ba1072f8aa1b06c4ec21566"
   },
   "tian/Utilities/MarkdownFileType.swift": {
-    "mtime": 1783584090.8194358,
+    "mtime": 1782043014.5501413,
     "ast_hash": "fbe492e43035fc8c1b466d26051cd53c",
     "semantic_hash": "fbe492e43035fc8c1b466d26051cd53c"
   },
   "tian/Utilities/PollingRefresher.swift": {
-    "mtime": 1783584090.819594,
+    "mtime": 1783393150.1760533,
     "ast_hash": "58349dd026f8a045be0865e09d9720a4",
     "semantic_hash": "58349dd026f8a045be0865e09d9720a4"
   },
   "tian/Utilities/RefreshScheduler.swift": {
-    "mtime": 1783584090.8198256,
+    "mtime": 1777434438.5878468,
     "ast_hash": "9c565038144ce83b30a58cd148e6b948",
     "semantic_hash": "9c565038144ce83b30a58cd148e6b948"
   },
   "tian/Utilities/SkillInstaller.swift": {
-    "mtime": 1783584090.8202865,
+    "mtime": 1782629880.855748,
     "ast_hash": "1b989a10416865e8e2ef180014e84a16",
     "semantic_hash": "1b989a10416865e8e2ef180014e84a16"
   },
   "tian/Utilities/SystemMonitor.swift": {
-    "mtime": 1783584090.820623,
+    "mtime": 1777449499.8999968,
     "ast_hash": "d2419e5a14f4159cabd2bb0f5aac8189",
     "semantic_hash": "d2419e5a14f4159cabd2bb0f5aac8189"
   },
   "tian/Utilities/WorkingDirectoryResolver.swift": {
-    "mtime": 1783584090.8208833,
+    "mtime": 1783067372.5306337,
     "ast_hash": "68179769d0c908a026d8abcfec1b9e19",
     "semantic_hash": "68179769d0c908a026d8abcfec1b9e19"
   },
   "tian/View/CloseConfirmationDialog.swift": {
-    "mtime": 1783584090.8213139,
+    "mtime": 1783067372.5312974,
     "ast_hash": "8ec9bd59753bba2230fbf01d0eff1a0d",
     "semantic_hash": "8ec9bd59753bba2230fbf01d0eff1a0d"
   },
   "tian/View/ConfirmAlert.swift": {
-    "mtime": 1783584090.8216379,
+    "mtime": 1781245312.2723598,
     "ast_hash": "eea44f7bef0285896b6945146ddf0b30",
     "semantic_hash": "eea44f7bef0285896b6945146ddf0b30"
   },
   "tian/View/CreateSession/BranchListViewModel.swift": {
-    "mtime": 1783584090.8222723,
+    "mtime": 1783067372.5315187,
     "ast_hash": "c33cc7bd593ce47b49afa11dc1bdd6af",
     "semantic_hash": "c33cc7bd593ce47b49afa11dc1bdd6af"
   },
   "tian/View/CreateSession/CreateSessionView.swift": {
-    "mtime": 1783584090.8228428,
+    "mtime": 1783408957.464358,
     "ast_hash": "88601fccdaa7ab77a14bee5604d07ed4",
     "semantic_hash": "88601fccdaa7ab77a14bee5604d07ed4"
   },
   "tian/View/DebugOverlayView.swift": {
-    "mtime": 1783584090.8232198,
+    "mtime": 1776139973.8347735,
     "ast_hash": "670f01c3ed880977b223108df2eccddd",
     "semantic_hash": "670f01c3ed880977b223108df2eccddd"
   },
   "tian/View/DefaultDirectoryMenu.swift": {
-    "mtime": 1783584090.823357,
+    "mtime": 1776139973.8348377,
     "ast_hash": "0358d463ca13efea08a89db34fdcefad",
     "semantic_hash": "0358d463ca13efea08a89db34fdcefad"
   },
   "tian/View/ImageDocument.swift": {
-    "mtime": 1783584090.8236103,
+    "mtime": 1783393150.1786926,
     "ast_hash": "9df58b2272e10cc65b87803252b1ff5f",
     "semantic_hash": "9df58b2272e10cc65b87803252b1ff5f"
   },
   "tian/View/ImageReaderView.swift": {
-    "mtime": 1783584090.82395,
+    "mtime": 1783067372.5326538,
     "ast_hash": "4e952be01781c36c59956a2716a17411",
     "semantic_hash": "4e952be01781c36c59956a2716a17411"
   },
   "tian/View/InspectPanel/BranchCommitRow.swift": {
-    "mtime": 1783584090.8241324,
+    "mtime": 1778132476.147996,
     "ast_hash": "93188780d0bf3812b74110d6ffad90f8",
     "semantic_hash": "93188780d0bf3812b74110d6ffad90f8"
   },
   "tian/View/InspectPanel/DiffRowViews.swift": {
-    "mtime": 1783584090.824307,
+    "mtime": 1778132476.1480827,
     "ast_hash": "8695505fe849b10e097f6335ca5ea5ba",
     "semantic_hash": "8695505fe849b10e097f6335ca5ea5ba"
   },
   "tian/View/InspectPanel/InspectBranchBody.swift": {
-    "mtime": 1783584090.8244677,
+    "mtime": 1778488104.803177,
     "ast_hash": "f447fa82043a48dd264ef0aa7ea19a28",
     "semantic_hash": "f447fa82043a48dd264ef0aa7ea19a28"
   },
   "tian/View/InspectPanel/InspectDiffBody.swift": {
-    "mtime": 1783584090.8246021,
+    "mtime": 1778132476.1482787,
     "ast_hash": "971d401c25863e3c7c910bdfc5095c9d",
     "semantic_hash": "971d401c25863e3c7c910bdfc5095c9d"
   },
   "tian/View/InspectPanel/InspectPanelColors.swift": {
-    "mtime": 1783584090.8247209,
+    "mtime": 1778132476.148359,
     "ast_hash": "f98a72097c6674c7216686334eb05a56",
     "semantic_hash": "f98a72097c6674c7216686334eb05a56"
   },
   "tian/View/InspectPanel/InspectPanelEmptyStates.swift": {
-    "mtime": 1783584090.824986,
+    "mtime": 1778132476.1485827,
     "ast_hash": "69da3add4afda20cebc153d3ca5dc724",
     "semantic_hash": "69da3add4afda20cebc153d3ca5dc724"
   },
   "tian/View/InspectPanel/InspectPanelFileBrowser.swift": {
-    "mtime": 1783584090.8257656,
+    "mtime": 1780981254.0663676,
     "ast_hash": "4c1e9dd81537eaac7e465b83ef3b95fc",
     "semantic_hash": "4c1e9dd81537eaac7e465b83ef3b95fc"
   },
   "tian/View/InspectPanel/InspectPanelFileRow.swift": {
-    "mtime": 1783584090.8263412,
+    "mtime": 1782107151.455711,
     "ast_hash": "3f1040563c51ab71d2b0e545cebc504f",
     "semantic_hash": "3f1040563c51ab71d2b0e545cebc504f"
   },
   "tian/View/InspectPanel/InspectPanelHeader.swift": {
-    "mtime": 1783584090.8264773,
+    "mtime": 1778132476.1492817,
     "ast_hash": "8fc3c946962b9f7e011705fc0b772875",
     "semantic_hash": "8fc3c946962b9f7e011705fc0b772875"
   },
   "tian/View/InspectPanel/InspectPanelInfoStrip.swift": {
-    "mtime": 1783584090.8268752,
+    "mtime": 1778132957.217489,
     "ast_hash": "97a797e850e5d1d56707fb4d14a19577",
     "semantic_hash": "97a797e850e5d1d56707fb4d14a19577"
   },
   "tian/View/InspectPanel/InspectPanelRail.swift": {
-    "mtime": 1783584090.8274372,
+    "mtime": 1778055382.299799,
     "ast_hash": "4c680a80f43990355d520fa9a9faf3d8",
     "semantic_hash": "4c680a80f43990355d520fa9a9faf3d8"
   },
   "tian/View/InspectPanel/InspectPanelResizeHandle.swift": {
-    "mtime": 1783584090.828195,
+    "mtime": 1778051764.9536471,
     "ast_hash": "c4d061b0063ef5d693d506c636a7cf02",
     "semantic_hash": "c4d061b0063ef5d693d506c636a7cf02"
   },
   "tian/View/InspectPanel/InspectPanelStatusStrip.swift": {
-    "mtime": 1783584090.8283064,
+    "mtime": 1778132476.1494954,
     "ast_hash": "85cc9c32b5031d5652b8d934f8818b56",
     "semantic_hash": "85cc9c32b5031d5652b8d934f8818b56"
   },
   "tian/View/InspectPanel/InspectPanelTabRow.swift": {
-    "mtime": 1783584090.828569,
+    "mtime": 1778132953.2568011,
     "ast_hash": "58152737a9b923fd32ffd810a362b5de",
     "semantic_hash": "58152737a9b923fd32ffd810a362b5de"
   },
   "tian/View/InspectPanel/InspectPanelView.swift": {
-    "mtime": 1783584090.8289058,
+    "mtime": 1780981254.0672822,
     "ast_hash": "1efd6613a9364f769aee9e008eb0597c",
     "semantic_hash": "1efd6613a9364f769aee9e008eb0597c"
   },
   "tian/View/MarkdownDiffView.swift": {
-    "mtime": 1783584090.8292098,
+    "mtime": 1781520445.1130984,
     "ast_hash": "8ba52d3867e6d5ed4b73c48794fbcec4",
     "semantic_hash": "8ba52d3867e6d5ed4b73c48794fbcec4"
   },
   "tian/View/MarkdownDocument.swift": {
-    "mtime": 1783584090.8294384,
+    "mtime": 1783393150.1794288,
     "ast_hash": "921f3f959edfab8698fcbbd93defbdd6",
     "semantic_hash": "921f3f959edfab8698fcbbd93defbdd6"
   },
   "tian/View/MarkdownReaderView.swift": {
-    "mtime": 1783584090.8297238,
+    "mtime": 1783067372.533334,
     "ast_hash": "7b02b610b66c56ed31cd5f10518575b4",
     "semantic_hash": "7b02b610b66c56ed31cd5f10518575b4"
   },
   "tian/View/PaneExitOverlay.swift": {
-    "mtime": 1783584090.8300643,
+    "mtime": 1783067372.533632,
     "ast_hash": "65d57120622621698027131e5490f04d",
     "semantic_hash": "65d57120622621698027131e5490f04d"
   },
   "tian/View/PaneView.swift": {
-    "mtime": 1783584090.83058,
+    "mtime": 1783067372.5342002,
     "ast_hash": "e08aad846e29567e0742a52b4f31f0e3",
     "semantic_hash": "e08aad846e29567e0742a52b4f31f0e3"
   },
   "tian/View/QuitConfirmationDialog.swift": {
-    "mtime": 1783584090.8308496,
+    "mtime": 1781245312.272728,
     "ast_hash": "36ad08f4e279e0bf05f5b4b905f87cb8",
     "semantic_hash": "36ad08f4e279e0bf05f5b4b905f87cb8"
   },
   "tian/View/Reader/ReaderChrome.swift": {
-    "mtime": 1783584090.8312473,
+    "mtime": 1783067372.5344155,
     "ast_hash": "d1339e49cdbbb6473e26ef14ed4d3cc0",
     "semantic_hash": "d1339e49cdbbb6473e26ef14ed4d3cc0"
   },
   "tian/View/Reader/ReaderOverlayView.swift": {
-    "mtime": 1783584090.831541,
+    "mtime": 1783067372.5346954,
     "ast_hash": "d70d5362268fbe74272df07774bdb7de",
     "semantic_hash": "d70d5362268fbe74272df07774bdb7de"
   },
   "tian/View/Session/ClaudeSessionStatusColor.swift": {
-    "mtime": 1783584090.8319194,
+    "mtime": 1783298600.7748423,
     "ast_hash": "ac090cd1b494e876d7f8f9391959139e",
     "semantic_hash": "ac090cd1b494e876d7f8f9391959139e"
   },
   "tian/View/Session/OverviewGridNavigation.swift": {
-    "mtime": 1783584090.832296,
+    "mtime": 1783580867.6275828,
     "ast_hash": "b1942e35b40ddbc3261281df6b5b4b94",
     "semantic_hash": ""
   },
   "tian/View/Session/SessionContentView.swift": {
-    "mtime": 1783584090.8327563,
+    "mtime": 1783067372.5349975,
     "ast_hash": "5f06db48216d0138f276cd8a128b83d0",
     "semantic_hash": "5f06db48216d0138f276cd8a128b83d0"
   },
   "tian/View/Session/SessionDividerClamper.swift": {
-    "mtime": 1783584090.8336854,
+    "mtime": 1783067372.5351546,
     "ast_hash": "6d7dc3cb745c16e585133e6f73d9304c",
     "semantic_hash": "6d7dc3cb745c16e585133e6f73d9304c"
   },
   "tian/View/Session/SessionDividerView.swift": {
-    "mtime": 1783584090.8339317,
+    "mtime": 1783067372.535338,
     "ast_hash": "016431174b7620147a64876bae2a52f8",
     "semantic_hash": "016431174b7620147a64876bae2a52f8"
   },
   "tian/View/Session/SessionHeaderView.swift": {
-    "mtime": 1783584090.8344698,
+    "mtime": 1783067372.5355246,
     "ast_hash": "b04296805a1ea24cf31dc8976868bb08",
     "semantic_hash": "b04296805a1ea24cf31dc8976868bb08"
   },
   "tian/View/Session/SessionLayout.swift": {
-    "mtime": 1783584090.8346233,
+    "mtime": 1783067372.535705,
     "ast_hash": "3539c928d46cab890353d624775427f7",
     "semantic_hash": "3539c928d46cab890353d624775427f7"
   },
   "tian/View/Session/SessionOverviewActivityListView.swift": {
-    "mtime": 1783584090.8349762,
+    "mtime": 1783311062.8193698,
     "ast_hash": "278e42d9d99fb78c983e9a19d145a103",
     "semantic_hash": "278e42d9d99fb78c983e9a19d145a103"
   },
   "tian/View/Session/SessionOverviewCardView.swift": {
-    "mtime": 1783584090.8354201,
+    "mtime": 1783483449.9564004,
     "ast_hash": "d2d44154c5fc7f9239dcdb9a105fa177",
     "semantic_hash": ""
   },
   "tian/View/Session/SessionOverviewGridView.swift": {
-    "mtime": 1783584090.8356884,
+    "mtime": 1783582583.626886,
     "ast_hash": "107fc45891374187f2b4aa7ac968b9be",
     "semantic_hash": ""
   },
   "tian/View/Shared/InlineRenameView.swift": {
-    "mtime": 1783584090.836137,
+    "mtime": 1783393756.7552602,
     "ast_hash": "7e28cb734a2955acb4a4e813974f9a1c",
     "semantic_hash": "7e28cb734a2955acb4a4e813974f9a1c"
   },
   "tian/View/Shared/LiquidGlassCircle.swift": {
-    "mtime": 1783584090.8364875,
+    "mtime": 1781427235.5095549,
     "ast_hash": "86b68279c41ceb91e40092775105faf0",
     "semantic_hash": "86b68279c41ceb91e40092775105faf0"
   },
   "tian/View/Shared/RainbowGlowBorder.swift": {
-    "mtime": 1783584090.8369787,
+    "mtime": 1783314039.0426016,
     "ast_hash": "f99661c797c837bb1be5b3d69f145dc0",
     "semantic_hash": "f99661c797c837bb1be5b3d69f145dc0"
   },
   "tian/View/Sidebar/BackgroundActivityBadgeView.swift": {
-    "mtime": 1783584090.8372462,
+    "mtime": 1783311062.8199484,
     "ast_hash": "b2074a3d9e2908c8db877b630c0e6b48",
     "semantic_hash": "b2074a3d9e2908c8db877b630c0e6b48"
   },
   "tian/View/Sidebar/BusyDotView.swift": {
-    "mtime": 1783584090.8376617,
+    "mtime": 1777434438.5893538,
     "ast_hash": "8f4592977f52276b890d8dbb95233f7f",
     "semantic_hash": "8f4592977f52276b890d8dbb95233f7f"
   },
   "tian/View/Sidebar/ChangeBadgeView.swift": {
-    "mtime": 1783584090.837774,
+    "mtime": 1776139973.8408701,
     "ast_hash": "47a263cd445587a5ad1dcaa43890486f",
     "semantic_hash": "47a263cd445587a5ad1dcaa43890486f"
   },
   "tian/View/Sidebar/GitFileListPopover.swift": {
-    "mtime": 1783584090.8378751,
+    "mtime": 1776139973.841009,
     "ast_hash": "c0e16f2d4f5fbecd83b0c27fdfe806e7",
     "semantic_hash": "c0e16f2d4f5fbecd83b0c27fdfe806e7"
   },
   "tian/View/Sidebar/PRStatusIndicatorView.swift": {
-    "mtime": 1783584090.8379579,
+    "mtime": 1776139973.8410873,
     "ast_hash": "1b5bf3ddea8a8a58e64a281d8aff572a",
     "semantic_hash": "1b5bf3ddea8a8a58e64a281d8aff572a"
   },
   "tian/View/Sidebar/SessionDotView.swift": {
-    "mtime": 1783584090.8384724,
+    "mtime": 1783298600.775954,
     "ast_hash": "39a57438782cc6bfbecc48c560cbad85",
     "semantic_hash": "39a57438782cc6bfbecc48c560cbad85"
   },
   "tian/View/Sidebar/SessionStatusLineView.swift": {
-    "mtime": 1783584090.8386464,
+    "mtime": 1783067372.5363522,
     "ast_hash": "c1800619061630a0476d16cf7bdb949a",
     "semantic_hash": "c1800619061630a0476d16cf7bdb949a"
   },
   "tian/View/Sidebar/SidebarContainerView.swift": {
-    "mtime": 1783584312.3015385,
+    "mtime": 1783585784.5231273,
     "ast_hash": "622b0307abb21fa945a4721544973cf1",
     "semantic_hash": ""
   },
   "tian/View/Sidebar/SidebarExpandedContentView.swift": {
-    "mtime": 1783586156.2698517,
+    "mtime": 1783586710.9715152,
     "ast_hash": "bb75580af0006273423f3288d8fa90b6",
     "semantic_hash": ""
   },
   "tian/View/Sidebar/SidebarOverviewButton.swift": {
-    "mtime": 1783584090.8401587,
+    "mtime": 1783234515.3221767,
     "ast_hash": "2f6ad675273dda1c8a94ee6c500ff539",
     "semantic_hash": "2f6ad675273dda1c8a94ee6c500ff539"
   },
   "tian/View/Sidebar/SidebarPanelView.swift": {
-    "mtime": 1783584090.8404753,
+    "mtime": 1783393150.1805768,
     "ast_hash": "c35874c34319507b9e9d8a552a61b859",
     "semantic_hash": "c35874c34319507b9e9d8a552a61b859"
   },
   "tian/View/Sidebar/SidebarSessionRowView.swift": {
-    "mtime": 1783584090.8409557,
+    "mtime": 1783311062.8204443,
     "ast_hash": "b7853dcbd41985ae51943e729f0301a1",
     "semantic_hash": "b7853dcbd41985ae51943e729f0301a1"
   },
   "tian/View/Sidebar/SidebarState.swift": {
-    "mtime": 1783584090.841063,
+    "mtime": 1776139973.8416617,
     "ast_hash": "420322fe20df378c3d9b301c229aeb80",
     "semantic_hash": "420322fe20df378c3d9b301c229aeb80"
   },
   "tian/View/Sidebar/SidebarToggleButton.swift": {
-    "mtime": 1783584090.8411422,
+    "mtime": 1776139973.8417337,
     "ast_hash": "af91ca9629e5153b3b836a162c53774d",
     "semantic_hash": "af91ca9629e5153b3b836a162c53774d"
   },
   "tian/View/Sidebar/SidebarWorkspaceHeaderView.swift": {
-    "mtime": 1783586149.2249815,
+    "mtime": 1783586710.972086,
     "ast_hash": "67971b7fe8ed44c03ce0ac0b5ee9fd59",
     "semantic_hash": ""
   },
   "tian/View/Sidebar/WorkspaceReorderGeometry.swift": {
-    "mtime": 1783584090.8417745,
+    "mtime": 1783307411.7362769,
     "ast_hash": "026ba72e95fdebec3f48ad76cb3e21c7",
     "semantic_hash": "026ba72e95fdebec3f48ad76cb3e21c7"
   },
   "tian/View/SplitContainerView.swift": {
-    "mtime": 1783584090.8418958,
+    "mtime": 1776139973.8419929,
     "ast_hash": "03917f94305131fbc1537a2e04b2e185",
     "semantic_hash": "03917f94305131fbc1537a2e04b2e185"
   },
   "tian/View/SplitTreeView.swift": {
-    "mtime": 1783584090.84224,
+    "mtime": 1776238043.7523916,
     "ast_hash": "086c3270ac1802bd72115692ed3fb3e0",
     "semantic_hash": "086c3270ac1802bd72115692ed3fb3e0"
   },
   "tian/View/StatusBar/SparklineView.swift": {
-    "mtime": 1783584090.8425183,
+    "mtime": 1777449499.9009693,
     "ast_hash": "89d129da6fba8cfdf1823ee60d12e9ee",
     "semantic_hash": "89d129da6fba8cfdf1823ee60d12e9ee"
   },
   "tian/View/StatusBar/StatusBarView.swift": {
-    "mtime": 1783584090.8428872,
+    "mtime": 1777449499.9013038,
     "ast_hash": "7f95154b6192b00b3115d491f48e4877",
     "semantic_hash": "7f95154b6192b00b3115d491f48e4877"
   },
   "tian/View/TerminalContentView.swift": {
-    "mtime": 1783584090.843291,
+    "mtime": 1783067372.5387223,
     "ast_hash": "a0a90fb0a10dcebe7af9b21efc1547a8",
     "semantic_hash": "a0a90fb0a10dcebe7af9b21efc1547a8"
   },
   "tian/View/TerminalSurfaceView.swift": {
-    "mtime": 1783584090.8436263,
+    "mtime": 1783393150.181517,
     "ast_hash": "f67cd6e908e753b2e000c55dd249915b",
     "semantic_hash": "f67cd6e908e753b2e000c55dd249915b"
   },
   "tian/View/Workspace/CreateWorkspaceView.swift": {
-    "mtime": 1783584090.8439364,
+    "mtime": 1783393150.1817558,
     "ast_hash": "9c0d8532e2fd7e0305de95a16c4594f3",
     "semantic_hash": "9c0d8532e2fd7e0305de95a16c4594f3"
   },
   "tian/View/Workspace/WorkspaceEmptyStateView.swift": {
-    "mtime": 1783584090.8441033,
+    "mtime": 1783393150.1823683,
     "ast_hash": "fb9520078507b9bf395e1c5c927f4cd1",
     "semantic_hash": "fb9520078507b9bf395e1c5c927f4cd1"
   },
   "tian/View/Workspace/WorkspaceWindowContent.swift": {
-    "mtime": 1783584090.8443596,
+    "mtime": 1783408957.4659393,
     "ast_hash": "917878c87cb5f22207ea88200623391d",
     "semantic_hash": "917878c87cb5f22207ea88200623391d"
   },
   "tian/View/Worktree/SessionCloseFlow.swift": {
-    "mtime": 1783584090.8447785,
+    "mtime": 1783067372.5392153,
     "ast_hash": "8ec451527f3d8ca32e9b23faa0288d05",
     "semantic_hash": "8ec451527f3d8ca32e9b23faa0288d05"
   },
   "tian/View/Worktree/SetupProgressCapsule.swift": {
-    "mtime": 1783584090.8450005,
+    "mtime": 1783067372.5395608,
     "ast_hash": "95ae3c73d02c0d63015b39478ca83360",
     "semantic_hash": "95ae3c73d02c0d63015b39478ca83360"
   },
   "tian/View/Worktree/SkipTeardownConfirmationDialog.swift": {
-    "mtime": 1783584090.8452392,
+    "mtime": 1781245312.2735295,
     "ast_hash": "2958968eafe154863947ae735dc599e6",
     "semantic_hash": "2958968eafe154863947ae735dc599e6"
   },
   "tian/View/Worktree/WorktreeCloseDialog.swift": {
-    "mtime": 1783584090.845442,
+    "mtime": 1783067372.539895,
     "ast_hash": "b2816df87302ec463655bb8f813c7164",
     "semantic_hash": "b2816df87302ec463655bb8f813c7164"
   },
   "tian/View/Worktree/WorktreeForceRemoveDialog.swift": {
-    "mtime": 1783584090.8456783,
+    "mtime": 1781245312.2759774,
     "ast_hash": "042b479eb2035ddcb1492dfb6b4bb7ce",
     "semantic_hash": "042b479eb2035ddcb1492dfb6b4bb7ce"
   },
   "tian/WindowManagement/QuitFlowCoordinator.swift": {
-    "mtime": 1783584090.8458087,
+    "mtime": 1776139973.8433502,
     "ast_hash": "57e66ff00ee66170a8f27535e7580d9f",
     "semantic_hash": "57e66ff00ee66170a8f27535e7580d9f"
   },
   "tian/WindowManagement/TianAppDelegate.swift": {
-    "mtime": 1783584090.8462062,
+    "mtime": 1783323969.0235705,
     "ast_hash": "575bcb8bed7d4b7603ee52c185352bf1",
     "semantic_hash": "575bcb8bed7d4b7603ee52c185352bf1"
   },
   "tian/WindowManagement/TrafficLightAligner.swift": {
-    "mtime": 1783584090.8462763,
+    "mtime": 1776139973.8435018,
     "ast_hash": "e7b6a98f0d563e7b93c833646eed04a5",
     "semantic_hash": "e7b6a98f0d563e7b93c833646eed04a5"
   },
   "tian/WindowManagement/WindowCoordinator.swift": {
-    "mtime": 1783584090.8464468,
+    "mtime": 1783067372.5401187,
     "ast_hash": "a5a203172d48f8a8f3174a370d1d7ded",
     "semantic_hash": "a5a203172d48f8a8f3174a370d1d7ded"
   },
   "tian/WindowManagement/WindowDragBlocker.swift": {
-    "mtime": 1783584090.847132,
+    "mtime": 1781243395.4783924,
     "ast_hash": "c80e3b8396eadc68683fc46309d33281",
     "semantic_hash": "c80e3b8396eadc68683fc46309d33281"
   },
   "tian/WindowManagement/WorkspaceCreationFlow.swift": {
-    "mtime": 1783584090.847303,
+    "mtime": 1783393150.1833472,
     "ast_hash": "6be97d9469c2088d4ce8dec52fc3d9b4",
     "semantic_hash": "6be97d9469c2088d4ce8dec52fc3d9b4"
   },
   "tian/WindowManagement/WorkspaceWindowController.swift": {
-    "mtime": 1783584090.8475838,
+    "mtime": 1783302516.2810216,
     "ast_hash": "d4dc24be15754b5eff90314145329708",
     "semantic_hash": "d4dc24be15754b5eff90314145329708"
   },
   "tian/Workspace/RemoteConnection.swift": {
-    "mtime": 1783584090.8479202,
+    "mtime": 1783393150.1835399,
     "ast_hash": "309bac9cf729c9f013ad9e8eeda7e5fe",
     "semantic_hash": "309bac9cf729c9f013ad9e8eeda7e5fe"
   },
   "tian/Workspace/Workspace.swift": {
-    "mtime": 1783584090.8481698,
+    "mtime": 1783564137.7275968,
     "ast_hash": "e7330dc52fb06bf0a204d1eac2882985",
     "semantic_hash": ""
   },
   "tian/Workspace/WorkspaceCollection.swift": {
-    "mtime": 1783584090.8485026,
+    "mtime": 1783564137.7278836,
     "ast_hash": "b68fd9859f9845c66f4c35cdfbb0cec7",
     "semantic_hash": ""
   },
   "tian/Workspace/WorkspaceManager.swift": {
-    "mtime": 1783584090.8485727,
+    "mtime": 1776139973.8442917,
     "ast_hash": "f402bf1e0a3ccd6c8a536aedec7a0284",
     "semantic_hash": "f402bf1e0a3ccd6c8a536aedec7a0284"
   },
   "tian/Worktree/BranchListService.swift": {
-    "mtime": 1783584090.848705,
+    "mtime": 1776139973.8444364,
     "ast_hash": "18267d7e296dbbeeb9a76e7a5741c398",
     "semantic_hash": "18267d7e296dbbeeb9a76e7a5741c398"
   },
   "tian/Worktree/KillGuard.swift": {
-    "mtime": 1783584090.8490887,
+    "mtime": 1777434438.5923996,
     "ast_hash": "d7ff8622475bb801ece25c456c4beb4c",
     "semantic_hash": "d7ff8622475bb801ece25c456c4beb4c"
   },
   "tian/Worktree/LimitedBuffer.swift": {
-    "mtime": 1783584090.849427,
+    "mtime": 1777434438.592641,
     "ast_hash": "69c54d77911287ed61ceff355197df38",
     "semantic_hash": "69c54d77911287ed61ceff355197df38"
   },
   "tian/Worktree/SetupProgress.swift": {
-    "mtime": 1783584090.8497627,
+    "mtime": 1783067372.5417964,
     "ast_hash": "ee1c7f4ab2c81cbabcd280a535c2ebb8",
     "semantic_hash": "ee1c7f4ab2c81cbabcd280a535c2ebb8"
   },
   "tian/Worktree/ShellReadinessWaiter.swift": {
-    "mtime": 1783584090.8498387,
+    "mtime": 1776139973.8445215,
     "ast_hash": "3fbec30b8ef005e68c3f496e270418a6",
     "semantic_hash": "3fbec30b8ef005e68c3f496e270418a6"
   },
   "tian/Worktree/WorkspaceProviding.swift": {
-    "mtime": 1783584090.8499072,
+    "mtime": 1776139973.844598,
     "ast_hash": "ace99168dce86786a094c57f7fe6194d",
     "semantic_hash": "ace99168dce86786a094c57f7fe6194d"
   },
   "tian/Worktree/WorktreeConfig.swift": {
-    "mtime": 1783584090.8501763,
+    "mtime": 1777434438.593466,
     "ast_hash": "1a7f93281e831f0491f96e105bb0c03f",
     "semantic_hash": "1a7f93281e831f0491f96e105bb0c03f"
   },
   "tian/Worktree/WorktreeConfigParser.swift": {
-    "mtime": 1783584090.8503866,
+    "mtime": 1777434438.5939417,
     "ast_hash": "aacda6111336ea2fdec50dd435c80501",
     "semantic_hash": "aacda6111336ea2fdec50dd435c80501"
   },
   "tian/Worktree/WorktreeCreateResult.swift": {
-    "mtime": 1783584090.8507056,
+    "mtime": 1783067372.5423715,
     "ast_hash": "99b24167f974650392279c3b76ce9bfb",
     "semantic_hash": "99b24167f974650392279c3b76ce9bfb"
   },
   "tian/Worktree/WorktreeError.swift": {
-    "mtime": 1783584090.851125,
+    "mtime": 1782625990.8361242,
     "ast_hash": "fb5e51664b8cb01a26a8450eff509422",
     "semantic_hash": "fb5e51664b8cb01a26a8450eff509422"
   },
   "tian/Worktree/WorktreeOrchestrator.swift": {
-    "mtime": 1783584090.8514962,
+    "mtime": 1783395562.3724875,
     "ast_hash": "c72743f9c02f1b598be5b6198db15ed7",
     "semantic_hash": "c72743f9c02f1b598be5b6198db15ed7"
   },
   "tian/Worktree/WorktreeRemovalResult.swift": {
-    "mtime": 1783584090.851954,
+    "mtime": 1782656069.2723005,
     "ast_hash": "dac551d830bcdef38bafd288378ec21a",
     "semantic_hash": "dac551d830bcdef38bafd288378ec21a"
   },
   "tian/Worktree/WorktreeService.swift": {
-    "mtime": 1783584090.8522408,
+    "mtime": 1782800801.4011698,
     "ast_hash": "85ea044d378acb434f9196030fd91792",
     "semantic_hash": "85ea044d378acb434f9196030fd91792"
   },
   "tian/tian-Bridging-Header.h": {
-    "mtime": 1783584090.8523297,
+    "mtime": 1776139973.845478,
     "ast_hash": "7ad2cb67f6769712ccbb6d9c46060d94",
     "semantic_hash": "7ad2cb67f6769712ccbb6d9c46060d94"
   },
   "tianTests/ANSIStripperTests.swift": {
-    "mtime": 1783584090.8525429,
+    "mtime": 1776139973.845699,
     "ast_hash": "2675e5fd22b8e2cffc5c1259687ae63d",
     "semantic_hash": "2675e5fd22b8e2cffc5c1259687ae63d"
   },
   "tianTests/AsyncPollHelpers.swift": {
-    "mtime": 1783584090.8528686,
+    "mtime": 1778132476.1505768,
     "ast_hash": "32e5f88c98e949b31b253ab6a6dfd1c1",
     "semantic_hash": "32e5f88c98e949b31b253ab6a6dfd1c1"
   },
   "tianTests/AutoSetPromptTests.swift": {
-    "mtime": 1783584090.8535025,
+    "mtime": 1777209576.3197076,
     "ast_hash": "f3853a45e8c4338b296165e40694ec87",
     "semantic_hash": "f3853a45e8c4338b296165e40694ec87"
   },
   "tianTests/BackgroundActivityStoreTests.swift": {
-    "mtime": 1783584090.8538883,
+    "mtime": 1783323969.0241735,
     "ast_hash": "d7d566bbc33eb97a08725a561e49c95a",
     "semantic_hash": "d7d566bbc33eb97a08725a561e49c95a"
   },
   "tianTests/BranchListServiceTests.swift": {
-    "mtime": 1783584090.8540156,
+    "mtime": 1776139973.8457985,
     "ast_hash": "fb6f65fa6e4dd23eff18df0d1db455dc",
     "semantic_hash": "fb6f65fa6e4dd23eff18df0d1db455dc"
   },
   "tianTests/BranchListViewModelTests.swift": {
-    "mtime": 1783584090.85481,
+    "mtime": 1776216921.25774,
     "ast_hash": "ec08af05668acc83a0688c3ebb5f74db",
     "semantic_hash": "ec08af05668acc83a0688c3ebb5f74db"
   },
   "tianTests/ClaudeSessionStateTests.swift": {
-    "mtime": 1783584090.8554115,
+    "mtime": 1782373251.1752362,
     "ast_hash": "bdefa3574e412ecc7bc0dffde978e3d1",
     "semantic_hash": "bdefa3574e412ecc7bc0dffde978e3d1"
   },
   "tianTests/CloseConfirmationDialogTests.swift": {
-    "mtime": 1783584090.8556602,
+    "mtime": 1783067372.544092,
     "ast_hash": "baab537a83d1f45f5cd0ff062172784b",
     "semantic_hash": "baab537a83d1f45f5cd0ff062172784b"
   },
   "tianTests/CommandLoggerTests.swift": {
-    "mtime": 1783584090.8557923,
+    "mtime": 1776139973.8462353,
     "ast_hash": "8aa4670a001999191342ee0d09708d82",
     "semantic_hash": "8aa4670a001999191342ee0d09708d82"
   },
   "tianTests/ConfigAutoSetRunnerTests.swift": {
-    "mtime": 1783584090.856207,
+    "mtime": 1777209576.32008,
     "ast_hash": "1f0410e9071f63c48d90040fea1c8c6a",
     "semantic_hash": "1f0410e9071f63c48d90040fea1c8c6a"
   },
   "tianTests/CreateSessionFlowTests.swift": {
-    "mtime": 1783584090.8565547,
+    "mtime": 1783067372.54439,
     "ast_hash": "f3108fc428a78d60706ee472168b2cbc",
     "semantic_hash": "f3108fc428a78d60706ee472168b2cbc"
   },
   "tianTests/CustomLaunchCommandTests.swift": {
-    "mtime": 1783584090.856824,
+    "mtime": 1783067372.5450017,
     "ast_hash": "26ecce20e54a75e156518c6c0040f640",
     "semantic_hash": "26ecce20e54a75e156518c6c0040f640"
   },
   "tianTests/DefaultWorkingDirectoryTests.swift": {
-    "mtime": 1783584090.8571284,
+    "mtime": 1783067372.545283,
     "ast_hash": "ebc3c20678b3bf7282678b692ab80c49",
     "semantic_hash": "ebc3c20678b3bf7282678b692ab80c49"
   },
   "tianTests/DividerClampingTests.swift": {
-    "mtime": 1783584090.857433,
+    "mtime": 1783067372.5457594,
     "ast_hash": "095e3be6750893aacffef31c32eeedec",
     "semantic_hash": "095e3be6750893aacffef31c32eeedec"
   },
   "tianTests/DockToggleDuringDragTests.swift": {
-    "mtime": 1783584090.857858,
+    "mtime": 1783067372.5462217,
     "ast_hash": "9e4e713ff94c9f10ab44665e7932f29e",
     "semantic_hash": "9e4e713ff94c9f10ab44665e7932f29e"
   },
   "tianTests/EnvironmentBuilderTests.swift": {
-    "mtime": 1783584090.8581398,
+    "mtime": 1783067372.5466747,
     "ast_hash": "a1fcacb20d558fdb32c3f487d2abe59e",
     "semantic_hash": "a1fcacb20d558fdb32c3f487d2abe59e"
   },
   "tianTests/EventCoalescerTests.swift": {
-    "mtime": 1783584090.8583832,
+    "mtime": 1777434438.5948706,
     "ast_hash": "b5c095c5cd34200bc476ba5e277b3b5a",
     "semantic_hash": "b5c095c5cd34200bc476ba5e277b3b5a"
   },
   "tianTests/FuzzyMatchTests.swift": {
-    "mtime": 1783584090.8585155,
+    "mtime": 1776139973.8465078,
     "ast_hash": "7f27515070cd17f011c88d5f3685ea2b",
     "semantic_hash": "7f27515070cd17f011c88d5f3685ea2b"
   },
   "tianTests/GitRepoWatcherBranchGraphTests.swift": {
-    "mtime": 1783584090.8586025,
+    "mtime": 1778132476.1506503,
     "ast_hash": "dffa795736d1c1c4019383d4628a6865",
     "semantic_hash": "dffa795736d1c1c4019383d4628a6865"
   },
   "tianTests/GitRepoWatcherTests.swift": {
-    "mtime": 1783584090.8589783,
+    "mtime": 1776860562.8423927,
     "ast_hash": "acf3ff967aa275ea0cf55b98b4221965",
     "semantic_hash": "acf3ff967aa275ea0cf55b98b4221965"
   },
   "tianTests/GitStatusServiceCommitGraphTests.swift": {
-    "mtime": 1783584090.8593104,
+    "mtime": 1782363119.831129,
     "ast_hash": "477acfcba7c811de37e5e6bcc62e12f9",
     "semantic_hash": "477acfcba7c811de37e5e6bcc62e12f9"
   },
   "tianTests/GitStatusServiceTests.swift": {
-    "mtime": 1783584090.8600402,
+    "mtime": 1778050548.4250324,
     "ast_hash": "28b6b3d3d4d6b49426e0b5af5ef3cc60",
     "semantic_hash": "28b6b3d3d4d6b49426e0b5af5ef3cc60"
   },
   "tianTests/GitStatusServiceUnifiedDiffTests.swift": {
-    "mtime": 1783584090.86016,
+    "mtime": 1778132476.1508577,
     "ast_hash": "583f5ff731934d4dfa69e9150b1d95ee",
     "semantic_hash": "583f5ff731934d4dfa69e9150b1d95ee"
   },
   "tianTests/IPCCommandHandlerTests.swift": {
-    "mtime": 1783584090.8604333,
+    "mtime": 1783311062.8211997,
     "ast_hash": "fc5fdd8bda3ba888c60d0353703bda5f",
     "semantic_hash": "fc5fdd8bda3ba888c60d0353703bda5f"
   },
   "tianTests/IPCMessageTests.swift": {
-    "mtime": 1783584090.8608117,
+    "mtime": 1783067372.5474572,
     "ast_hash": "4c840a031ff83348c5acfed2f3c6c8e4",
     "semantic_hash": "4c840a031ff83348c5acfed2f3c6c8e4"
   },
   "tianTests/IPCServerTests.swift": {
-    "mtime": 1783584090.8610675,
+    "mtime": 1783067372.5478547,
     "ast_hash": "456d97ae52d17e0b5ad21788b76e4b9d",
     "semantic_hash": "456d97ae52d17e0b5ad21788b76e4b9d"
   },
   "tianTests/InspectBranchViewModelTests.swift": {
-    "mtime": 1783584090.861189,
+    "mtime": 1778488104.805794,
     "ast_hash": "ecda3ed4e72a5f6b92513bb48d42a56f",
     "semantic_hash": "ecda3ed4e72a5f6b92513bb48d42a56f"
   },
   "tianTests/InspectDiffViewModelTests.swift": {
-    "mtime": 1783584090.8613038,
+    "mtime": 1778132476.1510394,
     "ast_hash": "e375b45b1d439545a78205fe6f756bde",
     "semantic_hash": "e375b45b1d439545a78205fe6f756bde"
   },
   "tianTests/InspectFileScannerTests.swift": {
-    "mtime": 1783584090.8615985,
+    "mtime": 1778135647.6470468,
     "ast_hash": "25ea757a6cad7a7c180312d5a958dc79",
     "semantic_hash": "25ea757a6cad7a7c180312d5a958dc79"
   },
   "tianTests/InspectFileTreeViewModelTests.swift": {
-    "mtime": 1783584090.86206,
+    "mtime": 1778135647.647627,
     "ast_hash": "0409f154885103845cfb8695cf49767b",
     "semantic_hash": "0409f154885103845cfb8695cf49767b"
   },
   "tianTests/InspectPanelStateTests.swift": {
-    "mtime": 1783584090.8621864,
+    "mtime": 1778132476.151634,
     "ast_hash": "ff702cba7305427ca3e28eecc7c640c7",
     "semantic_hash": "ff702cba7305427ca3e28eecc7c640c7"
   },
   "tianTests/InspectTabStateTests.swift": {
-    "mtime": 1783584090.8622682,
+    "mtime": 1778132476.151717,
     "ast_hash": "0d15c26d4afb7e808ce4a0630d9b7c06",
     "semantic_hash": "0d15c26d4afb7e808ce4a0630d9b7c06"
   },
   "tianTests/KeyBindingRegistryTests.swift": {
-    "mtime": 1783584090.8625119,
+    "mtime": 1783408957.4666467,
     "ast_hash": "ae55359e127c9edc1080bccebfe62120",
     "semantic_hash": "ae55359e127c9edc1080bccebfe62120"
   },
   "tianTests/KillGuardTests.swift": {
-    "mtime": 1783584090.862907,
+    "mtime": 1777434438.5957737,
     "ast_hash": "32ec3b0e094b46cde0ece9c44789351f",
     "semantic_hash": "32ec3b0e094b46cde0ece9c44789351f"
   },
   "tianTests/LimitedBufferTests.swift": {
-    "mtime": 1783584090.8632033,
+    "mtime": 1777434438.595978,
     "ast_hash": "6672000ccc45b157f43271cb2020f426",
     "semantic_hash": "6672000ccc45b157f43271cb2020f426"
   },
   "tianTests/MarkdownInlineDiffTests.swift": {
-    "mtime": 1783584090.863513,
+    "mtime": 1781520589.971598,
     "ast_hash": "7d73c4b2f1b42a0e40266a8c26324ce9",
     "semantic_hash": "7d73c4b2f1b42a0e40266a8c26324ce9"
   },
   "tianTests/NotificationManagerTests.swift": {
-    "mtime": 1783584090.8638256,
+    "mtime": 1782182665.2580125,
     "ast_hash": "d67799aa00817f5ac4805354d29e276a",
     "semantic_hash": "d67799aa00817f5ac4805354d29e276a"
   },
   "tianTests/OverviewGridNavigationTests.swift": {
-    "mtime": 1783584090.8643334,
+    "mtime": 1783580867.6291199,
     "ast_hash": "2219a273be587eaf65553dea6e4d61c7",
     "semantic_hash": ""
   },
   "tianTests/PRStatusCacheTests.swift": {
-    "mtime": 1783584090.864843,
+    "mtime": 1776860562.8429189,
     "ast_hash": "1bf3ed800c3cf6e63b34885da4c42814",
     "semantic_hash": "1bf3ed800c3cf6e63b34885da4c42814"
   },
   "tianTests/PaneStatusManagerTests.swift": {
-    "mtime": 1783584090.865573,
+    "mtime": 1783298600.7772644,
     "ast_hash": "668602bedc8d27f75e1c4a35146f3ad8",
     "semantic_hash": "668602bedc8d27f75e1c4a35146f3ad8"
   },
   "tianTests/PaneViewModelRealizeSurfaceTests.swift": {
-    "mtime": 1783584090.866028,
+    "mtime": 1783067372.5488205,
     "ast_hash": "594fefdb80d2fd2adec50d8e4c459f96",
     "semantic_hash": "594fefdb80d2fd2adec50d8e4c459f96"
   },
   "tianTests/ProcessDetectorTests.swift": {
-    "mtime": 1783584090.8663065,
+    "mtime": 1783067372.5491047,
     "ast_hash": "02a29bb9cc845f1b18f051d458e97a67",
     "semantic_hash": "02a29bb9cc845f1b18f051d458e97a67"
   },
   "tianTests/RefreshSchedulerTests.swift": {
-    "mtime": 1783584090.866736,
+    "mtime": 1777434438.597629,
     "ast_hash": "e185730cb1f5c15486f7d2f8e38c12a6",
     "semantic_hash": "e185730cb1f5c15486f7d2f8e38c12a6"
   },
   "tianTests/RemoteCommandBuilderTests.swift": {
-    "mtime": 1783584090.867273,
+    "mtime": 1783393150.1849582,
     "ast_hash": "f365c92a01c3aa0e8953ebdf9dcda490",
     "semantic_hash": "f365c92a01c3aa0e8953ebdf9dcda490"
   },
   "tianTests/RemoteConnectionTests.swift": {
-    "mtime": 1783584090.86759,
+    "mtime": 1783393150.185248,
     "ast_hash": "6a20395bb3e930a1b1a0115b53a42560",
     "semantic_hash": "6a20395bb3e930a1b1a0115b53a42560"
   },
   "tianTests/RemoteExecutionRegistryTests.swift": {
-    "mtime": 1783584090.8681078,
+    "mtime": 1783393150.1855304,
     "ast_hash": "95bd58c715d93063e212da5cf409f72a",
     "semantic_hash": "95bd58c715d93063e212da5cf409f72a"
   },
   "tianTests/RetryClaudeSpawnTests.swift": {
-    "mtime": 1783584090.8683932,
+    "mtime": 1783067372.5494647,
     "ast_hash": "c3bb33b0dc587b61943b96f4d25c7542",
     "semantic_hash": "c3bb33b0dc587b61943b96f4d25c7542"
   },
   "tianTests/SessionCollectionTests.swift": {
-    "mtime": 1783584090.8687606,
+    "mtime": 1783564137.7285607,
     "ast_hash": "341785d37ea299191623180a3207759f",
     "semantic_hash": ""
   },
   "tianTests/SessionDividerViewTests.swift": {
-    "mtime": 1783584090.8689134,
+    "mtime": 1783067372.5499136,
     "ast_hash": "0655e011d833c461ea2528d3922b3175",
     "semantic_hash": "0655e011d833c461ea2528d3922b3175"
   },
   "tianTests/SessionGitContextBranchDirtyTests.swift": {
-    "mtime": 1783584090.8690557,
+    "mtime": 1783067372.550078,
     "ast_hash": "28165cd92a4536dd893bbbe8e047208f",
     "semantic_hash": "28165cd92a4536dd893bbbe8e047208f"
   },
   "tianTests/SessionGitContextTests.swift": {
-    "mtime": 1783584090.8693452,
+    "mtime": 1783067372.5503569,
     "ast_hash": "97e2d3ad2cd1e865a9dcdd992ece0de4",
     "semantic_hash": "97e2d3ad2cd1e865a9dcdd992ece0de4"
   },
   "tianTests/SessionLayoutTests.swift": {
-    "mtime": 1783584090.8695087,
+    "mtime": 1783067372.5505443,
     "ast_hash": "5e4cac3c48ac37d5ba79a51454cea1e9",
     "semantic_hash": "5e4cac3c48ac37d5ba79a51454cea1e9"
   },
   "tianTests/SessionMigrationV3ToV4Tests.swift": {
-    "mtime": 1783584090.8696802,
+    "mtime": 1783067372.5511045,
     "ast_hash": "07e7bc2b23ccd9c45fd02397edb4bfc0",
     "semantic_hash": "07e7bc2b23ccd9c45fd02397edb4bfc0"
   },
   "tianTests/SessionMigrationV4ToV5Tests.swift": {
-    "mtime": 1783584090.8698492,
+    "mtime": 1783067372.5514524,
     "ast_hash": "bbc1aa872b50e2be5b52e5074f03e7a7",
     "semantic_hash": "bbc1aa872b50e2be5b52e5074f03e7a7"
   },
   "tianTests/SessionMigrationV5ToV6Tests.swift": {
-    "mtime": 1783584090.8700507,
+    "mtime": 1783393150.186016,
     "ast_hash": "bdadae0b2572153e7c7e0ee0a7b9ce22",
     "semantic_hash": "bdadae0b2572153e7c7e0ee0a7b9ce22"
   },
   "tianTests/SessionMigrationV6ToV7Tests.swift": {
-    "mtime": 1783584090.870297,
+    "mtime": 1783067372.5520597,
     "ast_hash": "149f8299b98aaedf853b305a8323faac",
     "semantic_hash": "149f8299b98aaedf853b305a8323faac"
   },
   "tianTests/SessionMigrationV7ToV8Tests.swift": {
-    "mtime": 1783584090.8704822,
+    "mtime": 1783393150.1861992,
     "ast_hash": "dbf2bb81c312bbaf408aa7138ec1cb9f",
     "semantic_hash": "dbf2bb81c312bbaf408aa7138ec1cb9f"
   },
   "tianTests/SessionModelTests.swift": {
-    "mtime": 1783584090.870797,
+    "mtime": 1783067372.5526605,
     "ast_hash": "747999493c5d540e8188d521eee7827b",
     "semantic_hash": "747999493c5d540e8188d521eee7827b"
   },
   "tianTests/SessionRestorerTests.swift": {
-    "mtime": 1783584090.871397,
+    "mtime": 1783067372.5536036,
     "ast_hash": "03c89137ab542ef6ce6a9d745f37e91e",
     "semantic_hash": "03c89137ab542ef6ce6a9d745f37e91e"
   },
   "tianTests/SessionSplitNavigationTests.swift": {
-    "mtime": 1783584090.8719325,
+    "mtime": 1783067372.553821,
     "ast_hash": "971e2c7c6df134c38b437e23f4236062",
     "semantic_hash": "971e2c7c6df134c38b437e23f4236062"
   },
   "tianTests/SessionStateLegacyTestHelpers.swift": {
-    "mtime": 1783584090.8721366,
+    "mtime": 1783067372.5540497,
     "ast_hash": "0c6e19fbca6470ebd9d79b7d77423e8b",
     "semantic_hash": "0c6e19fbca6470ebd9d79b7d77423e8b"
   },
   "tianTests/SessionStateTests.swift": {
-    "mtime": 1783584090.8724575,
+    "mtime": 1783564137.7291377,
     "ast_hash": "97778b6188a1fc010e482e602c7cf627",
     "semantic_hash": ""
   },
   "tianTests/SetupProgressTests.swift": {
-    "mtime": 1783584090.8726568,
+    "mtime": 1783067372.554701,
     "ast_hash": "bd436d15cacba4762be38e6b3ad5c5e6",
     "semantic_hash": "bd436d15cacba4762be38e6b3ad5c5e6"
   },
   "tianTests/SkillInstallerTests.swift": {
-    "mtime": 1783584090.8729327,
+    "mtime": 1782629880.8573902,
     "ast_hash": "293af3d3042f240cc362f17a16ff252a",
     "semantic_hash": "293af3d3042f240cc362f17a16ff252a"
   },
   "tianTests/SplitLayoutTests.swift": {
-    "mtime": 1783584090.8731968,
+    "mtime": 1776139973.8483257,
     "ast_hash": "ad216ae1980c2afeb1594fa36244d1a5",
     "semantic_hash": "ad216ae1980c2afeb1594fa36244d1a5"
   },
   "tianTests/SplitNavigationTests.swift": {
-    "mtime": 1783584090.8732946,
+    "mtime": 1776139973.848456,
     "ast_hash": "106e696c5c8c34a18a21120b5e0cd3e8",
     "semantic_hash": "106e696c5c8c34a18a21120b5e0cd3e8"
   },
   "tianTests/SplitTreeTests.swift": {
-    "mtime": 1783584090.8734858,
+    "mtime": 1776139973.8485887,
     "ast_hash": "c6bc248dbfa38d48914e927eb7dedf35",
     "semantic_hash": "c6bc248dbfa38d48914e927eb7dedf35"
   },
   "tianTests/TerminalSurfaceViewFocusTests.swift": {
-    "mtime": 1783584090.8741102,
+    "mtime": 1778571139.0359254,
     "ast_hash": "32f637fafed5cf867c4c83eb66e81141",
     "semantic_hash": "32f637fafed5cf867c4c83eb66e81141"
   },
   "tianTests/TianSettingsTests.swift": {
-    "mtime": 1783584090.874543,
+    "mtime": 1782290815.729991,
     "ast_hash": "03c25ff9cb494bf02d77dd8735c62579",
     "semantic_hash": "03c25ff9cb494bf02d77dd8735c62579"
   },
   "tianTests/WorkingDirectoryResolverTests.swift": {
-    "mtime": 1783584090.8747282,
+    "mtime": 1783067372.555,
     "ast_hash": "7ce3f56a97bed7a92abaf8ac90fb4eab",
     "semantic_hash": "7ce3f56a97bed7a92abaf8ac90fb4eab"
   },
   "tianTests/WorkingTreeWatcherTests.swift": {
-    "mtime": 1783584090.8750856,
+    "mtime": 1777955673.7879968,
     "ast_hash": "d549cf48addd4f18a159f43587a05fd8",
     "semantic_hash": "d549cf48addd4f18a159f43587a05fd8"
   },
   "tianTests/WorkspaceCreationFlowTests.swift": {
-    "mtime": 1783584090.875159,
+    "mtime": 1776139973.8487234,
     "ast_hash": "0de51082c76c9a7b2e3d992aa9292923",
     "semantic_hash": "0de51082c76c9a7b2e3d992aa9292923"
   },
   "tianTests/WorkspaceTests.swift": {
-    "mtime": 1783584090.8754382,
+    "mtime": 1783564137.7297025,
     "ast_hash": "252d6f8b5a6b584a9a96114a7f1d1ac6",
     "semantic_hash": ""
   },
   "tianTests/WorktreeConfigParserTests.swift": {
-    "mtime": 1783584090.8757,
+    "mtime": 1777209576.320494,
     "ast_hash": "87d562c85860d7d77aef387ea30ba3f0",
     "semantic_hash": "87d562c85860d7d77aef387ea30ba3f0"
   },
   "tianTests/WorktreeKindTests.swift": {
-    "mtime": 1783584090.8759117,
+    "mtime": 1777955673.7881765,
     "ast_hash": "ec54bfdc49295f86e65ba469aeecbf2c",
     "semantic_hash": "ec54bfdc49295f86e65ba469aeecbf2c"
   },
   "tianTests/WorktreeOrchestratorTests.swift": {
-    "mtime": 1783584090.876219,
+    "mtime": 1783395562.373073,
     "ast_hash": "5b488fb840fe7df38cf104c34ea96c58",
     "semantic_hash": "5b488fb840fe7df38cf104c34ea96c58"
   },
   "tianTests/WorktreeServiceTests.swift": {
-    "mtime": 1783584090.8766072,
+    "mtime": 1782800801.4021916,
     "ast_hash": "84f2c3fef0e0ae1edd814fd97f8c647c",
     "semantic_hash": "84f2c3fef0e0ae1edd814fd97f8c647c"
   },
   ".claude/CLAUDE.md": {
-    "mtime": 1783584090.7305017,
+    "mtime": 1783409196.8229697,
     "ast_hash": "9b31786b637be3c13978bec4c2330752",
     "semantic_hash": "9b31786b637be3c13978bec4c2330752"
   },
   ".claude/skills/graphify/SKILL.md": {
-    "mtime": 1783584090.7322233,
+    "mtime": 1783416965.7568462,
     "ast_hash": "1e48e0226c5b26741c54209a51c94454",
     "semantic_hash": "1e48e0226c5b26741c54209a51c94454"
   },
   ".claude/skills/graphify/references/add-watch.md": {
-    "mtime": 1783584090.7326694,
+    "mtime": 1783406327.7731116,
     "ast_hash": "d59d027fe449f06aa03905a01184e779",
     "semantic_hash": "d59d027fe449f06aa03905a01184e779"
   },
   ".claude/skills/graphify/references/exports.md": {
-    "mtime": 1783584090.733169,
+    "mtime": 1783406327.7731977,
     "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
     "semantic_hash": "9da2a2152e60a22f07f05fed5158f287"
   },
   ".claude/skills/graphify/references/extraction-spec.md": {
-    "mtime": 1783584090.733648,
+    "mtime": 1783406327.773332,
     "ast_hash": "42fef56a01698118f7fd722acdadea34",
     "semantic_hash": "42fef56a01698118f7fd722acdadea34"
   },
   ".claude/skills/graphify/references/github-and-merge.md": {
-    "mtime": 1783584090.7343597,
+    "mtime": 1783406327.7734063,
     "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
     "semantic_hash": "cde13df085e4c492aeb7ba298a996d0d"
   },
   ".claude/skills/graphify/references/hooks.md": {
-    "mtime": 1783584090.7347121,
+    "mtime": 1783406327.7734995,
     "ast_hash": "3f545db6ce646650bb9de588f5512a27",
     "semantic_hash": "3f545db6ce646650bb9de588f5512a27"
   },
   ".claude/skills/graphify/references/query.md": {
-    "mtime": 1783584090.7354183,
+    "mtime": 1783406327.7736971,
     "ast_hash": "3c46f8ad006874260614ed8657d02307",
     "semantic_hash": "3c46f8ad006874260614ed8657d02307"
   },
   ".claude/skills/graphify/references/transcribe.md": {
-    "mtime": 1783584090.735887,
+    "mtime": 1783406327.7737813,
     "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
     "semantic_hash": "67b6a5fa6c0974e18f60db9f8932fbd8"
   },
   ".claude/skills/graphify/references/update.md": {
-    "mtime": 1783584090.7362752,
+    "mtime": 1783406327.7739217,
     "ast_hash": "c698309979460d0f02ba616417844399",
     "semantic_hash": "c698309979460d0f02ba616417844399"
   },
   ".claude/skills/session-audit/SKILL.md": {
-    "mtime": 1783584090.7369602,
+    "mtime": 1782712774.0259676,
     "ast_hash": "8fc7249a1ca16e72ecaad88b46ccb89f",
     "semantic_hash": "8fc7249a1ca16e72ecaad88b46ccb89f"
   },
   ".claude/skills/tian/SKILL.md": {
-    "mtime": 1783584090.7382324,
+    "mtime": 1783067372.512748,
     "ast_hash": "d5b5d44939cef5b019274c0bb3038b3b",
     "semantic_hash": "d5b5d44939cef5b019274c0bb3038b3b"
   },
   ".dev/README.md": {
-    "mtime": 1783584090.7409942,
+    "mtime": 1775967109.6888492,
     "ast_hash": "b4a52e5f2fd69de24d979cc3db770a8b",
     "semantic_hash": "b4a52e5f2fd69de24d979cc3db770a8b"
   },
   "AGENTS.md": {
-    "mtime": 1783584090.7431989,
+    "mtime": 1781755889.568239,
     "ast_hash": "7907a147c25621916282dca6f256eac7",
     "semantic_hash": "7907a147c25621916282dca6f256eac7"
   },
   "CLAUDE.md": {
-    "mtime": 1783584090.7436726,
+    "mtime": 1783564137.7130132,
     "ast_hash": "d95cd2f5c7e5caeaf34dd626bc65dc6c",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1783584090.7444067,
+    "mtime": 1783314039.0639331,
     "ast_hash": "bd9206148ae068988a07c76c95019d67",
     "semantic_hash": "bd9206148ae068988a07c76c95019d67"
   },
   "THIRD-PARTY-NOTICES.md": {
-    "mtime": 1783584090.7447546,
+    "mtime": 1783301759.8367915,
     "ast_hash": "a3eed879bb0fc5c0f85f11873085ce9d",
     "semantic_hash": "a3eed879bb0fc5c0f85f11873085ce9d"
   },
   "docs/pm/dashboard/index.html": {
-    "mtime": 1783584090.7513955,
+    "mtime": 1782636356.9387383,
     "ast_hash": "018c042eb0cca00ef4524f69d0ec0e09",
     "semantic_hash": "018c042eb0cca00ef4524f69d0ec0e09"
   },
   "docs/pm/decisions/README.md": {
-    "mtime": 1783584090.754276,
+    "mtime": 1783067372.515451,
     "ast_hash": "ed7d6a4b112f03f1c74d4b5e7583aa3b",
     "semantic_hash": "ed7d6a4b112f03f1c74d4b5e7583aa3b"
   },
   "project.yml": {
-    "mtime": 1783584090.768256,
+    "mtime": 1783311062.815102,
     "ast_hash": "4bea5a5778acd7051d844eaec99dbc29",
     "semantic_hash": "4bea5a5778acd7051d844eaec99dbc29"
   },
   "scripts/README.md": {
-    "mtime": 1783584090.769561,
+    "mtime": 1783301759.8385725,
     "ast_hash": "ca29952a55309a16f505b66271cb0ce1",
     "semantic_hash": "ca29952a55309a16f505b66271cb0ce1"
   },
   "docs/assets/main.png": {
-    "mtime": 1783584090.74982,
+    "mtime": 1778636020.6410334,
     "ast_hash": "9b4d6aa12a0f8eb5bdee9d0ecc4ff9d1",
     "semantic_hash": "9b4d6aa12a0f8eb5bdee9d0ecc4ff9d1"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/AppIcon.png": {
-    "mtime": 1783584090.7840562,
+    "mtime": 1778488104.7968483,
     "ast_hash": "7bf5c4a6fc397562e3082f1cf51b75a2",
     "semantic_hash": "7bf5c4a6fc397562e3082f1cf51b75a2"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_1024x1024.png": {
-    "mtime": 1783584090.785329,
+    "mtime": 1778488104.7983487,
     "ast_hash": "7bf5c4a6fc397562e3082f1cf51b75a2",
     "semantic_hash": "7bf5c4a6fc397562e3082f1cf51b75a2"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_128x128.png": {
-    "mtime": 1783584090.785812,
+    "mtime": 1778488104.7992668,
     "ast_hash": "44ac0179c40189792f599c426ccaf1d1",
     "semantic_hash": "44ac0179c40189792f599c426ccaf1d1"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_16x16.png": {
-    "mtime": 1783584090.785892,
+    "mtime": 1778488104.7995694,
     "ast_hash": "a670c7d2efc4e6241c71052a371dbf02",
     "semantic_hash": "a670c7d2efc4e6241c71052a371dbf02"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_256x256.png": {
-    "mtime": 1783584090.7860656,
+    "mtime": 1778488104.7998958,
     "ast_hash": "006e2b52a994adc6529436cf0a6ecbb3",
     "semantic_hash": "006e2b52a994adc6529436cf0a6ecbb3"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_32x32.png": {
-    "mtime": 1783584090.786166,
+    "mtime": 1778488104.8001974,
     "ast_hash": "16072b6f7819ce9a5cbd8ec53eb30831",
     "semantic_hash": "16072b6f7819ce9a5cbd8ec53eb30831"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_512x512.png": {
-    "mtime": 1783584090.7865973,
+    "mtime": 1778488104.8007305,
     "ast_hash": "2b3c16c78289801ed143c17a7fa0bc3b",
     "semantic_hash": "2b3c16c78289801ed143c17a7fa0bc3b"
   },
   "tian/Assets.xcassets/AppIcon.appiconset/icon_64x64.png": {
-    "mtime": 1783584090.7867336,
+    "mtime": 1778488104.80109,
     "ast_hash": "b46a6cb0203afb487ef2fab3b81dc41c",
     "semantic_hash": "b46a6cb0203afb487ef2fab3b81dc41c"
   },
   "tian/Core/ClaudeNotificationPolicy.swift": {
-    "mtime": 1783584090.7882547,
+    "mtime": 1783493637.8051224,
     "ast_hash": "cea83b770129375ecc5453326b8ff05b",
     "semantic_hash": ""
   },
   "tian/Core/ClaudeSessionNotifier.swift": {
-    "mtime": 1783584090.788733,
+    "mtime": 1783493637.8053997,
     "ast_hash": "0738bbbe1d4b46f2d7bb39ab31999241",
     "semantic_hash": ""
   },
   "tian/Resources/tests/tian-hook-prompt-test.sh": {
-    "mtime": 1783584090.8108597,
+    "mtime": 1783507923.7619,
     "ast_hash": "830e48c3ca33fa462c0173fc20e9feef",
     "semantic_hash": ""
   },
   "tianTests/ClaudeNotificationPolicyTests.swift": {
-    "mtime": 1783584090.8551278,
+    "mtime": 1783493637.807744,
     "ast_hash": "8d6401d03179d7984e8fe6a7c6f881c5",
     "semantic_hash": ""
   },
   "tian/View/Session/SessionEmptyStateView.swift": {
-    "mtime": 1783584090.8342774,
+    "mtime": 1783564137.7251492,
     "ast_hash": "cc61cc858f43458a3eda1c1c098475d7",
     "semantic_hash": ""
   },
   "tian/Session/SessionOverviewSort.swift": {
-    "mtime": 1783584090.8156097,
+    "mtime": 1783582583.625152,
     "ast_hash": "c02f6605baf3fb39e002c12a80721877",
     "semantic_hash": ""
   },
   "tianTests/SessionOverviewSortTests.swift": {
-    "mtime": 1783584090.871202,
+    "mtime": 1783582583.6276748,
     "ast_hash": "edb4d8f881d62676af3e0d511785ceda",
+    "semantic_hash": ""
+  },
+  ".serena/project.local.yml": {
+    "mtime": 1782179750.2328415,
+    "ast_hash": "f136e7d47205d9a758913615074760e5",
+    "semantic_hash": ""
+  },
+  ".serena/project.yml": {
+    "mtime": 1783229511.986665,
+    "ast_hash": "6d4cf663b80dae3cb17da00ced3ae672",
     "semantic_hash": ""
   }
 }

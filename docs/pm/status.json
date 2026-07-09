@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.4) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.5) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -24,15 +24,9 @@
   "shipped": [
     {
       "date": "2026-07-09",
-      "summary": "Sidebar/session-overview UX batch (3 fixes). (1) Session overview overlay lifted above every branch of sessionContentStack and auto-dismiss re-keyed to a global hasAnySession, so deleting the active workspace's last card no longer closes the overview while other workspaces still have cards. (2) Cmd+Shift+O now opens the overview from the empty create-session page (same overlay lift; toggle guard still blocks when zero cards exist anywhere). (3) Sidebar workspace header: clicking the title/row activates that workspace (an empty workspace lands on the No Sessions create-session screen), a new leading chevron toggles fold; keyboard Return mirrors the click, arrows still fold/unfold, and a VoiceOver custom action restores disclosure (children:.combine flattens the chevron). Delivered via /orchestrate (2 waves, 3 code-implementers). Clean Debug build + tianTests green (twice); /code-review medium caught 2 self-inflicted a11y/keyboard regressions, both fixed and re-verified. GUI click/keystroke path not yet human-verified.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/79"
-    },
-    {
-      "date": "2026-07-09",
-      "summary": "Session overview grid (Cmd+Shift+O) gains a sort/view-type control: pick Default order or Session State — cards sorted by Claude state priority needs-input > busy > idle > fresh (nil aggregate state = fresh, sorts last), reusing the existing ClaudeSessionState ordering. Pure flat sort (orchestrator grouping ignored), persisted across restarts via @AppStorage, `s` cycles the mode. Sort applied in cardEntries so both grid and keyboard nav follow. Pure ordering logic extracted to tian/Session/SessionOverviewSort.swift (decorate-sort-undecorate key, unit-tested). Clean Debug build + 1038 tianTests green; /code-review medium applied 3 cleanups, no correctness bugs. GUI open→reorder→persist path not yet human-verified (overlay automation permission-blocked).",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/78"
+      "summary": "Released v1.5.5 (build 479) — sidebar/session-overview UX batch. Session overview grid (Cmd+Shift+O) gains a sort control (Default vs Session State: needs-input > busy > idle > fresh, persisted, `s` cycles; ordering in tian/Session/SessionOverviewSort.swift, unit-tested) — PR #78. Overview overlay lifted above every sessionContentStack branch with auto-dismiss re-keyed to a global hasAnySession, opens from the empty create-session page, and the sidebar workspace header now activates its workspace on title/row click with a new leading chevron for fold (Return mirrors click, VoiceOver disclosure restored) — PR #79/#80. Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. GUI click/keystroke path not yet human-verified.",
+      "commit": "a05d460",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.5"
     },
     {
       "date": "2026-07-09",
@@ -45,12 +39,6 @@
       "summary": "Released v1.5.3 — Session Overview card no longer shows harness-injected synthetic turns (e.g. a background-subagent <task-notification> wrapper) in the 'latest user prompt' line; the UserPromptSubmit hook (tian-hook-prompt.sh) now rejects a prompt whose leading content is an injected wrapper tag (task-notification / system-reminder / local-command-* / command-* / bash-*) before forwarding, so only genuine typed input updates the card (PR #75). Added a standalone bash test that stubs the $TIAN_CLI_PATH seam (10 cases: 5 rejected, 5 forwarded, incl. a tag-boundary case). Medium code-review: no findings. Built (build 457), notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
       "commit": "34b4ac9",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.3"
-    },
-    {
-      "date": "2026-07-08",
-      "summary": "Released v1.5.2 — Claude session macOS notifications de-noised: a banner now fires only when a session needs you (task done / input needed / AskUserQuestion), driven by ClaudeSessionState transitions instead of forwarding every OSC desktop notification, and suppressed for the session you're actively viewing (PR #72). Also gitignored graphify dated-snapshot + AST-cache dirs (#73, #74). Medium code-review caught a surface-id→pane wiring bug (fixed pre-merge); live-verified in a debug build. Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast (build 449) live.",
-      "commit": "19d853f",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.2"
     }
   ]
 }
