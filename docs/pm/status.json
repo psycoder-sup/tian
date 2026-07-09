@@ -9,11 +9,25 @@
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
-    { "title": "Agent delegation (/tian implement) shipped in a release", "done": true, "target": "" },
-    { "title": "Flatten hierarchy to Workspace→Session", "done": true, "target": "2026-07" }
+    {
+      "title": "Agent delegation (/tian implement) shipped in a release",
+      "done": true,
+      "target": ""
+    },
+    {
+      "title": "Flatten hierarchy to Workspace→Session",
+      "done": true,
+      "target": "2026-07"
+    }
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-09",
+      "summary": "Sidebar/session-overview UX batch (3 fixes). (1) Session overview overlay lifted above every branch of sessionContentStack and auto-dismiss re-keyed to a global hasAnySession, so deleting the active workspace's last card no longer closes the overview while other workspaces still have cards. (2) Cmd+Shift+O now opens the overview from the empty create-session page (same overlay lift; toggle guard still blocks when zero cards exist anywhere). (3) Sidebar workspace header: clicking the title/row opens the create-session flow, a new leading chevron toggles fold; keyboard Return mirrors the click, arrows still fold/unfold, and a VoiceOver custom action restores disclosure (children:.combine flattens the chevron). Delivered via /orchestrate (2 waves, 3 code-implementers). Clean Debug build + tianTests green (twice); /code-review medium caught 2 self-inflicted a11y/keyboard regressions, both fixed and re-verified. GUI click/keystroke path not yet human-verified.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/79"
+    },
     {
       "date": "2026-07-09",
       "summary": "Session overview grid (Cmd+Shift+O) gains a sort/view-type control: pick Default order or Session State — cards sorted by Claude state priority needs-input > busy > idle > fresh (nil aggregate state = fresh, sorts last), reusing the existing ClaudeSessionState ordering. Pure flat sort (orchestrator grouping ignored), persisted across restarts via @AppStorage, `s` cycles the mode. Sort applied in cardEntries so both grid and keyboard nav follow. Pure ordering logic extracted to tian/Session/SessionOverviewSort.swift (decorate-sort-undecorate key, unit-tested). Clean Debug build + 1038 tianTests green; /code-review medium applied 3 cleanups, no correctness bugs. GUI open→reorder→persist path not yet human-verified (overlay automation permission-blocked).",
