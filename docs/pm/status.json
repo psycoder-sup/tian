@@ -1,8 +1,10 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-08",
-  "now": [],
+  "lastUpdated": "2026-07-09",
+  "now": [
+    "Closing the last session no longer closes its workspace — the workspace stays alive and its content area shows a new 'No Sessions' create-session empty state (new SessionEmptyStateView). Auto-close cascade (SessionCollection→Workspace.onEmpty→removeWorkspace) removed; explicit workspace close unchanged. Built + tianTests green on branch worktree-workspace-survives-empty; pending GUI live-check + merge."
+  ],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
     "Daily-drive the shipped app (now v1.5.3) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",

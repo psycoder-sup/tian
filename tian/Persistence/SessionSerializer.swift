@@ -35,7 +35,15 @@ enum SessionSerializer {
         isFullscreen: Bool? = nil
     ) -> SessionState {
         let sessionStates = PaneStatusManager.shared.sessionStates
-        let workspaces = collection.workspaces.map { workspace in
+        // Skip workspaces with zero sessions. Closing the last session keeps the
+        // workspace alive in-app (its content area shows the create-session empty
+        // state), but an empty workspace has nothing to restore and — worse —
+        // `SessionRestorer.validate` throws on any empty-session workspace, which
+        // `loadFrom` turns into a discard of the ENTIRE state file (every other
+        // workspace and session included). So empty workspaces are not persisted.
+        let workspaces = collection.workspaces
+            .filter { !$0.sessionCollection.sessions.isEmpty }
+            .map { workspace in
             let sessions = workspace.sessionCollection.sessions.map { session in
                 sessionRecord(from: session, sessionStates: sessionStates)
             }

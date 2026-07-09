@@ -491,6 +491,24 @@ struct SessionSnapshotTests {
         #expect(snapshot.workspaces[1].name == "second")
     }
 
+    @Test func snapshotDropsEmptyWorkspaces() {
+        // Closing a workspace's last session leaves it alive in-app but with no
+        // sessions. Persisting an empty workspace would make
+        // `SessionRestorer.validate` throw on read and discard the ENTIRE state
+        // file, so the snapshot must exclude zero-session workspaces.
+        let collection = WorkspaceCollection()
+        let populated = collection.workspaces[0]
+        let empty = collection.createWorkspace(name: "empty")!
+        empty.sessionCollection.removeSession(id: empty.sessionCollection.sessions[0].id)
+        #expect(empty.sessionCollection.sessions.isEmpty)
+
+        let snapshot = SessionSerializer.snapshot(from: collection)
+
+        #expect(snapshot.workspaces.count == 1)
+        #expect(snapshot.workspaces[0].id == populated.id)
+        #expect(snapshot.workspaces.allSatisfy { !$0.sessions.isEmpty })
+    }
+
     @Test func snapshotCapturesActiveIDs() {
         let collection = WorkspaceCollection()
         let ws = collection.workspaces[0]

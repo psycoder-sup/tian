@@ -55,9 +55,6 @@ final class Workspace: Identifiable {
     /// Persisted via `WorkspaceSnapshot.activeTab`.
     let inspectTabState: InspectTabState
 
-    /// Called when the workspace's last session is closed.
-    var onEmpty: (() -> Void)?
-
     // MARK: - Init
 
     convenience init(name: String, defaultWorkingDirectory: URL? = nil, remote: RemoteConnection? = nil) {
@@ -108,10 +105,6 @@ final class Workspace: Identifiable {
         // Seed the workspace's first session (a fresh Claude session). No custom
         // name — it uses its auto-derived name (Claude title / directory leaf).
         self.sessionCollection.createSession(workingDirectory: workingDir)
-
-        self.sessionCollection.onEmpty = { [weak self] in
-            self?.onEmpty?()
-        }
     }
 
     /// Restore a workspace with a pre-built SessionCollection.
@@ -142,10 +135,6 @@ final class Workspace: Identifiable {
         self.sessionCollection.propagateWorkspaceDefault(defaultWorkingDirectory)
         self.sessionCollection.propagateWorkspaceID(id)
         configureRemote()
-
-        self.sessionCollection.onEmpty = { [weak self] in
-            self?.onEmpty?()
-        }
     }
 
     /// Wires this workspace's remote transport (if any) into the file tree and

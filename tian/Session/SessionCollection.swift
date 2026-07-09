@@ -2,19 +2,17 @@ import Foundation
 import Observation
 
 /// Owns the ordered list of sessions for one workspace.
+///
+/// Emptying the collection (closing the last session) is a supported, stable
+/// state: the owning workspace stays alive and its content area renders the
+/// create-session empty state. Closing a workspace is a separate, explicit user
+/// gesture (see `WorkspaceCollection.removeWorkspace`).
 @MainActor @Observable
 final class SessionCollection {
     private(set) var sessions: [Session]
 
     /// The active session's id, or `nil` when the collection is empty.
     var activeSessionID: UUID?
-
-    /// Set to `true` when the last session is closed; the app should quit.
-    var shouldQuit: Bool = false
-
-    /// Called when the last session is closed. When set, `shouldQuit` is not
-    /// set; the callback owner is responsible for propagating the quit signal.
-    var onEmpty: (() -> Void)?
 
     /// The owning workspace's default directory. Propagated to new sessions.
     var workspaceDefaultDirectory: URL?
@@ -104,12 +102,10 @@ final class SessionCollection {
         sessions.remove(at: index)
 
         if sessions.isEmpty {
+            // Closing the last session leaves the collection (and the owning
+            // workspace) alive but empty; the content area shows the
+            // create-session empty state. It does NOT close the workspace.
             activeSessionID = nil
-            if let onEmpty {
-                onEmpty()
-            } else {
-                shouldQuit = true
-            }
             return
         }
 

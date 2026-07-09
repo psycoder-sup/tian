@@ -119,6 +119,13 @@ struct SidebarContainerView: View {
             updateInspectPanelRoot()
             refreshInspectPanelStatus()
         }
+        .onChange(of: displayedSessionCollection?.sessions.isEmpty ?? true) { _, isEmpty in
+            // The session-overview overlay is mounted only in the populated
+            // branch of `sessionContentStack`. If the active workspace drains to
+            // empty while the overview is open, clear the flag so it doesn't pop
+            // back up over the empty state or a freshly created session.
+            if isEmpty { isOverviewVisible = false }
+        }
         .modifier(InspectPanelWiringModifier(
             activeSession: activeSession,
             activeWorkspace: activeWorkspace,
@@ -363,48 +370,58 @@ struct SidebarContainerView: View {
     @ViewBuilder
     private var sessionContentStack: some View {
         if let sessionCollection = displayedSessionCollection {
-            ZStack {
-                ForEach(sessionCollection.sessions) { session in
-                    let isActive = session.id == sessionCollection.activeSessionID
-                    SessionContentView(
-                        session: session,
-                        isActive: isActive,
-                        windowLeadingInset: windowLeadingInset,
-                        windowTrailingInset: windowTrailingInset
-                    )
-                    .opacity(isActive ? 1 : 0)
-                    .allowsHitTesting(isActive)
+            if sessionCollection.sessions.isEmpty, let workspace = activeWorkspace {
+                // The workspace outlived its last session (closing the last
+                // session no longer closes the workspace). Offer a create-session
+                // action where the Claude pane would normally render.
+                SessionEmptyStateView(
+                    workspaceCollection: workspaceCollection,
+                    workspace: workspace
+                )
+            } else {
+                ZStack {
+                    ForEach(sessionCollection.sessions) { session in
+                        let isActive = session.id == sessionCollection.activeSessionID
+                        SessionContentView(
+                            session: session,
+                            isActive: isActive,
+                            windowLeadingInset: windowLeadingInset,
+                            windowTrailingInset: windowTrailingInset
+                        )
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
+                    }
                 }
-            }
-            .background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { handleContainerSizeChange(geo.size) }
-                        .onChange(of: geo.size) { _, newSize in
-                            lastContainerSize = newSize
-                            if !sidebarState.isAnimating {
-                                handleContainerSizeChange(newSize)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear { handleContainerSizeChange(geo.size) }
+                            .onChange(of: geo.size) { _, newSize in
+                                lastContainerSize = newSize
+                                if !sidebarState.isAnimating {
+                                    handleContainerSizeChange(newSize)
+                                }
                             }
-                        }
+                    }
+                )
+                .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
+                    if wasAnimating && !isAnimating {
+                        handleContainerSizeChange(lastContainerSize)
+                    }
                 }
-            )
-            .onChange(of: sidebarState.isAnimating) { wasAnimating, isAnimating in
-                if wasAnimating && !isAnimating {
-                    handleContainerSizeChange(lastContainerSize)
+                .onChange(of: sessionCollection.activeSessionID) { _, _ in
+                    handleSessionChanged()
                 }
+                // Overview grid is applied as an .overlay (not an if/else swap) so
+                // the ZStack above stays mounted — every session's Metal terminal
+                // surface keeps its live state while the overview is open.
+                .modifier(SessionOverviewOverlayModifier(
+                    workspaceCollection: workspaceCollection,
+                    worktreeOrchestrator: worktreeOrchestrator,
+                    sidebarState: sidebarState,
+                    isOverviewVisible: $isOverviewVisible
+                ))
             }
-            .onChange(of: sessionCollection.activeSessionID) { _, _ in
-                handleSessionChanged()
-            }
-            // Overview grid is applied as an .overlay (not an if/else swap) so
-            // the ZStack above stays mounted — every session's Metal terminal
-            // surface keeps its live state while the overview is open.
-            .modifier(SessionOverviewOverlayModifier(
-                workspaceCollection: workspaceCollection,
-                worktreeOrchestrator: worktreeOrchestrator,
-                sidebarState: sidebarState,
-                isOverviewVisible: $isOverviewVisible
-            ))
         } else if workspaceCollection.workspaces.isEmpty {
             WorkspaceEmptyStateView(workspaceCollection: workspaceCollection)
         }

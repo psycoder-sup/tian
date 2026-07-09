@@ -16,7 +16,6 @@ struct SessionCollectionTests {
         #expect(collection.sessions[0].hasLiveClaudePane)
         #expect(collection.sessions[0].terminalPanel == nil)
         #expect(collection.activeSessionID == collection.sessions[0].id)
-        #expect(!collection.shouldQuit)
     }
 
     // MARK: - Create
@@ -75,33 +74,21 @@ struct SessionCollectionTests {
         #expect(collection.activeSessionID == session2ID)
     }
 
-    @Test func removeLastSessionSetsQuit() {
+    @Test func removeLastSessionLeavesCollectionEmpty() {
+        // Closing the last session leaves the collection empty but alive — it
+        // no longer signals a quit or closes the owning workspace. The content
+        // area renders the create-session empty state instead.
         let collection = SessionCollection()
         let sessionID = collection.sessions[0].id
         collection.removeSession(id: sessionID)
         #expect(collection.sessions.isEmpty)
         #expect(collection.activeSessionID == nil)
-        #expect(collection.shouldQuit)
-    }
-
-    @Test func removeLastSessionFiresOnEmptyInsteadOfQuit() {
-        // When an `onEmpty` callback is set, the collection defers the quit
-        // signal to it rather than setting `shouldQuit` itself.
-        let collection = SessionCollection()
-        var fired = false
-        collection.onEmpty = { fired = true }
-
-        collection.removeSession(id: collection.sessions[0].id)
-        #expect(collection.sessions.isEmpty)
-        #expect(fired)
-        #expect(!collection.shouldQuit)
     }
 
     @Test func removeNonexistentSessionIsNoOp() {
         let collection = SessionCollection()
         collection.removeSession(id: UUID())
         #expect(collection.sessions.count == 1)
-        #expect(!collection.shouldQuit)
     }
 
     // MARK: - Activate
@@ -155,15 +142,16 @@ struct SessionCollectionTests {
 
     // MARK: - Close cascades
 
-    @Test func explicitSessionCloseCascadesToQuit() async {
+    @Test func explicitSessionCloseEmptiesCollection() async {
         // A user-gesture close on the last session fires `onSessionClose` →
-        // removeSession → collection empties → shouldQuit.
+        // removeSession → collection empties. It does not quit or close the
+        // workspace; the collection simply becomes empty.
         let collection = SessionCollection()
         let session = collection.sessions[0]
         await session.requestSessionClose()
 
         #expect(collection.sessions.isEmpty)
-        #expect(collection.shouldQuit)
+        #expect(collection.activeSessionID == nil)
     }
 
     @Test func terminalPaneCloseDoesNotCloseSession() throws {
@@ -180,13 +168,12 @@ struct SessionCollectionTests {
         #expect(session.terminalPanel == nil)
         #expect(session.terminalVisible == false)
         #expect(collection.sessions.count == 1)
-        #expect(!collection.shouldQuit)
     }
 
     @Test func claudePaneCloseClosesSession() throws {
         // Closing the Claude pane now closes the session (the Claude process
-        // exited). As the collection's last session, this empties it and flags
-        // shouldQuit.
+        // exited). As the collection's last session, this empties the collection
+        // but leaves it (and the owning workspace) alive.
         let collection = SessionCollection()
         let session = collection.sessions[0]
 
@@ -196,7 +183,6 @@ struct SessionCollectionTests {
 
         #expect(collection.sessions.isEmpty)
         #expect(collection.activeSessionID == nil)
-        #expect(collection.shouldQuit)
     }
 
     @Test func claudePaneCloseRemovesOnlyThatSessionWhenOthersRemain() throws {
@@ -208,7 +194,6 @@ struct SessionCollectionTests {
         claude.closePane(paneID: claude.splitTree.focusedPaneID)
 
         #expect(collection.sessions.count == 1)
-        #expect(!collection.shouldQuit)
     }
 
     // MARK: - Hierarchical ordering
@@ -351,7 +336,7 @@ struct SessionCollectionStressTests {
         #expect(collection.sessions.contains { $0.id == collection.activeSessionID })
     }
 
-    @Test func closeAllSessionsCascadesToQuit() {
+    @Test func closeAllSessionsEmptiesCollection() {
         let collection = SessionCollection()
 
         for _ in 1..<10 {
@@ -364,7 +349,10 @@ struct SessionCollectionStressTests {
             let lastID = collection.sessions.last!.id
             collection.removeSession(id: lastID)
         }
-        #expect(collection.shouldQuit)
+        // Emptying the collection is a stable state — no quit signal, and the
+        // active id clears out.
+        #expect(collection.sessions.isEmpty)
+        #expect(collection.activeSessionID == nil)
     }
 
     @Test func reorderSessionsRepeatedly() {
