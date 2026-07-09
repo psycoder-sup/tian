@@ -87,4 +87,22 @@ enum OverviewGridNavigation {
         }
         return (0, 0)
     }
+
+    /// The card to select after the current selection's card disappeared from the
+    /// list — the neighbor that slid into its slot (the same flat index in the new
+    /// list, clamped to the last card), so focus lands on an *adjacent* card
+    /// instead of snapping back to the first. Falls back to the first card when the
+    /// previous id can't be located in `oldIDs`, and returns `nil` only when no
+    /// cards remain.
+    static func selectionAfterRemoval(
+        previous: UUID?,
+        oldIDs: [UUID],
+        newIDs: [UUID]
+    ) -> UUID? {
+        guard !newIDs.isEmpty else { return nil }
+        if let previous, let oldIndex = oldIDs.firstIndex(of: previous) {
+            return newIDs[min(oldIndex, newIDs.count - 1)]
+        }
+        return newIDs.first
+    }
 }
