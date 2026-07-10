@@ -39,8 +39,12 @@ struct SessionOverviewGridView: View {
     /// Persisted card order for the overview grid — survives app restarts.
     @AppStorage("sessionOverviewSortMode") private var sortMode: SessionOverviewSortMode = .defaultOrder
 
-    /// Inner padding around the scrolling grid content.
-    private let contentPadding: CGFloat = 20
+    /// Inner padding around the scrolling grid content. Must exceed the selected
+    /// card's outer glow radius (`SessionOverviewCardView`'s 24pt shadow) or the
+    /// `ScrollView` clips the glow flat at the top edge when a top-row card is
+    /// selected. Also feeds `columnCount(forWidth:)`'s width calc, so this stays
+    /// the single source of truth for both.
+    private let contentPadding: CGFloat = 28
 
     /// Minimum card width and inter-card gap. Shared by both the adaptive
     /// `GridItem` below and the `columnCount(forWidth:)` nav math so the layout
