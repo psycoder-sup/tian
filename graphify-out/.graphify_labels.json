@@ -244,11 +244,9 @@
   "242": "CGFloat",
   "243": "Int",
   "244": "Context",
-  "245": "Int",
-  "246": "KeyView",
-  "247": "NSEvent",
-  "248": "UUID",
-  "249": "SessionGitContextBranchDirtyTests",
-  "250": "Void",
+  "245": ".findSession",
+  "246": "CacheResult",
+  "247": "SessionGitContextBranchDirtyTests",
+  "248": "FakeBranchGraphHost",
   "835": "tian-hook-prompt.sh"
 }
