@@ -157,43 +157,61 @@ final class WorkspaceCollection {
     }
 
     /// Navigate to the next session across all workspaces.
-    /// If on the last session of the current workspace, moves to the first session of the next workspace.
+    /// If on the last session of the current workspace, moves to the first session of the
+    /// next workspace that has one — skipping over any empty workspaces (wrapping around).
+    /// A no-op if no workspace anywhere has a session.
     func nextSessionGlobal() {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
         let sc = workspaces[wsIndex].sessionCollection
-        guard let activeID = sc.activeSessionID,
-              let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }) else { return }
 
-        if sessionIndex + 1 < sc.sessions.count {
+        if let activeID = sc.activeSessionID,
+           let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }),
+           sessionIndex + 1 < sc.sessions.count {
             activate(sc.sessions[sessionIndex + 1], in: sc)
-        } else {
-            let nextWsIndex = (wsIndex + 1) % workspaces.count
-            activeWorkspaceID = workspaces[nextWsIndex].id
-            let nextSC = workspaces[nextWsIndex].sessionCollection
-            if let first = nextSC.sessions.first {
-                activate(first, in: nextSC)
+            return
+        }
+
+        // On the last session, or the active workspace is empty: scan forward
+        // for the next workspace with at least one session.
+        for offset in 1...workspaces.count {
+            let idx = (wsIndex + offset) % workspaces.count
+            let candidate = workspaces[idx]
+            if let first = candidate.sessionCollection.sessions.first {
+                activeWorkspaceID = candidate.id
+                activate(first, in: candidate.sessionCollection)
+                return
             }
         }
+        // No workspace anywhere has a session — no-op.
     }
 
     /// Navigate to the previous session across all workspaces.
-    /// If on the first session of the current workspace, moves to the last session of the previous workspace.
+    /// If on the first session of the current workspace, moves to the last session of the
+    /// previous workspace that has one — skipping over any empty workspaces (wrapping around).
+    /// A no-op if no workspace anywhere has a session.
     func previousSessionGlobal() {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == activeWorkspaceID }) else { return }
         let sc = workspaces[wsIndex].sessionCollection
-        guard let activeID = sc.activeSessionID,
-              let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }) else { return }
 
-        if sessionIndex > 0 {
+        if let activeID = sc.activeSessionID,
+           let sessionIndex = sc.sessions.firstIndex(where: { $0.id == activeID }),
+           sessionIndex > 0 {
             activate(sc.sessions[sessionIndex - 1], in: sc)
-        } else {
-            let prevWsIndex = (wsIndex - 1 + workspaces.count) % workspaces.count
-            activeWorkspaceID = workspaces[prevWsIndex].id
-            let prevSC = workspaces[prevWsIndex].sessionCollection
-            if let last = prevSC.sessions.last {
-                activate(last, in: prevSC)
+            return
+        }
+
+        // On the first session, or the active workspace is empty: scan backward
+        // for the previous workspace with at least one session.
+        for offset in 1...workspaces.count {
+            let idx = ((wsIndex - offset) % workspaces.count + workspaces.count) % workspaces.count
+            let candidate = workspaces[idx]
+            if let last = candidate.sessionCollection.sessions.last {
+                activeWorkspaceID = candidate.id
+                activate(last, in: candidate.sessionCollection)
+                return
             }
         }
+        // No workspace anywhere has a session — no-op.
     }
 
     /// Cross-workspace session activation that also resets focus to the
