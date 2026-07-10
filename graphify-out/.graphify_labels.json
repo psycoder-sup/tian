@@ -244,9 +244,5 @@
   "242": "CGFloat",
   "243": "Int",
   "244": "Context",
-  "245": ".findSession",
-  "246": "CacheResult",
-  "247": "SessionGitContextBranchDirtyTests",
-  "248": "FakeBranchGraphHost",
   "835": "tian-hook-prompt.sh"
 }

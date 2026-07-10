@@ -1,16 +1,16 @@
-# Graph Report - skill-release-ship  (2026-07-10)
+# Graph Report - tian  (2026-07-10)
 
 ## Corpus Check
-- 327 files · ~337,143 words
+- 326 files · ~337,386 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4278 nodes · 11002 edges · 250 communities (176 shown, 74 thin omitted)
+- 4267 nodes · 10992 edges · 246 communities (167 shown, 79 thin omitted)
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 1464 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `87c03f84`
+- Built from commit: `80ba00d8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -93,6 +93,7 @@
 - Session Restorer
 - Session Restorer Tests
 - Worktree Config Execution
+- Quit Flow Coordinator
 - Pane Hierarchy Wiring
 - Inspect Tab State
 - IPC Server Socket
@@ -200,7 +201,6 @@
 - tian-hook-log
 - Serena project config
 - filter_zombies
-- OrchestratorTestError
 - ConfirmAlert
 - install
 - release
@@ -257,10 +257,6 @@
 - IPCValue
 - CGFloat
 - Context
-- .findSession
-- CacheResult
-- SessionGitContextBranchDirtyTests
-- FakeBranchGraphHost
 - tian-hook-prompt.sh
 
 ## God Nodes (most connected - your core abstractions)
@@ -290,54 +286,54 @@
 ## Import Cycles
 - None detected.
 
-## Communities (250 total, 74 thin omitted)
+## Communities (246 total, 79 thin omitted)
 
 ### Community 0 - "IPC Command Handling"
-Cohesion: 0.07
-Nodes (20): ClaudeSessionNotifier, Duration, IPCCommandHandler, Bool, Int, IPCEnv, IPCRequest, IPCResponse (+12 more)
+Cohesion: 0.13
+Nodes (7): IPCCommandHandler, Int, WindowCoordinator, IPCCommandHandlerTests, IPCEnv, IPCRequest, IPCValue
 
 ### Community 1 - "Terminal Surface Input"
-Cohesion: 0.05
-Nodes (27): ghostty_input_mods_e, NSAttributedString, NSMenu, NSPoint, NSRange, NSRangePointer, NSRect, NSSize (+19 more)
+Cohesion: 0.11
+Nodes (10): ghostty_input_mods_e, NSSize, NSTextInputClient, Selector, Any, Bool, NSCoder, NSTrackingArea (+2 more)
 
 ### Community 2 - "Session Git & PR Status"
-Cohesion: 0.07
-Nodes (12): SessionGitContext, Session, Bool, CGSize, ClaudeSessionState, Date, URL, Void (+4 more)
+Cohesion: 0.08
+Nodes (8): Session, CGSize, ClaudeSessionState, Date, Void, CustomLaunchCommandTests, SessionModelTests, MainActor
 
 ### Community 3 - "Split Layout & Navigation"
 Cohesion: 0.05
-Nodes (29): CGPoint, First, Second, DividerInfo, SplitLayout, SplitLayoutResult, CGFloat, CGRect (+21 more)
+Nodes (30): CGPoint, First, Second, DividerInfo, SplitLayout, SplitLayoutResult, CGFloat, CGRect (+22 more)
 
 ### Community 4 - "Session State Migration"
-Cohesion: 0.10
-Nodes (20): Migration, MigrationError, futureVersion, migrationFailed, missingVersion, SessionStateMigrator, Any, Bool (+12 more)
+Cohesion: 0.08
+Nodes (22): Migration, MigrationError, futureVersion, migrationFailed, missingVersion, SessionStateMigrator, Any, Bool (+14 more)
 
 ### Community 5 - "CLI Command Router"
-Cohesion: 0.11
-Nodes (23): ParsableCommand, ActivityGroup, ActivitySync, GitGroup, GitRefresh, handleVoidResponse(), NotifyCommand, PaneClose (+15 more)
+Cohesion: 0.06
+Nodes (52): ExpressibleByArgument, ParsableCommand, IPCError, ActivityGroup, ActivitySync, GitGroup, GitRefresh, handleCreateResponse() (+44 more)
 
 ### Community 6 - "Git Repo Watcher"
-Cohesion: 0.07
-Nodes (13): HierarchicalEntry, SessionCollection, Bool, Int, URL, UUID, URL, WorkingDirectoryResolver (+5 more)
+Cohesion: 0.10
+Nodes (8): HierarchicalEntry, SessionCollection, Bool, Int, URL, UUID, SessionCollectionStressTests, SessionCollectionTests
 
 ### Community 7 - "Session Model"
 Cohesion: 0.13
-Nodes (10): SessionGitContext, Bool, Duration, Int, Never, Set, Task, URL (+2 more)
+Nodes (12): GitRepoStatus, SessionGitContext, Bool, Duration, Int, Never, Set, Task (+4 more)
 
 ### Community 8 - "Session Collection"
 Cohesion: 0.09
 Nodes (42): bash_commands(), buckets(), child_branch(), child_hygiene(), count_tools(), failed_delegate_tasks(), file_path_tools(), filter_zombies() (+34 more)
 
 ### Community 9 - "SwiftUI View Components"
-Cohesion: 0.08
-Nodes (7): JSONDecoder, SessionMigrationV4ToV5Tests, SessionMigrationV5ToV6Tests, SessionMigrationV7ToV8Tests, PaneNodeStateEncodingTests, JSONEncoder, WindowFrameTests
+Cohesion: 0.19
+Nodes (6): Bool, IPCEnv, IPCRequest, IPCResponse, IPCValue, UUID
 
 ### Community 10 - "Config Auto-Set Runner"
-Cohesion: 0.11
-Nodes (21): Decodable, AutoSetPayload, ClaudeResultEnvelope, CopyEntry, SetupEntry, Bool, ClaudeInvoker, ProcessClaudeInvoker (+13 more)
+Cohesion: 0.13
+Nodes (18): Decodable, AutoSetPayload, ClaudeResultEnvelope, CopyEntry, SetupEntry, Bool, ConfigAutoSetResult, ConfigAutoSetRunner (+10 more)
 
 ### Community 11 - "Session Overview Grid"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (11): InspectFileScanning, InspectFileTreeViewModel, LiveInspectFileScanner, async, Bool, Duration, Never, Set (+3 more)
 
 ### Community 12 - "Sidebar Container"
@@ -349,19 +345,19 @@ Cohesion: 0.24
 Nodes (5): Any, Void, WorktreeOrchestrator, MockWorkspaceProvider, WorktreeOrchestratorTests
 
 ### Community 14 - "Split Tree Model"
-Cohesion: 0.15
-Nodes (15): RestoreMetrics, Bool, Int, SessionState, Date, Int, makeClaudeSession(), makeWorkspaceState() (+7 more)
+Cohesion: 0.16
+Nodes (12): SessionState, Date, Int, makeClaudeSession(), makeWorkspaceState(), SessionRestorerBuildTests, SessionRestorerLoadTests, SessionRestorerMetricsTests (+4 more)
 
 ### Community 15 - "SSH Remote Execution"
 Cohesion: 0.11
-Nodes (10): Int8, GhosttyTerminalSurface, Optional, Bool, ghostty_input_key_s, ghostty_surface_t, T, UInt32 (+2 more)
+Nodes (11): ghostty_surface_config_s, Int8, GhosttyTerminalSurface, Optional, Bool, ghostty_input_key_s, ghostty_surface_t, T (+3 more)
 
 ### Community 16 - "Inspect File Tree Scanning"
-Cohesion: 0.15
-Nodes (5): Bool, WindowFrame, SessionSnapshotWindowGeometryTests, SessionSnapshotTests, SessionSnapshotWorktreePathTests
+Cohesion: 0.10
+Nodes (8): Bool, WindowFrame, UUID, Void, WorkspaceCollection, SessionSnapshotWindowGeometryTests, SessionSnapshotTests, SessionSnapshotWorktreePathTests
 
 ### Community 17 - "ANSI Stripper"
-Cohesion: 0.12
+Cohesion: 0.11
 Nodes (11): RemoveResult, lastPane, notFound, removed, SplitTree, Bool, Int, PaneNode (+3 more)
 
 ### Community 18 - "Workspace Model"
@@ -370,107 +366,107 @@ Nodes (9): ANSIStripper, State, csi, escape, escapeIntermediate, normal, osc, os
 
 ### Community 19 - "Persistence State Models"
 Cohesion: 0.08
-Nodes (13): PaneHierarchyContext, UUID, PaneViewModel, Bool, CGSize, NSObjectProtocol, Set, SplitDirection (+5 more)
+Nodes (16): Bool, ClaudeSessionState, UUID, PaneViewModel, Bool, CGSize, ClaudeSessionState, NSObjectProtocol (+8 more)
 
 ### Community 20 - "Command Logger"
-Cohesion: 0.06
-Nodes (36): CodingKey, Encodable, CodingKeys, isError, result, structuredOutput, subtype, CodingKeys (+28 more)
+Cohesion: 0.09
+Nodes (28): CodingKey, Encodable, CodingKeys, isError, result, structuredOutput, subtype, CodingKeys (+20 more)
 
 ### Community 21 - "Workspace Collection"
-Cohesion: 0.13
-Nodes (4): Int, Int32, WorktreeServiceTests, WorktreeServiceTestsRunner
+Cohesion: 0.14
+Nodes (3): Int32, WorktreeServiceTests, WorktreeServiceTestsRunner
 
 ### Community 22 - "Refresh Scheduling & Coalescing"
-Cohesion: 0.11
-Nodes (16): ghostty_action_color_change_s, ghostty_action_s, ghostty_app_t, ghostty_clipboard_e, ghostty_config_t, ghostty_surface_config_s, ghostty_target_s, NSPasteboard (+8 more)
+Cohesion: 0.10
+Nodes (18): ghostty_action_color_change_s, ghostty_action_s, ghostty_app_t, ghostty_clipboard_e, ghostty_config_t, ghostty_target_s, NSPasteboard, GhosttyApp (+10 more)
 
 ### Community 23 - "Worktree Service"
 Cohesion: 0.05
 Nodes (42): additionalProperties, description, type, description, type, description, type, description (+34 more)
 
 ### Community 24 - "Off-Main Process Runner"
-Cohesion: 0.10
-Nodes (19): DispatchWorkItem, KillGuard, State, alive, dead, terminating, pid_t, TimeInterval (+11 more)
+Cohesion: 0.08
+Nodes (24): DispatchWorkItem, FileHandle, FileLogWriter, ISO8601DateFormatter, UInt64, URL, KillGuard, State (+16 more)
 
 ### Community 25 - "Decision Record Schema"
-Cohesion: 0.16
-Nodes (13): sockaddr, blockingAwait(), IPCServer, async, Bool, Data, escaping, Int32 (+5 more)
+Cohesion: 0.28
+Nodes (7): IPCServer, async, Bool, Data, Int32, IPCResponse, UInt64
 
 ### Community 26 - "Git Status Service"
-Cohesion: 0.11
-Nodes (12): NSWindowController, NSWindowDelegate, Bool, WindowFrame, Any, Bool, NSCoder, NSObjectProtocol (+4 more)
+Cohesion: 0.07
+Nodes (16): NSLayoutConstraint, NSWindowController, NSWindowDelegate, CGFloat, NSWindow, TrafficLightAligner, Bool, WindowFrame (+8 more)
 
 ### Community 27 - "Session State Fixtures"
 Cohesion: 0.06
-Nodes (18): IPCRequest, IPCResponse, IPCValue, array, bool, int, null, object (+10 more)
-
-### Community 28 - "Worktree Service Tests"
-Cohesion: 0.12
-Nodes (11): PaneStatus, PaneStatusManager, Duration, Never, Set, T, Task, UInt64 (+3 more)
+Nodes (20): IPCEnv, IPCError, IPCRequest, IPCResponse, IPCValue, array, bool, int (+12 more)
 
 ### Community 29 - "Test Harness Utilities"
 Cohesion: 0.09
 Nodes (3): Foundation, Testing, tian
 
 ### Community 30 - "Workspace Reorder Logic"
-Cohesion: 0.09
-Nodes (6): Bool, Int, UUID, Void, WorkspaceCollection, WorkspaceCollectionTests
+Cohesion: 0.07
+Nodes (7): ForegroundProcessSummary, Int32, CGFloat, Int, WorkspaceReorderGeometry, Bool, WorkspaceCollectionTests
 
 ### Community 31 - "Inspect File Tree ViewModel"
-Cohesion: 0.10
-Nodes (5): URL, Workspace, DefaultWorkingDirectoryTests, MainActor, WorkspaceTests
+Cohesion: 0.08
+Nodes (10): Bool, Date, InspectFileTreeViewModel, URL, UUID, Workspace, WorkspaceSnapshot, DefaultWorkingDirectoryTests (+2 more)
 
 ### Community 32 - "Pane ViewModel"
 Cohesion: 0.05
 Nodes (35): Architecture, Build, Concepts, graphify, Keeping the record current (do this without being asked), Key Layers, Lifecycle, Logs (+27 more)
 
 ### Community 33 - "Error Types"
-Cohesion: 0.17
-Nodes (4): Bool, ClaudeSessionState, PaneStatusManagerTests, UUID
+Cohesion: 0.13
+Nodes (8): PaneStatusManager, Bool, ClaudeSessionState, Duration, Never, Void, PaneStatusManagerTests, UUID
 
 ### Community 34 - "Ghostty App Core"
 Cohesion: 0.35
 Nodes (7): CharacterChord, KeyBinding, KeyBindingRegistry, KeyCodeChord, NSEvent, UInt16, UInt
 
 ### Community 35 - "Pane Status Manager"
-Cohesion: 0.19
-Nodes (11): GitRepoID, PRStatus, URL, CacheEntry, CacheKey, PRStatusCache, Date, Int (+3 more)
+Cohesion: 0.13
+Nodes (16): GitRepoID, PRStatus, URL, CacheEntry, CacheKey, CacheResult, hit, miss (+8 more)
 
 ### Community 36 - "Session Git Context Tests"
-Cohesion: 0.12
-Nodes (15): InspectPanelHeader, Bool, CGFloat, DiffSummary, FilesContext, InspectPanelInfoStrip, Bool, CGFloat (+7 more)
+Cohesion: 0.09
+Nodes (20): WorktreeKind, linkedWorktree, mainCheckout, notARepo, noWorkingDirectory, InspectPanelHeader, Bool, CGFloat (+12 more)
 
 ### Community 37 - "Sidebar Drag Reorder"
-Cohesion: 0.10
-Nodes (13): DragGesture, PreferenceKey, SidebarExpandedContentView, SidebarItem, sessionRow, workspaceHeader, CGFloat, CGRect (+5 more)
+Cohesion: 0.09
+Nodes (14): DragGesture, PreferenceKey, SidebarExpandedContentView, SidebarItem, sessionRow, workspaceHeader, CGFloat, CGRect (+6 more)
 
 ### Community 38 - "Session Migration Encoding Tests"
 Cohesion: 0.16
-Nodes (8): BackgroundActivity, Kind, agent, bash, other, Bool, Date, TimeInterval
+Nodes (6): NSMenu, NSScreen, ghostty_input_key_s, ghostty_surface_t, NSEvent, UInt32
 
 ### Community 39 - "Background Activity Store"
 Cohesion: 0.07
-Nodes (16): CFTimeInterval, CallbackBox, GitRepoWatcher, Bool, DispatchQueue, escaping, FSEventStreamRef, Void (+8 more)
+Nodes (17): CFTimeInterval, CoreServices, CallbackBox, GitRepoWatcher, Bool, DispatchQueue, escaping, FSEventStreamRef (+9 more)
 
 ### Community 41 - "Session Divider Drag"
 Cohesion: 0.12
 Nodes (13): Binding, SessionOverviewCardView, Bool, Void, WorkspaceChip, CreateWorkspaceView, Field, directory (+5 more)
 
 ### Community 42 - "Framework Imports"
-Cohesion: 0.08
-Nodes (26): S, ImageReaderView, Bool, Void, DiffBinaryPlaceholderRow, DiffFileHeaderRow, DiffHunkHeaderRow, DiffLineRow (+18 more)
+Cohesion: 0.10
+Nodes (23): S, DiffBinaryPlaceholderRow, DiffFileHeaderRow, DiffHunkHeaderRow, DiffLineRow, DiffTruncatedRow, Bool, CGFloat (+15 more)
 
 ### Community 43 - "Markdown Reader"
-Cohesion: 0.09
-Nodes (19): MarkdownContent, MarkdownUI, MarkdownDiffView, Rendered, Int, DiffOutcome, notInRepo, segments (+11 more)
+Cohesion: 0.07
+Nodes (24): MarkdownContent, MarkdownUI, ReaderFileSource, RemoteReaderFileSource, Data, Date, DiffColors, MarkdownDiffView (+16 more)
 
 ### Community 44 - "Worktree Config Parser"
-Cohesion: 0.15
-Nodes (6): table, TimeInterval, URL, WorktreeConfigParser, WorktreeConfigParserTests, TOMLTable
+Cohesion: 0.12
+Nodes (12): table, CopyRule, LayoutNode, pane, split, Int, SplitDirection, TimeInterval (+4 more)
+
+### Community 45 - "Session Audit Analyzer"
+Cohesion: 0.07
+Nodes (11): BackgroundActivity, Kind, agent, bash, other, Bool, Date, TimeInterval (+3 more)
 
 ### Community 46 - "Git Types"
 Cohesion: 0.06
-Nodes (30): CustomStringConvertible, Error, LocalizedError, CLIError, closeInFlight, connection, general, permissionDenied (+22 more)
+Nodes (36): CustomStringConvertible, Error, Logger, NotificationError, permissionDenied, RestoreError, emptySessions, emptyWorkspaces (+28 more)
 
 ### Community 48 - "Working Tree Watcher"
 Cohesion: 0.14
@@ -478,27 +474,27 @@ Nodes (14): DispatchSourceTimer, Box, Bool, DispatchQueue, Duration, FSEventStre
 
 ### Community 49 - "Branch Graph Rendering"
 Cohesion: 0.11
-Nodes (16): GitCommit, GitCommitGraph, GitLane, Color, BranchCommitRow, Bool, CGFloat, BranchGraphCanvas (+8 more)
+Nodes (13): Float, SIMD2, Color, BranchGraphCanvas, InspectBranchBody, Bool, CGFloat, ClaudeSessionState (+5 more)
 
 ### Community 50 - "Inspect File Scanner"
-Cohesion: 0.10
-Nodes (14): GitChangedFile, InspectChildEntry, InspectIgnoredEntries, Bool, Set, BlockingScanner, CountingScanner, FixedScanner (+6 more)
+Cohesion: 0.16
+Nodes (7): GitChangedFile, BlockingScanner, FixedScanner, InspectFileTreeViewModel, InspectFileTreeViewModelTests, Bool, URL
 
 ### Community 51 - "CLI Output Formatting"
 Cohesion: 0.18
 Nodes (7): SessionSerializer, ClaudeSessionState, Data, URL, UUID, SessionSerializerWriteTests, URL
 
 ### Community 52 - "Claude Session State"
-Cohesion: 0.06
-Nodes (18): Comparable, ClaudeNotificationPolicy, ClaudeNotificationTrigger, done, needsAttention, Bool, ClaudeSessionState, ClaudeSessionState (+10 more)
+Cohesion: 0.08
+Nodes (8): ClaudeNotificationPolicy, ClaudeNotificationTrigger, done, needsAttention, Bool, ClaudeSessionState, ClaudeNotificationPolicyTests, ClaudeSessionStateTests
 
 ### Community 53 - "Remote Connection & Workspace Create"
-Cohesion: 0.14
-Nodes (3): BranchListViewModelTests, Bool, Date
+Cohesion: 0.15
+Nodes (3): Date, BranchListViewModelTests, Date
 
 ### Community 54 - "Inspect Branch ViewModel"
 Cohesion: 0.11
-Nodes (11): RestoreResult, Source, backup, primary, SessionRestorer, Bool, Data, URL (+3 more)
+Nodes (14): RestoreMetrics, RestoreResult, Source, backup, primary, Bool, Int, SessionRestorer (+6 more)
 
 ### Community 55 - "Markdown Diff Segments"
 Cohesion: 0.08
@@ -513,23 +509,23 @@ Cohesion: 0.15
 Nodes (8): InspectFileScanner, ScannerError, decodeFailed, gitFailed, Data, Int32, URL, InspectFileScannerTests
 
 ### Community 58 - "IPC Client CLI"
-Cohesion: 0.15
-Nodes (8): BranchEntry, BranchListProviding, BranchListServiceAdapter, Bool, Date, Kind, FakeService, FakingListService
+Cohesion: 0.13
+Nodes (9): BranchEntry, BranchListProviding, BranchListServiceAdapter, Bool, Date, Kind, FakeService, FakingListService (+1 more)
 
 ### Community 59 - "Workspace Window Controller"
-Cohesion: 0.21
-Nodes (9): InspectBranchViewModel, Bool, Never, Task, Void, BlockingGraphService, InspectBranchViewModelTests, CheckedContinuation (+1 more)
+Cohesion: 0.15
+Nodes (14): GitCommitGraph, BranchGraphDirtyHost, InspectBranchViewModel, SessionGitContext, Bool, Never, Task, Void (+6 more)
 
 ### Community 60 - "Inspect Diff ViewModel"
 Cohesion: 0.08
 Nodes (24): For /graphify add and --watch, For /graphify query, For the commit hook and native CLAUDE.md integration, For --update and --cluster-only, /graphify, Honesty Rules, Interpreter guard for subcommands, Part A - Structural extraction for code files (+16 more)
 
 ### Community 61 - "Inspect Panel View"
-Cohesion: 0.11
-Nodes (13): App, NSApplicationDelegate, NSObject, Scene, TianApp, Bool, NSApplication, TianAppDelegate (+5 more)
+Cohesion: 0.14
+Nodes (10): NSApplicationDelegate, NSObject, Bool, NSApplication, TianAppDelegate, UNNotification, UNNotificationPresentationOptions, UNNotificationResponse (+2 more)
 
 ### Community 62 - "Create Session View"
-Cohesion: 0.12
+Cohesion: 0.13
 Nodes (17): Character, CreateSessionView, CreateWorktreeSubmission, Field, dialog, name, SubmitAction, blocked (+9 more)
 
 ### Community 63 - "Git Status Service Tests"
@@ -537,32 +533,28 @@ Cohesion: 0.23
 Nodes (7): SessionOverviewSort, ClaudeSessionState, T, Item, SessionOverviewSortTests, ClaudeSessionState, Int
 
 ### Community 64 - "IPC Message Protocol"
-Cohesion: 0.16
-Nodes (11): handleCreateResponse(), PaneSend, PaneSplit, sendRequest(), SessionClose, SessionCreate, Bool, Int (+3 more)
+Cohesion: 0.19
+Nodes (8): Kind, added, removed, unchanged, MarkdownDiffSegment, MarkdownInlineDiff, Int, MarkdownInlineDiffTests
 
 ### Community 65 - "Session Split Navigation"
-Cohesion: 0.07
-Nodes (26): GitFileDiff, InspectDiffViewModel, Bool, Duration, Never, Set, Task, Void (+18 more)
+Cohesion: 0.25
+Nodes (12): GitFileDiff, InspectDiffViewModel, Bool, Duration, Never, Set, Task, Void (+4 more)
 
 ### Community 67 - "Worktree Setup Progress"
-Cohesion: 0.24
-Nodes (8): Snapshot, Duration, Never, Task, UInt32, UInt64, Void, SystemMonitor
-
-### Community 68 - "Background Activity Sync"
-Cohesion: 0.12
-Nodes (8): PaneKind, claude, terminal, ClaudeSessionState, PaneNode, RemoteSpawnSpec, PaneSpawner, PaneViewModelRealizeSurfaceTests
+Cohesion: 0.14
+Nodes (14): escaping, T, Double, AppMetrics, Int, UInt64, Snapshot, Duration (+6 more)
 
 ### Community 69 - "Pane Node Building"
-Cohesion: 0.15
-Nodes (11): ExpressibleByArgument, handleListResponse(), PaneList, SessionList, IPCValue, WorkspaceList, OutputFormat, json (+3 more)
+Cohesion: 0.14
+Nodes (4): InspectTabState, Bool, InspectTab, InspectTabStateTests
 
 ### Community 70 - "Pane Node Tree"
-Cohesion: 0.14
-Nodes (18): Identifiable, GitDiffHunk, GitDiffLine, GitDiffSummary, GitRepoStatus, Kind, added, context (+10 more)
+Cohesion: 0.12
+Nodes (22): Identifiable, GitCommit, GitDiffHunk, GitDiffLine, GitDiffSummary, GitFileStatus, added, deleted (+14 more)
 
 ### Community 71 - "Create Session Flow Tests"
-Cohesion: 0.10
-Nodes (14): RemoteExecutionRegistry, Bool, SSHConnection, State, connected, connecting, idle, offline (+6 more)
+Cohesion: 0.05
+Nodes (25): RemoteInspectFileScanner, RemoteScanError, commandFailed, Data, Duration, Int32, URL, RemoteCommandBuilder (+17 more)
 
 ### Community 72 - "IPC Env Encoding"
 Cohesion: 0.17
@@ -578,51 +570,55 @@ Nodes (9): PaneNode, leaf, split, SplitDirection, horizontal, vertical, Bool, In
 
 ### Community 75 - "Session Restorer"
 Cohesion: 0.13
-Nodes (17): IPCError, IPCRequest, IPCResponse, IPCValue, array, bool, int, null (+9 more)
+Nodes (19): Codable, IPCEnv, IPCError, IPCRequest, IPCResponse, IPCValue, array, bool (+11 more)
 
 ### Community 76 - "Session Restorer Tests"
 Cohesion: 0.10
-Nodes (32): Codable, Equatable, Sendable, IPCEnv, escaping, T, IPCEnv, IPCError (+24 more)
+Nodes (16): JSONDecoder, PaneLeafState, SessionRecord, Bool, ClaudeSessionState, UUID, WindowFrame, WorkspaceState (+8 more)
+
+### Community 77 - "Worktree Config Execution"
+Cohesion: 0.14
+Nodes (5): GitStatusService, Bool, Int, Int32, GitStatusServiceTests
+
+### Community 78 - "Quit Flow Coordinator"
+Cohesion: 0.25
+Nodes (4): NSAttributedString, NSRange, NSRangePointer, NSRect
 
 ### Community 79 - "Pane Hierarchy Wiring"
 Cohesion: 0.11
 Nodes (18): A Session = one Claude pane + a toggleable terminal panel, Command reference, Core rules, Delegation orchestrator (bundled script — backs `/tian implement`), Discovery, Driving tian with the `tian` CLI, Gotchas, Long-session hygiene (+10 more)
 
 ### Community 80 - "Inspect Tab State"
-Cohesion: 0.20
-Nodes (4): RemoteCommandBuilder, ShellQuoting, SSHMultiplexing, RemoteCommandBuilderTests
+Cohesion: 0.26
+Nodes (6): ClaudeSessionNotifier, Duration, NotificationManager, Bool, UUID, NotificationManagerTests
 
 ### Community 81 - "IPC Server Socket"
-Cohesion: 0.13
-Nodes (13): ReaderOverlayView, Bool, CGFloat, Void, SessionContentView, Bool, CGFloat, CGSize (+5 more)
+Cohesion: 0.19
+Nodes (9): SessionContentView, Bool, CGFloat, CGSize, SessionHeaderView, CGFloat, SplitTreeView, Bool (+1 more)
 
 ### Community 82 - "Key Binding Registry"
-Cohesion: 0.18
-Nodes (9): Phase, cleanup, removing, setup, SetupProgress, Bool, Int, UUID (+1 more)
+Cohesion: 0.09
+Nodes (19): SidebarSessionRowMutationGate, SidebarSessionRowView, Bool, CGFloat, Date, URL, UUID, Void (+11 more)
 
 ### Community 84 - "Branch List Fakes"
-Cohesion: 0.16
-Nodes (3): CGFloat, Int, WorkspaceReorderGeometry
+Cohesion: 0.20
+Nodes (10): InspectDiffBody, Row, binary, divider, fileHeader, hunkHeader, line, truncated (+2 more)
 
 ### Community 85 - "App Delegate Lifecycle"
-Cohesion: 0.18
-Nodes (10): 1. Settle the tree (graphify churn), 2. (Confirmed) — proceed once the version and a clean tree are both settled., 3. Publish, 4. Update the release record — `docs/pm/status.json`, 5. Verify, Cutting a tian release with `/release`, Escape hatches (env vars, forwarded to publish.sh), Gotchas (+2 more)
+Cohesion: 0.29
+Nodes (5): Harness, Int, NSView, NSWindow, TerminalSurfaceViewFocusTests
 
 ### Community 86 - "File Log Writer"
-Cohesion: 0.18
-Nodes (8): InspectPanelState, Bool, CGFloat, Bool, Date, UUID, WorkspaceSnapshot, InspectPanelStateTests
-
-### Community 87 - "Window Drag Blocker"
-Cohesion: 0.25
-Nodes (8): NSView, KeyView, SidebarKeyboardResponder, Bool, Context, KeyView, NSEvent, Void
+Cohesion: 0.33
+Nodes (4): InspectPanelState, Bool, CGFloat, InspectPanelStateTests
 
 ### Community 88 - "Commit Graph Tests"
 Cohesion: 0.32
 Nodes (5): SkillInstaller, URL, UserDefaults, SkillInstallerTests, URL
 
 ### Community 89 - "IPC Message Tests"
-Cohesion: 0.20
-Nodes (11): Hashable, FileTreeNode, Kind, directory, file, Bool, Int, Kind (+3 more)
+Cohesion: 0.29
+Nodes (7): FileTreeNode, Kind, directory, file, Bool, Int, Kind
 
 ### Community 90 - "Remote Command Builder"
 Cohesion: 0.20
@@ -633,12 +629,12 @@ Cohesion: 0.31
 Nodes (4): BranchListService, Int32, Set, BranchListServiceTests
 
 ### Community 92 - "Branch List ViewModel"
-Cohesion: 0.18
-Nodes (4): ProcessDetector, RunningProcessInfo, UUID, ProcessDetectorTests
+Cohesion: 0.13
+Nodes (6): ProcessDetector, RunningProcessInfo, Bool, Int, UUID, ProcessDetectorTests
 
 ### Community 93 - "Branch List Service"
-Cohesion: 0.15
-Nodes (9): ArgumentParser, ConfigAutoSet, ConfigGroup, Bool, CommandContext, IPCEnv, TianCLI, TianEnvironment (+1 more)
+Cohesion: 0.08
+Nodes (18): ArgumentParser, ClaudeInvoker, ProcessClaudeInvoker, URL, ConfigAutoSet, ConfigGroup, Bool, IPCClient (+10 more)
 
 ### Community 94 - "Key Chord Model"
 Cohesion: 0.23
@@ -653,8 +649,8 @@ Cohesion: 0.27
 Nodes (5): Carbon.HIToolbox, KeyboardLayoutTranslator, Data, UInt16, UInt32
 
 ### Community 97 - "Status Doc Schema"
-Cohesion: 0.16
-Nodes (8): Bool, Coordinator, Bool, Context, NSView, SplitDirection, UUID, TerminalContentView
+Cohesion: 0.18
+Nodes (7): Coordinator, Bool, Context, NSView, SplitDirection, UUID, TerminalContentView
 
 ### Community 99 - "Terminal Content View"
 Cohesion: 0.24
@@ -665,11 +661,11 @@ Cohesion: 0.27
 Nodes (6): PollingRefresher, Duration, MainActor, Never, Task, Void
 
 ### Community 101 - "Image Reader"
-Cohesion: 0.17
-Nodes (8): ImageIO, NSImage, ReaderFileSource, RemoteReaderFileSource, ImageDocument, Sendbox, Date, T
+Cohesion: 0.18
+Nodes (9): ImageIO, NSImage, ImageDocument, Sendbox, Date, T, ImageReaderView, Bool (+1 more)
 
 ### Community 102 - "Session Serializer"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (9): GridItem, SessionOverviewSortMode, defaultOrder, sessionState, CardEntry, SessionOverviewGridView, CGFloat, Int (+1 more)
 
 ### Community 103 - "Workspace Keyboard Navigation"
@@ -681,20 +677,20 @@ Cohesion: 0.14
 Nodes (13): Architecture, Build, Concepts, Key Layers, Lifecycle, Logs, Scratch / Temporary Files, Source Layout (+5 more)
 
 ### Community 105 - "Check For Updates"
-Cohesion: 0.20
-Nodes (9): CaseIterable, WorktreeCreateOutput, id, ids, json, InspectTab, branch, diff (+1 more)
+Cohesion: 0.06
+Nodes (36): CaseIterable, Comparable, Equatable, Sendable, ClaudeSessionState, active, busy, failed (+28 more)
 
 ### Community 106 - "Working Directory Resolver"
-Cohesion: 0.27
-Nodes (3): EnvironmentBuilder, UUID, EnvironmentBuilderTests
+Cohesion: 0.18
+Nodes (5): EnvironmentBuilder, UUID, PaneHierarchyContext, UUID, EnvironmentBuilderTests
 
 ### Community 107 - "App Hero Screenshot (UI)"
 Cohesion: 0.24
 Nodes (13): Claude Pane (Claude Code v2.1.140), Claude Code Statusline (ctx/model/branch), File Explorer Panel (Files/Diff/Branch), Workspace -> Session -> Pane Hierarchy, New Workspace Action, Session Row (name + branch + git diff), Workspace/Session Sidebar, Bottom Status Bar (CPU/RAM) (+5 more)
 
 ### Community 108 - "Shipped Items Schema"
-Cohesion: 0.25
-Nodes (10): sockaddr_un, socklen_t, IPCServerTests, IPCTestError, connectionFailed, socketCreationFailed, writeFailed, Data (+2 more)
+Cohesion: 0.40
+Nodes (6): sockaddr_un, socklen_t, IPCServerTests, connectionFailed, Data, Int
 
 ### Community 109 - "Status Bar View"
 Cohesion: 0.22
@@ -705,32 +701,32 @@ Cohesion: 0.15
 Nodes (13): description, type, properties, commit, since, summary, target, description (+5 more)
 
 ### Community 111 - "NotificationManager"
-Cohesion: 0.29
-Nodes (5): FileHandle, FileLogWriter, ISO8601DateFormatter, UInt64, URL
+Cohesion: 0.20
+Nodes (6): InspectChildEntry, InspectIgnoredEntries, Bool, Set, CountingScanner, Int
 
 ### Community 112 - "TianSettings"
-Cohesion: 0.22
-Nodes (3): URL, WorkspaceCreationFlow, WorkspaceCreationFlowTests
+Cohesion: 0.17
+Nodes (5): DirectoryPicker, URL, URL, WorkspaceCreationFlow, WorkspaceCreationFlowTests
 
 ### Community 113 - "Row"
-Cohesion: 0.24
+Cohesion: 0.18
 Nodes (5): SessionCloseFlow, Bool, NSWindow, URL, Error
 
 ### Community 114 - "AppKit"
-Cohesion: 0.18
-Nodes (8): BlockerView, Bool, Context, NSEvent, NSTrackingArea, NSView, NSWindow, WindowDragBlocker
+Cohesion: 0.08
+Nodes (21): NSView, NSViewRepresentable, Context, NSView, NSWindow, WindowAccessor, KeyView, SidebarKeyboardResponder (+13 more)
 
 ### Community 115 - "KeyboardLayoutTranslator"
-Cohesion: 0.29
+Cohesion: 0.33
 Nodes (5): Bool, UserDefaults, TianSettings, UserDefaults, TianSettingsTests
 
 ### Community 116 - "implement-log"
 Cohesion: 0.11
-Nodes (15): Content, image, markdown, SessionReaderState, DefaultDirectoryMenu, URL, Void, SidebarSessionRowMutationGate (+7 more)
+Nodes (11): Content, image, markdown, SessionReaderState, DefaultDirectoryMenu, URL, Void, ReaderOverlayView (+3 more)
 
 ### Community 117 - "socklen_t"
-Cohesion: 0.09
-Nodes (17): WorktreeError, baseWithExisting, branchAlreadyExists, closeInFlight, configParseError, gitError, invalidBaseRef, notAGitRepo (+9 more)
+Cohesion: 0.10
+Nodes (13): Log, ClosedRange, TimeInterval, WorktreeConfig, Bool, T, URL, UUID (+5 more)
 
 ### Community 118 - "AutoSetPrompt"
 Cohesion: 0.25
@@ -753,24 +749,24 @@ Cohesion: 0.11
 Nodes (10): CoreGraphics, SessionDividerClamper, Bool, CGFloat, SessionLayout, CGFloat, CGRect, CGSize (+2 more)
 
 ### Community 124 - "EnvironmentBuilderTests"
-Cohesion: 0.15
-Nodes (15): Badge, local, localAndOrigin, origin, BranchEntry.Kind, BranchListViewModel, BranchRow, Direction (+7 more)
+Cohesion: 0.19
+Nodes (9): BranchListViewModel, BranchRow, Direction, down, up, Mode, existingBranch, newBranch (+1 more)
 
 ### Community 125 - "WorktreeKindTests"
-Cohesion: 0.27
-Nodes (7): SessionSplitNavigation, CGRect, CGSize, PaneNode, UUID, Target, UUID
+Cohesion: 0.14
+Nodes (10): SessionGitContext, SessionSplitNavigation, CGRect, CGSize, PaneNode, UUID, Target, Bool (+2 more)
 
 ### Community 129 - "WorkspaceWindowContent"
-Cohesion: 0.27
-Nodes (6): IPCClient, Int, Int32, IPCRequest, IPCResponse, Ping
+Cohesion: 0.25
+Nodes (5): sockaddr, blockingAwait(), escaping, T, UnsafePointer
 
 ### Community 130 - "implement"
-Cohesion: 0.36
-Nodes (4): Float, SIMD2, BusyDotView, CGFloat
+Cohesion: 0.40
+Nodes (4): PaneStatus, T, UInt64, WeakBox
 
 ### Community 131 - "os"
-Cohesion: 0.36
-Nodes (4): NSLayoutConstraint, CGFloat, NSWindow, TrafficLightAligner
+Cohesion: 0.22
+Nodes (8): LocalizedError, CLIError, closeInFlight, connection, general, permissionDenied, processSafety, Int32
 
 ### Community 132 - "MarkdownCopyButton"
 Cohesion: 0.22
@@ -806,7 +802,7 @@ Nodes (5): ContinuousClock, PollTimeoutError, pollUntil(), Duration, MainActor
 
 ### Community 140 - "blockingAwait"
 Cohesion: 0.11
-Nodes (8): CoreServices, Darwin, os, OSLog, BranchDeleteOutcome, deleted, keptUnmerged, notFound
+Nodes (8): Darwin, os, OSLog, BranchDeleteOutcome, deleted, keptUnmerged, notFound, State
 
 ### Community 141 - ".makeHarness"
 Cohesion: 0.33
@@ -821,8 +817,8 @@ Cohesion: 0.21
 Nodes (8): NSAlert, ConfirmAlert, QuitConfirmationDialog, Bool, Int, NSAlert, NSWindow, Void
 
 ### Community 144 - "Response"
-Cohesion: 0.39
-Nodes (3): AppMetrics, Int, UInt64
+Cohesion: 0.33
+Nodes (5): ChangeBadgeView, Int, Never, Task, Void
 
 ### Community 145 - "ShellReadyReason"
 Cohesion: 0.25
@@ -865,28 +861,24 @@ Cohesion: 0.17
 Nodes (9): Commands, ObservableObject, Sparkle, CheckForUpdatesView, CheckForUpdatesViewModel, SPUUpdater, SPUUpdater, WorkspaceCommands (+1 more)
 
 ### Community 160 - "SidebarWorkspaceHeaderView"
-Cohesion: 0.38
-Nodes (5): NSViewRepresentable, Context, NSView, NSWindow, WindowAccessor
+Cohesion: 0.40
+Nodes (3): App, Scene, TianApp
 
 ### Community 161 - "EventCoalescerTests"
-Cohesion: 0.38
-Nodes (3): Bool, ClaudeSessionState, UUID
+Cohesion: 0.40
+Nodes (5): PRState, closed, draft, merged, open
 
 ### Community 162 - ".send"
-Cohesion: 0.33
-Nodes (6): GitFileStatus, added, deleted, modified, renamed, unmerged
-
-### Community 166 - ".startClaude"
-Cohesion: 0.22
-Nodes (6): WorktreeKind, linkedWorktree, mainCheckout, notARepo, noWorkingDirectory, WorktreeKindTests
+Cohesion: 0.25
+Nodes (8): Hashable, Badge, local, localAndOrigin, origin, Kind, local, remote
 
 ### Community 167 - "AppMetrics"
 Cohesion: 0.04
-Nodes (32): SwiftUI, SettingsView, InspectPanelFileBrowser, InspectFileTreeViewModel, Void, InspectPanelRail, CGFloat, Void (+24 more)
+Nodes (28): Observation, SwiftUI, SettingsView, Keys, BranchEntry.Kind, InspectPanelFileBrowser, InspectFileTreeViewModel, Void (+20 more)
 
 ### Community 169 - "publish"
-Cohesion: 0.10
-Nodes (18): Logger, FileBaseline, committed, notInRepo, untracked, GitStatusService, Bool, Int (+10 more)
+Cohesion: 0.50
+Nodes (4): FileBaseline, committed, notInRepo, untracked
 
 ### Community 171 - "resolve_from_runlog"
 Cohesion: 0.67
@@ -897,12 +889,8 @@ Cohesion: 0.67
 Nodes (3): title, description, type
 
 ### Community 173 - "EventCoalescerTests"
-Cohesion: 0.11
-Nodes (15): WorkspaceProviding, CopyRule, LayoutNode, pane, split, ClosedRange, Int, SplitDirection (+7 more)
-
-### Community 175 - "ConfirmAlert"
-Cohesion: 0.33
-Nodes (5): PaneState, exited, running, spawnFailed, UInt32
+Cohesion: 0.08
+Nodes (18): AnyObject, WorkspaceProviding, Bool, UUID, WorktreeCreateResult, WorktreeError, baseWithExisting, branchAlreadyExists (+10 more)
 
 ### Community 176 - "date"
 Cohesion: 0.50
@@ -928,17 +916,13 @@ Nodes (3): Glowing Vertical Cursor Bar Motif, tian App Icon (macOS AppIcon), Ter
 Cohesion: 0.50
 Nodes (4): description, items, type, now
 
-### Community 184 - "tian-hook-log"
-Cohesion: 0.12
-Nodes (7): AnyObject, Observation, BranchGraphDirtyHost, SessionGitContext, Keys, Bool, WorktreeRemovalResult
-
 ### Community 186 - "filter_zombies"
 Cohesion: 0.83
 Nodes (3): tian-bash-integration.bash script, _tian_fix_path(), _tian_install_claude_wrapper()
 
 ### Community 188 - "ConfirmAlert"
-Cohesion: 0.14
-Nodes (5): AppKit, CGRect, WindowFrame, DirectoryPicker, URL
+Cohesion: 0.20
+Nodes (3): AppKit, CGRect, WindowFrame
 
 ### Community 192 - "tian-hook-pr-refresh"
 Cohesion: 0.67
@@ -952,52 +936,28 @@ Nodes (3): description, type, date
 Cohesion: 0.67
 Nodes (3): description, type, done
 
-### Community 196 - ".flagsChanged"
-Cohesion: 0.47
-Nodes (3): HtmlFileType, Bool, Set
-
 ### Community 198 - "graphify knowledge graph"
 Cohesion: 0.25
 Nodes (9): Bundle tian CLI build phase, Bundled Claude hook scripts, tian-cli tool target, tian app target, tianTests target, XcodeGen project.yml, MarkdownUI, Swift Argument Parser (+1 more)
 
-### Community 200 - "CLIError+IPC.swift"
-Cohesion: 0.25
-Nodes (4): CLIError, IPCError, PaneCapture, WorktreeCreate
-
-### Community 201 - "WorkingDirectoryResolver.swift"
-Cohesion: 0.47
-Nodes (3): ImageFileType, Bool, Set
-
-### Community 202 - "graphify reference: commit hook and native CLAUDE.md integration"
-Cohesion: 0.50
-Nodes (3): SurfaceCallbackContext, ghostty_surface_t, UUID
-
 ### Community 214 - "T"
-Cohesion: 0.15
-Nodes (3): RemoteConnection, Bool, RemoteConnectionTests
-
-### Community 242 - "CGFloat"
-Cohesion: 0.40
-Nodes (3): MarkdownFileType, Bool, Set
-
-### Community 246 - "CacheResult"
-Cohesion: 0.50
-Nodes (4): CacheResult, hit, miss, Bool
+Cohesion: 0.16
+Nodes (4): RemoteConnectionState, RemoteConnection, Bool, RemoteConnectionTests
 
 ## Knowledge Gaps
-- **434 isolated node(s):** `Preconditions`, `1. Settle the tree (graphify churn)`, `2. (Confirmed) — proceed once the version and a clean tree are both settled.`, `3. Publish`, `4. Update the release record — `docs/pm/status.json`` (+429 more)
+- **426 isolated node(s):** `$schema`, `$id`, `title`, `description`, `type` (+421 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **74 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **79 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `String` connect `publish` to `IPC Command Handling`, `Terminal Surface Input`, `Session Git & PR Status`, `Session State Migration`, `CLI Command Router`, `Git Repo Watcher`, `Session Model`, `Config Auto-Set Runner`, `Session Overview Grid`, `Sidebar Container`, `Worktree Orchestrator`, `Split Tree Model`, `SSH Remote Execution`, `ANSI Stripper`, `Workspace Model`, `Persistence State Models`, `Command Logger`, `Workspace Collection`, `Refresh Scheduling & Coalescing`, `Off-Main Process Runner`, `Decision Record Schema`, `Session State Fixtures`, `Worktree Service Tests`, `Workspace Reorder Logic`, `Inspect File Tree ViewModel`, `Ghostty App Core`, `Pane Status Manager`, `Session Git Context Tests`, `Sidebar Drag Reorder`, `Session Migration Encoding Tests`, `Background Activity Store`, `Graphify Pipeline Skill`, `Session Divider Drag`, `Framework Imports`, `Markdown Reader`, `Worktree Config Parser`, `Session Audit Analyzer`, `Git Types`, `Working Tree Watcher`, `Branch Graph Rendering`, `Inspect File Scanner`, `CLI Output Formatting`, `Claude Session State`, `Remote Connection & Workspace Create`, `Inspect Branch ViewModel`, `Branch List Tests`, `IPC Client CLI`, `Workspace Window Controller`, `Create Session View`, `IPC Message Protocol`, `Session Split Navigation`, `Fuzzy Match`, `Background Activity Sync`, `Pane Node Building`, `Pane Node Tree`, `Create Session Flow Tests`, `IPC Env Encoding`, `Pane Status Aggregation Tests`, `Session State Registry`, `Session Restorer`, `Session Restorer Tests`, `Worktree Config Execution`, `Inspect Tab State`, `IPC Server Socket`, `Key Binding Registry`, `Session Content View`, `File Log Writer`, `Commit Graph Tests`, `IPC Message Tests`, `Skill Installer`, `Branch List ViewModel`, `Branch List Service`, `Key Chord Model`, `Process Detector`, `Image Reader`, `Session Serializer`, `Check For Updates`, `Working Directory Resolver`, `Shipped Items Schema`, `Status Bar View`, `NotificationManager`, `TianSettings`, `KeyboardLayoutTranslator`, `implement-log`, `socklen_t`, `GitStatusServiceUnifiedDiffTests`, `EnvironmentBuilderTests`, `SessionSplitNavigation`, `PollingRefresher`, `WorkspaceWindowContent`, `Response`, `MockWorkspaceProvider`, `BusyDotView`, `Response`, `InlineRenameView`, `RefreshSchedulerTests`, `resolve_from_runlog`, `ContinuousClock`, `.unifiedDiff`, `.send`, `.fromIPCError`, `.startClaude`, `AppMetrics`, `EventCoalescerTests`, `.makeTempGitRepo`, `tian-hook-log`, `OrchestratorTestError`, `ConfirmAlert`, `.flagsChanged`, `CLIError+IPC.swift`, `WorkingDirectoryResolver.swift`, `T`, `CGFloat`, `Context`?**
-  _High betweenness centrality (0.562) - this node is a cross-community bridge._
-- **Why does `Foundation` connect `Test Harness Utilities` to `WorkspaceWindowContent`, `Split Layout & Navigation`, `Session State Migration`, `CLI Command Router`, `Git Repo Watcher`, `Config Auto-Set Runner`, `Session Overview Grid`, `blockingAwait`, `.stopPreventsFurtherCallbacks`, `Split Tree Model`, `ANSI Stripper`, `Workspace Model`, `Persistence State Models`, `Command Logger`, `BranchListService`, `Off-Main Process Runner`, `Decision Record Schema`, `Git Status Service`, `PaneState`, `Worktree Service Tests`, `HtmlFileType`, `Pane Status Manager`, `.fromIPCError`, `.startClaude`, `Session Migration Encoding Tests`, `SessionRestorer`, `Markdown Reader`, `Worktree Config Parser`, `EventCoalescerTests`, `Git Types`, `Inspect File Scanner`, `CLI Output Formatting`, `Claude Session State`, `Markdown Diff Segments`, `tian-hook-log`, `Branch List Tests`, `ConfirmAlert`, `Git Status Service Tests`, `Background Activity Sync`, `Pane Node Building`, `Pane Node Tree`, `Create Session Flow Tests`, `CLIError+IPC.swift`, `Pane Status Aggregation Tests`, `Session State Registry`, `Session Restorer`, `Session Restorer Tests`, `.flagsChanged`, `WorkingDirectoryResolver.swift`, `Inspect Tab State`, `Key Binding Registry`, `File Log Writer`, `T`, `Commit Graph Tests`, `IPC Message Tests`, `Remote Command Builder`, `Branch List ViewModel`, `Branch List Service`, `Close Confirmation Dialog`, `Image Reader`, `Workspace Keyboard Navigation`, `Check For Updates`, `Working Directory Resolver`, `NotificationManager`, `TianSettings`, `CGFloat`, `KeyboardLayoutTranslator`, `implement-log`, `socklen_t`, `items`, `EnvironmentBuilderTests`, `SessionSplitNavigation`?**
-  _High betweenness centrality (0.078) - this node is a cross-community bridge._
-- **Why does `Session` connect `Session Git & PR Status` to `IPC Command Handling`, `Git Repo Watcher`, `Sidebar Container`, `Split Tree Model`, `Inspect File Tree Scanning`, `Persistence State Models`, `Worktree Service Tests`, `Inspect File Tree ViewModel`, `EventCoalescerTests`, `Error Types`, `.fromIPCError`, `Session Migration Encoding Tests`, `Sidebar Drag Reorder`, `NSView`, `publish`, `Session Divider Drag`, `Session Audit Analyzer`, `CLI Output Formatting`, `tian-hook-log`, `OrchestratorTestError`, `Background Activity Sync`, `Pane Node Tree`, `Create Session Flow Tests`, `Session Restorer Tests`, `Quit Flow Coordinator`, `IPC Server Socket`, `Session Serializer`, `Workspace Keyboard Navigation`, `Row`, `Context`, `implement-log`, `.findSession`, `SidebarExpandedContentView`, `WorktreeKindTests`, `PollingRefresher`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
+- **Why does `String` connect `Git Types` to `IPC Command Handling`, `Terminal Surface Input`, `Session Git & PR Status`, `Session State Migration`, `CLI Command Router`, `Git Repo Watcher`, `Session Model`, `SwiftUI View Components`, `Config Auto-Set Runner`, `Session Overview Grid`, `Sidebar Container`, `Worktree Orchestrator`, `Split Tree Model`, `SSH Remote Execution`, `Inspect File Tree Scanning`, `ANSI Stripper`, `Workspace Model`, `Persistence State Models`, `Command Logger`, `Workspace Collection`, `Refresh Scheduling & Coalescing`, `Off-Main Process Runner`, `Decision Record Schema`, `Git Status Service`, `Session State Fixtures`, `Worktree Service Tests`, `Workspace Reorder Logic`, `Inspect File Tree ViewModel`, `Error Types`, `Ghostty App Core`, `Pane Status Manager`, `Session Git Context Tests`, `Sidebar Drag Reorder`, `Background Activity Store`, `Graphify Pipeline Skill`, `Session Divider Drag`, `Framework Imports`, `Markdown Reader`, `Worktree Config Parser`, `Session Audit Analyzer`, `Working Tree Watcher`, `Branch Graph Rendering`, `Inspect File Scanner`, `CLI Output Formatting`, `Remote Connection & Workspace Create`, `Inspect Branch ViewModel`, `Branch List Tests`, `IPC Client CLI`, `Workspace Window Controller`, `Create Session View`, `IPC Message Protocol`, `Session Split Navigation`, `Fuzzy Match`, `Worktree Setup Progress`, `Background Activity Sync`, `Pane Node Building`, `Pane Node Tree`, `Create Session Flow Tests`, `IPC Env Encoding`, `Pane Status Aggregation Tests`, `Session State Registry`, `Session Restorer`, `Session Restorer Tests`, `Worktree Config Execution`, `Inspect Tab State`, `IPC Server Socket`, `Key Binding Registry`, `Session Content View`, `Branch List Fakes`, `Window Drag Blocker`, `Commit Graph Tests`, `IPC Message Tests`, `Skill Installer`, `Branch List ViewModel`, `Branch List Service`, `Key Chord Model`, `Process Detector`, `Image Reader`, `Session Serializer`, `Check For Updates`, `Working Directory Resolver`, `Shipped Items Schema`, `Status Bar View`, `NotificationManager`, `TianSettings`, `KeyboardLayoutTranslator`, `implement-log`, `socklen_t`, `GitStatusServiceUnifiedDiffTests`, `EnvironmentBuilderTests`, `WorktreeKindTests`, `SessionSplitNavigation`, `PollingRefresher`, `implement`, `os`, `Response`, `MockWorkspaceProvider`, `BusyDotView`, `blockingAwait`, `InlineRenameView`, `RefreshSchedulerTests`, `resolve_from_runlog`, `ContinuousClock`, `.unifiedDiff`, `EventCoalescerTests`, `.send`, `.fromIPCError`, `.startClaude`, `AppMetrics`, `publish`, `EventCoalescerTests`, `.makeTempGitRepo`, `tian-hook-log`, `T`, `CGFloat`, `Context`?**
+  _High betweenness centrality (0.553) - this node is a cross-community bridge._
+- **Why does `Foundation` connect `Test Harness Utilities` to `WorkspaceWindowContent`, `implement`, `os`, `Split Layout & Navigation`, `CLI Command Router`, `Session State Migration`, `Git Repo Watcher`, `Config Auto-Set Runner`, `.stopPreventsFurtherCallbacks`, `blockingAwait`, `Split Tree Model`, `ANSI Stripper`, `Workspace Model`, `Persistence State Models`, `Command Logger`, `BranchListService`, `Off-Main Process Runner`, `PaneState`, `Git Status Service`, `Session State Fixtures`, `HtmlFileType`, `Inspect File Tree ViewModel`, `Pane Status Manager`, `Session Git Context Tests`, `.fromIPCError`, `Background Activity Store`, `AppMetrics`, `SessionRestorer`, `Markdown Reader`, `Worktree Config Parser`, `Session Audit Analyzer`, `Git Types`, `EventCoalescerTests`, `Working Tree Watcher`, `CLI Output Formatting`, `Claude Session State`, `Markdown Diff Segments`, `tian-hook-log`, `Branch List Tests`, `IPC Client CLI`, `Workspace Window Controller`, `ConfirmAlert`, `Git Status Service Tests`, `IPC Message Protocol`, `Pane Node Building`, `Pane Node Tree`, `Create Session Flow Tests`, `CLIError+IPC.swift`, `Pane Status Aggregation Tests`, `Session State Registry`, `Session Restorer`, `WorkingDirectoryResolver.swift`, `Session Restorer Tests`, `Key Binding Registry`, `T`, `Commit Graph Tests`, `IPC Message Tests`, `Remote Command Builder`, `Branch List ViewModel`, `Branch List Service`, `Close Confirmation Dialog`, `Workspace Keyboard Navigation`, `Check For Updates`, `Working Directory Resolver`, `TianSettings`, `implement-log`, `items`, `SessionSplitNavigation`?**
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
+- **Why does `TerminalSurfaceView` connect `Terminal Surface Input` to `Status Doc Schema`, `Session Git & PR Status`, `Split Layout & Navigation`, `Session Migration Encoding Tests`, `Quit Flow Coordinator`, `SSH Remote Execution`, `ConfirmAlert`, `ANSI Stripper`, `AppKit`, `Persistence State Models`, `Git Types`, `App Delegate Lifecycle`, `Refresh Scheduling & Coalescing`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Are the 16 inferred relationships involving `String` (e.g. with `.run()` and `.resolveRepoRoot()`) actually correct?**
   _`String` has 16 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 61 inferred relationships involving `Session` (e.g. with `.buildWorkspaceCollection()` and `SessionReaderState`) actually correct?**
