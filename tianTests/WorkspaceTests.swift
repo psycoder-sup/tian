@@ -629,4 +629,116 @@ struct WorkspaceCollectionTests {
         #expect(collection.workspaces.count == 2)
         #expect(ws1.sessionCollection.sessions.isEmpty)
     }
+
+    // MARK: - Global Session Navigation (empty-workspace skip)
+
+    /// Empties every session in `workspace`, leaving it in the "no sessions"
+    /// state a workspace reaches after closing its last session.
+    private func emptyAllSessions(of workspace: Workspace) {
+        for session in workspace.sessionCollection.sessions {
+            workspace.sessionCollection.removeSession(id: session.id)
+        }
+    }
+
+    /// Creates a new workspace and immediately empties its auto-seeded
+    /// session, modeling an empty workspace sitting among others.
+    @discardableResult
+    private func makeEmptyWorkspace(named name: String, in collection: WorkspaceCollection) -> Workspace {
+        let ws = collection.createWorkspace(name: name)!
+        emptyAllSessions(of: ws)
+        return ws
+    }
+
+    @Test func nextSessionGlobalFromEmptyWorkspaceLandsOnNextNonEmptyWorkspaceFirstSession() {
+        // The active workspace has no sessions (e.g. after closing its last
+        // one). Next should skip forward past it to the next workspace that
+        // has sessions and land on its first — never get stuck.
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        let wsEmpty = makeEmptyWorkspace(named: "empty", in: collection)
+        let ws3 = collection.createWorkspace(name: "third")!
+        #expect(collection.workspaces.map(\.id) == [ws1.id, wsEmpty.id, ws3.id])
+
+        collection.activeWorkspaceID = wsEmpty.id
+
+        collection.nextSessionGlobal()
+
+        #expect(collection.activeWorkspaceID == ws3.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == ws3.sessions.first?.id)
+    }
+
+    @Test func previousSessionGlobalFromEmptyWorkspaceLandsOnPreviousNonEmptyWorkspaceLastSession() {
+        // Mirror of the above: previous should skip backward past the empty
+        // active workspace and land on the previous non-empty workspace's
+        // last session.
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        ws1.sessionCollection.createSession() // ws1 now has 2 sessions
+        let wsEmpty = makeEmptyWorkspace(named: "empty", in: collection)
+        #expect(collection.workspaces.map(\.id) == [ws1.id, wsEmpty.id])
+
+        collection.activeWorkspaceID = wsEmpty.id
+
+        collection.previousSessionGlobal()
+
+        #expect(collection.activeWorkspaceID == ws1.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == ws1.sessions.last?.id)
+    }
+
+    @Test func sessionGlobalNavigationSkipsEmptyWorkspaceBetweenNonEmptyOnes() {
+        // An empty workspace sandwiched between two non-empty ones is skipped
+        // over — never landed on — in either direction.
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        makeEmptyWorkspace(named: "empty", in: collection)
+        let ws3 = collection.createWorkspace(name: "third")!
+
+        collection.activeWorkspaceID = ws1.id
+        collection.nextSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws3.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == ws3.sessions.first?.id)
+
+        collection.activeWorkspaceID = ws3.id
+        collection.previousSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws1.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == ws1.sessions.last?.id)
+    }
+
+    @Test func sessionGlobalNavigationIsNoOpWhenAllWorkspacesAreEmpty() {
+        // With no session anywhere in the collection, both directions are a
+        // no-op: no crash, active workspace/session unchanged.
+        let collection = WorkspaceCollection()
+        let ws1 = collection.workspaces[0]
+        emptyAllSessions(of: ws1)
+        makeEmptyWorkspace(named: "second", in: collection)
+        collection.activeWorkspaceID = ws1.id
+
+        collection.nextSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws1.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == nil)
+
+        collection.previousSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws1.id)
+        #expect(collection.activeSessionCollection?.activeSessionID == nil)
+    }
+
+    @Test func nextAndPreviousSessionGlobalWrapWithinSingleWorkspace() {
+        // A lone workspace with multiple sessions still wraps in place: next
+        // on the last session goes to the first; previous on the first goes
+        // to the last. Unchanged from before this fix.
+        let collection = WorkspaceCollection()
+        let ws = collection.workspaces[0]
+        ws.sessionCollection.createSession() // sessions: [s0, s1], s1 active
+        let s0 = ws.sessions[0]
+        let s1 = ws.sessions[1]
+        #expect(ws.activeSessionID == s1.id)
+
+        collection.nextSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws.id)
+        #expect(ws.activeSessionID == s0.id)
+
+        collection.previousSessionGlobal()
+        #expect(collection.activeWorkspaceID == ws.id)
+        #expect(ws.activeSessionID == s1.id)
+    }
 }
