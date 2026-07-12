@@ -68,7 +68,12 @@ final class IPCCommandHandler {
         case "prompt.set": return handlePromptSet(request)
 
         // Background Activity
-        case "activity.sync":   return handleActivitySync(request)
+        case "activity.sync":            return handleActivitySync(request)
+        case "activity.begin":           return handleActivityBegin(request)
+        case "activity.end":             return handleActivityEnd(request)
+        case "activity.reconcile":       return handleActivityReconcile(request)
+        case "activity.reset-lifecycle": return handleActivityResetLifecycle(request)
+        case "activity.clear":           return handleActivityClear(request)
 
         // Notify (Phase 5)
         case "notify": return await handleNotify(request)
@@ -551,7 +556,7 @@ final class IPCCommandHandler {
             let old = statusManager.sessionState(for: paneId)
             statusManager.setSessionState(paneID: paneId, state: sessionState)
             if let new = statusManager.sessionState(for: paneId) {
-                let hasBackgroundWork = !(statusManager.backgroundActivities[paneId] ?? []).isEmpty
+                let hasBackgroundWork = (statusManager.backgroundActivities[paneId] ?? []).contains { !$0.isStale }
                 claudeNotifier.sessionStateChanged(
                     paneID: paneId,
                     session: session,
@@ -621,6 +626,123 @@ final class IPCCommandHandler {
 
         let activities = BackgroundActivity.fromClaudeSnapshot(json: json)
         statusManager.syncActivities(paneID: paneId, activities)
+        return .success()
+    }
+
+    /// Registers a live lifecycle activity (subagent/teammate start) reported by
+    /// a `SubagentStart`/teammate hook. Per-pane: targets `TIAN_PANE_ID`. Mirrors
+    /// `handleActivitySync`'s pane-resolution boilerplate.
+    ///
+    /// An unrecognized `kind` value falls back to `.other` rather than failing —
+    /// a future Claude version emitting a new kind must not break tracking; a
+    /// tracked-as-other entry is strictly better than a dropped one.
+    private func handleActivityBegin(_ request: IPCRequest) -> IPCResponse {
+        guard let id = stringParam("id", from: request.params) else {
+            return missingParameter("id")
+        }
+        guard let kindStr = stringParam("kind", from: request.params) else {
+            return missingParameter("kind")
+        }
+        guard let label = stringParam("label", from: request.params) else {
+            return missingParameter("label")
+        }
+        let status = stringParam("status", from: request.params)
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        let kind = BackgroundActivity.Kind(rawValue: kindStr) ?? .other
+        let activity = BackgroundActivity.lifecycle(id: id, kind: kind, label: label, status: status)
+        statusManager.beginActivity(paneID: paneId, activity)
+        return .success()
+    }
+
+    /// Retires a lifecycle activity (subagent/teammate stop) by id, or by label
+    /// when no id is available. Per-pane: targets `TIAN_PANE_ID`. Mirrors
+    /// `handleActivitySync`'s pane-resolution boilerplate. Prefers `id` when both
+    /// are present.
+    private func handleActivityEnd(_ request: IPCRequest) -> IPCResponse {
+        let id = stringParam("id", from: request.params)
+        let label = stringParam("label", from: request.params)
+        guard id != nil || label != nil else {
+            return missingParameter("id")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        if let id {
+            statusManager.endActivity(paneID: paneId, id: id)
+        } else if let label {
+            statusManager.endActivity(paneID: paneId, label: label)
+        }
+        return .success()
+    }
+
+    /// Authoritative turn-end reconcile: replaces the caller pane's whole
+    /// background-activity set with exactly this Claude `background_tasks`
+    /// snapshot, dropping every lifecycle entry. Per-pane: targets
+    /// `TIAN_PANE_ID`. Mirrors `handleActivitySync`'s pane-resolution boilerplate.
+    private func handleActivityReconcile(_ request: IPCRequest) -> IPCResponse {
+        guard let json = stringParam("json", from: request.params) else {
+            return missingParameter("json")
+        }
+
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        let activities = BackgroundActivity.fromClaudeSnapshot(json: json)
+        statusManager.reconcileActivities(paneID: paneId, activities)
+        return .success()
+    }
+
+    /// Drops lifecycle (subagent/teammate) activities for the caller pane, keeping
+    /// snapshot-sourced ones. Per-pane: targets `TIAN_PANE_ID`. Takes no params.
+    private func handleActivityResetLifecycle(_ request: IPCRequest) -> IPCResponse {
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        statusManager.resetLifecycleActivities(paneID: paneId)
+        return .success()
+    }
+
+    /// Unconditionally clears every background activity for the caller pane,
+    /// lifecycle and snapshot-sourced alike. `SessionEnd` is the only teardown
+    /// event Claude Code guarantees to fire, and neither `sync` nor `reconcile`
+    /// clear lifecycle entries any more (both were narrowed to partial replace
+    /// so they don't stomp on entries the other still owns) — so session end
+    /// needs its own unconditional clear to guarantee the pane's activity state
+    /// never gets stuck busy. Per-pane: targets `TIAN_PANE_ID`. Takes no params.
+    private func handleActivityClear(_ request: IPCRequest) -> IPCResponse {
+        guard let paneId = UUID(uuidString: request.env.paneId) else {
+            return invalidUUID(request.env.paneId, label: "pane UUID")
+        }
+
+        guard resolvePane(id: paneId) != nil else {
+            return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
+        }
+
+        statusManager.clearActivities(paneID: paneId)
         return .success()
     }
 

@@ -8,6 +8,17 @@
 # TIAN_CLI_PATH is set) forwards the state via `tian status set`.
 #
 # Rotates the log file when it exceeds 5MB (matches tian's FileLogWriter).
+# This is the sole owner of that path/size/rotation logic for
+# claude-hooks.log — other hook scripts (e.g. tian-hook-activity.sh) that
+# need to log to the same file delegate here rather than re-implementing it,
+# to avoid two processes racing the same `mv -f` rotation.
+#
+# If TIAN_HOOK_LOG_RAW_PAYLOAD=1 is set, stdin is treated as an
+# already-compacted/truncated raw payload string (not JSON to extract fields
+# from) and is appended verbatim as a trailing `payload=...` field, in
+# addition to the usual line. This lets callers get raw-payload logging
+# without ever supplying STATE, so it can never trigger `tian status set`.
+#
 # Always exits 0 so hook behavior is never blocked by logging failures.
 
 set +e
@@ -55,6 +66,7 @@ TS=$(date '+%Y-%m-%d %H:%M:%S')
   printf ' cli=%s'  "${TIAN_CLI_PATH:+SET}${TIAN_CLI_PATH:-UNSET}"
   printf ' sock=%s' "${TIAN_SOCKET:+SET}${TIAN_SOCKET:-UNSET}"
   printf ' pane=%s' "${TIAN_PANE_ID:-UNSET}"
+  [ "$TIAN_HOOK_LOG_RAW_PAYLOAD" = "1" ] && printf ' payload=%s' "$INPUT"
   printf '\n'
 
   if [ -n "$STATE" ]; then

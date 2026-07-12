@@ -78,6 +78,17 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh PostToolUseFailure busy"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "matcher": "",
@@ -93,6 +104,25 @@
           {
             "type": "command",
             "command": "d=$(jq -r '.cwd // empty' 2>/dev/null); [ -n \"$d\" ] && tian pane set-directory \"$d\" >/dev/null 2>&1 || true"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh reset-lifecycle"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh SubagentStart busy"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh begin"
           }
         ]
       }
@@ -107,7 +137,26 @@
           },
           {
             "type": "command",
+            "command": "tian-hook-activity.sh end"
+          },
+          {
+            "type": "command",
             "command": "tian-hook-activity.sh sync"
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tian-hook-log.sh TeammateIdle"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh end"
           }
         ]
       }
@@ -122,7 +171,7 @@
           },
           {
             "type": "command",
-            "command": "tian-hook-activity.sh sync"
+            "command": "tian-hook-activity.sh reconcile"
           }
         ]
       }
@@ -165,6 +214,10 @@
           {
             "type": "command",
             "command": "tian-hook-log.sh Notification.idle_prompt idle"
+          },
+          {
+            "type": "command",
+            "command": "tian-hook-activity.sh reset-lifecycle"
           }
         ]
       }
