@@ -637,6 +637,11 @@ struct ActivityGroup: ParsableCommand {
         abstract: "Report outstanding background work (subagents / background bash) for the current pane.",
         subcommands: [
             ActivitySync.self,
+            ActivityBegin.self,
+            ActivityEnd.self,
+            ActivityReconcile.self,
+            ActivityResetLifecycle.self,
+            ActivityClear.self,
         ]
     )
 }
@@ -652,6 +657,105 @@ struct ActivitySync: ParsableCommand {
 
     func run() throws {
         let response = try sendRequest(command: "activity.sync", params: ["json": .string(json)])
+        try handleVoidResponse(response)
+    }
+}
+
+struct ActivityBegin: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "begin",
+        abstract: "Register a live lifecycle activity (subagent/teammate start) for the current pane."
+    )
+
+    @Option(name: .long, help: "Stable id for this activity (upserted by id).")
+    var id: String
+
+    @Option(name: .long, help: "Kind of activity: agent, teammate, bash, or other.")
+    var kind: String
+
+    @Option(name: .long, help: "Human-readable label for this activity.")
+    var label: String
+
+    @Option(name: .long, help: "Optional status string.")
+    var status: String?
+
+    func run() throws {
+        var params: [String: IPCValue] = [
+            "id": .string(id),
+            "kind": .string(kind),
+            "label": .string(label),
+        ]
+        if let status { params["status"] = .string(status) }
+        let response = try sendRequest(command: "activity.begin", params: params)
+        try handleVoidResponse(response)
+    }
+}
+
+struct ActivityEnd: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "end",
+        abstract: "Retire a lifecycle activity (subagent/teammate stop) for the current pane."
+    )
+
+    @Option(name: .long, help: "Id of the activity to end.")
+    var id: String?
+
+    @Option(name: .long, help: "Label of the activity to end (fallback when no id is available).")
+    var label: String?
+
+    func run() throws {
+        guard id != nil || label != nil else {
+            throw CLIError.general("At least one of --id or --label must be provided.")
+        }
+
+        var params: [String: IPCValue] = [:]
+        if let id {
+            params["id"] = .string(id)
+        }
+        if let label {
+            params["label"] = .string(label)
+        }
+
+        let response = try sendRequest(command: "activity.end", params: params)
+        try handleVoidResponse(response)
+    }
+}
+
+struct ActivityReconcile: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "reconcile",
+        abstract: "Authoritative turn-end reconcile: replace the current pane's activities with exactly this Claude background_tasks JSON array, dropping any lifecycle entries."
+    )
+
+    @Option(name: .long, help: "Raw Claude background_tasks JSON array, forwarded verbatim.")
+    var json: String
+
+    func run() throws {
+        let response = try sendRequest(command: "activity.reconcile", params: ["json": .string(json)])
+        try handleVoidResponse(response)
+    }
+}
+
+struct ActivityResetLifecycle: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "reset-lifecycle",
+        abstract: "Drop lifecycle (subagent/teammate) activities for the current pane, keeping snapshot-sourced ones."
+    )
+
+    func run() throws {
+        let response = try sendRequest(command: "activity.reset-lifecycle")
+        try handleVoidResponse(response)
+    }
+}
+
+struct ActivityClear: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "clear",
+        abstract: "Guaranteed session-teardown op: drops every background activity for the current pane, lifecycle and snapshot alike."
+    )
+
+    func run() throws {
+        let response = try sendRequest(command: "activity.clear")
         try handleVoidResponse(response)
     }
 }
