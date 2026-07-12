@@ -28,7 +28,9 @@ All mutations return new values (value semantics). `PaneViewModel` replaces the 
 
 ### Working Directory Resolution
 
-Fallback chain: active pane (OSC 7) → session default → workspace default → `$HOME`.
+Two distinct paths:
+- **New session** (Claude pane): workspace default → `$HOME`. Deliberately ignores every pane's live OSC 7 cwd *and* the active session's own default, so a terminal panel that `cd`'d elsewhere — or an active worktree session — never leaks into where a fresh session launches (`SessionCollection.resolveWorkingDirectory()`).
+- **New/split terminal pane**: source pane (OSC 7) → session default → workspace default → `$HOME` (`PaneViewModel.resolveWorkingDirectory(for:)` via `WorkingDirectoryResolver`) — splitting a terminal inherits its source pane's cwd.
 
 ### Lifecycle
 

@@ -277,9 +277,7 @@ struct SessionCollectionTests {
 
     // MARK: - Working directory resolution
 
-    /// With no source-pane directory and no session default, resolution falls
-    /// through to the workspace default. An empty-Claude session has no live pane
-    /// to source a directory from, so the fallback chain is exercised cleanly.
+    /// A new session resolves to the workspace default (the workspace root).
     @Test func resolveWorkingDirectoryUsesWorkspaceDefault() {
         let session = Session(customName: "empty", claudePane: nil, terminalPanel: nil)
         let collection = SessionCollection(
@@ -290,20 +288,42 @@ struct SessionCollectionTests {
         #expect(collection.resolveWorkingDirectory() == "/tmp/workspace")
     }
 
-    /// The session default takes precedence over the workspace default.
-    @Test func resolveWorkingDirectorySessionOverridesWorkspace() {
+    /// A new session launches at the workspace root even when the active session
+    /// carries its own default (e.g. a worktree session whose default is the
+    /// linked-worktree path). The active session's cwd must never leak into a
+    /// fresh session — otherwise creating a normal session while a worktree
+    /// session is active would inherit the worktree path.
+    @Test func resolveWorkingDirectoryUsesWorkspaceRootEvenWhenActiveSessionHasOwnDefault() {
         let session = Session(
             customName: "empty",
             claudePane: nil,
             terminalPanel: nil,
-            defaultWorkingDirectory: URL(filePath: "/tmp/session")
+            defaultWorkingDirectory: URL(filePath: "/tmp/some-worktree")
         )
         let collection = SessionCollection(
             sessions: [session],
             activeSessionID: session.id,
             workspaceDefaultDirectory: URL(filePath: "/tmp/workspace")
         )
-        #expect(collection.resolveWorkingDirectory() == "/tmp/session")
+        #expect(collection.resolveWorkingDirectory() == "/tmp/workspace")
+    }
+
+    /// With no workspace default, resolution falls to `$HOME` — not the active
+    /// session's own default — proving the active session's cwd never leaks in.
+    @Test func resolveWorkingDirectoryFallsToHomeNotActiveSessionDefault() {
+        let session = Session(
+            customName: "empty",
+            claudePane: nil,
+            terminalPanel: nil,
+            defaultWorkingDirectory: URL(filePath: "/tmp/some-worktree")
+        )
+        let collection = SessionCollection(
+            sessions: [session],
+            activeSessionID: session.id,
+            workspaceDefaultDirectory: nil
+        )
+        let home = ProcessInfo.processInfo.environment["HOME"] ?? "~"
+        #expect(collection.resolveWorkingDirectory() == home)
     }
 }
 
