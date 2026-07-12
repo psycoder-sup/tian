@@ -244,5 +244,13 @@
   "242": "CGFloat",
   "243": "Int",
   "244": "Context",
+  "245": "date",
+  "246": "decision",
+  "247": "number",
+  "248": "owner",
+  "249": "title",
+  "250": "summary",
+  "251": "target",
+  "252": "Field",
   "835": "tian-hook-prompt.sh"
 }
