@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-12",
+  "lastUpdated": "2026-07-13",
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
@@ -22,6 +22,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-13",
+      "summary": "Fixed stuck busy/subagent/team indicators. tian only learned about subagents from Claude's background_tasks snapshot (piped in on Stop/SubagentStop), which never mentions foreground subagents — and Stop doesn't fire on ESC, so a cancelled turn stayed pinned busy until a 180s TTL. Registered the three hooks tian never used (SubagentStart, TeammateIdle, PostToolUseFailure — all present in Claude Code 2.1.207) and added an explicit lifecycle refcount in PaneStatusManager alongside the snapshot feed: BackgroundActivity gains a Source (lifecycle/snapshot) + .teammate kind, syncActivities becomes a partial replace so a snapshot can't evict a live foreground subagent, dedupe-by-id kills the double-count, TTLs split 180s snapshot / 900s lifecycle, and SessionEnd gets a true clear-all. Teammates deliberately survive Stop/new-prompt (they outlive a turn); subagents don't. 1088/1089 tests (one pre-existing load-sensitive WorktreeOrchestrator flake), 11/11 new hook-shell tests; code review found 4 issues, all fixed in-branch; security review clean.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/86"
+    },
     {
       "date": "2026-07-12",
       "summary": "Fixed new normal-mode sessions launching in the terminal panel's wandered-to cwd. SessionCollection.resolveWorkingDirectory() now resolves to the workspace root (main worktree in a git repo) then $HOME, ignoring every pane's live OSC 7 cwd and the active session's own default — so a new session created while a worktree session is active still lands at the main repo root. Removed the sourcePaneDirectory() OSC-7 leak; terminal-panel splits still inherit their source pane's cwd via PaneViewModel. 43 resolver/session tests pass; Debug build clean.",
