@@ -252,5 +252,9 @@
   "250": "summary",
   "251": "target",
   "252": "Field",
+  "253": ".findSession",
+  "254": ".characterIndex",
+  "255": ".doCommand",
+  "256": ".init",
   "835": "tian-hook-prompt.sh"
 }
