@@ -199,33 +199,21 @@ final class SessionCollection {
 
     // MARK: - Working Directory
 
-    /// Resolves the working directory from the active pane, falling back through
-    /// the session → workspace → $HOME hierarchy via `WorkingDirectoryResolver`.
+    /// Resolves the working directory for a **new session** — always the
+    /// workspace root (the main worktree in a git repo), falling back to `$HOME`.
+    ///
+    /// A new session deliberately ignores every pane's live OSC 7 cwd *and* the
+    /// active session's own default: a terminal panel that `cd`'d elsewhere, or
+    /// an active worktree session whose default is a linked-worktree path, must
+    /// never leak into where a fresh session launches. (Terminal-panel *splits*
+    /// still inherit their source pane's cwd — that path lives in
+    /// `PaneViewModel.resolveWorkingDirectory(for:)`, not here.)
     func resolveWorkingDirectory() -> String {
-        let sourcePaneDir = sourcePaneDirectory()
-        let sessionDefault = activeSession?.defaultWorkingDirectory
-        return WorkingDirectoryResolver.resolve(
-            sourcePaneDirectory: sourcePaneDir,
-            sessionDefault: sessionDefault,
+        WorkingDirectoryResolver.resolve(
+            sourcePaneDirectory: nil,
+            sessionDefault: nil,
             workspaceDefault: workspaceDefaultDirectory
         )
-    }
-
-    /// Extracts the working directory from the active pane (OSC 7 or tree node).
-    private func sourcePaneDirectory() -> String? {
-        guard let pvm = activeSession?.effectiveFocusedPane else { return nil }
-        let focusedID = pvm.splitTree.focusedPaneID
-        if let surface = pvm.surface(for: focusedID)?.surface {
-            let inherited = ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW)
-            if let wdPtr = inherited.working_directory {
-                return String(cString: wdPtr)
-            }
-        }
-        if case .leaf(_, let wd) = pvm.splitTree.findLeaf(paneID: focusedID),
-           !wd.isEmpty, wd != "~" {
-            return wd
-        }
-        return nil
     }
 
     /// Updates the workspace ID on this collection and all owned sessions.
