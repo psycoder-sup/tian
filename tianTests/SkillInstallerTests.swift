@@ -68,6 +68,28 @@ struct SkillInstallerTests {
             atPath: dest.appendingPathComponent("tian-cli/stray.txt").path))
     }
 
+    @Test func installSkillsLeavesSymlinkedDestSkillUntouched() throws {
+        let source = try makeTempDir()
+        let dest = try makeTempDir()
+        let linkTarget = try makeTempDir()
+        defer { cleanup(source); cleanup(dest); cleanup(linkTarget) }
+
+        // Dev-machine setup: ~/.claude/skills/tian-cli is a symlink to a repo checkout.
+        try makeSkill("tian-cli", in: linkTarget, contents: "repo")
+        let link = dest.appendingPathComponent("tian-cli", isDirectory: true)
+        try FileManager.default.createSymbolicLink(
+            at: link,
+            withDestinationURL: linkTarget.appendingPathComponent("tian-cli", isDirectory: true))
+
+        try makeSkill("tian-cli", in: source, contents: "bundled")
+
+        try SkillInstaller.installSkills(from: source, to: dest)
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: link.path)
+        #expect(attrs[.type] as? FileAttributeType == .typeSymbolicLink)
+        #expect(try read(link.appendingPathComponent("SKILL.md")) == "repo")
+    }
+
     @Test func installSkillsIgnoresNonDirectoryEntries() throws {
         let source = try makeTempDir()
         let dest = try makeTempDir()
