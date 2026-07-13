@@ -156,11 +156,12 @@ targets:
           - $(BUILT_PRODUCTS_DIR)/$(PRODUCT_NAME).app/Contents/Resources/shell-integration/tian-bash-integration.bash
       - name: Bundle Claude Skills
         script: |
+          # Only the tian skill ships with the app; other .claude/skills are repo-only.
           SKILLS_SRC="$SRCROOT/.claude/skills"
           SKILLS_DEST="$BUILT_PRODUCTS_DIR/${PRODUCT_NAME}.app/Contents/Resources/skills"
           rm -rf "$SKILLS_DEST"
           mkdir -p "$SKILLS_DEST"
-          rsync -a --delete "$SKILLS_SRC/" "$SKILLS_DEST/"
+          rsync -a --delete "$SKILLS_SRC/tian/" "$SKILLS_DEST/tian/"
         inputFiles:
           - $(SRCROOT)/.claude/skills/tian/SKILL.md
         outputFiles:
