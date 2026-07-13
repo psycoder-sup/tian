@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-13",
+      "summary": "Fixed the session-overview grid clipping the selected card's glow flat on the top row (and edge columns): the ScrollView clipped at its bounds while the card's bloom (stacked 12pt+24pt shadows + 1.035x scale) reaches ~40pt past its frame. Grid now renders with .scrollClipDisabled(), with the enclosing VStack clipped at the overview's bounds so scrolled cards can't bleed onto the sidebar. Live-verified in tian-debug.app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/88"
+    },
+    {
+      "date": "2026-07-13",
       "summary": "Stopped the app auto-installing repo-only skills (release, graphify, session-audit) into ~/.claude/skills: the Bundle Claude Skills build phase now bundles only the tian skill, and SkillInstaller skips symlinked destinations so a dev machine's ~/.claude/skills/tian → repo symlink survives version bumps. Leaked global copies removed by hand.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/87"
