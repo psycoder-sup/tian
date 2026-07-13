@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.6) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.9) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -24,7 +24,13 @@
   "shipped": [
     {
       "date": "2026-07-13",
-      "summary": "Fixed the sidebar burying a pending prompt: Claude fires a subagent's tool hooks from the parent's process under the same pane id, so a background subagent's PostToolUse (busy) clobbered the main thread's AskUserQuestion (needs_attention) seconds later. Hook events now carry their origin (payload agent_id, empty == main thread) through tian-hook-log.sh -> `tian status set --agent-id` -> IPC, and a pane records the attention owner that raised a needs_attention: only that origin's busy/active may clear it. Build + 1122 tianTests + 3 hook shell suites green. Ships with the next release (the hook script and CLI live in the app bundle).",
+      "summary": "Released v1.5.9 (build 526) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the subagent-busy attention-clobber fix (PR #89): hook events now carry an origin id end-to-end so a background subagent's busy/active status can no longer clobber a pending AskUserQuestion raised by the main thread.",
+      "commit": "cd34d05",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.9"
+    },
+    {
+      "date": "2026-07-13",
+      "summary": "Fixed the sidebar burying a pending prompt: Claude fires a subagent's tool hooks from the parent's process under the same pane id, so a background subagent's PostToolUse (busy) clobbered the main thread's AskUserQuestion (needs_attention) seconds later. Hook events now carry their origin (payload agent_id, empty == main thread) through tian-hook-log.sh -> `tian status set --agent-id` -> IPC, and a pane records the attention owner that raised a needs_attention: only that origin's busy/active may clear it. Build + 1122 tianTests + 3 hook shell suites green.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/89"
     },
@@ -33,18 +39,6 @@
       "summary": "Released v1.5.8 (build 517) — notarized + stapled, Sparkle appcast live. Ships the overview selected-card glow-clip fix (PR #88) and the skill-install scoping fix (PR #87).",
       "commit": "08aaa3d",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.8"
-    },
-    {
-      "date": "2026-07-13",
-      "summary": "Fixed the session-overview grid clipping the selected card's glow flat on the top row (and edge columns): the ScrollView clipped at its bounds while the card's bloom (stacked 12pt+24pt shadows + 1.035x scale) reaches ~40pt past its frame. Grid now renders with .scrollClipDisabled(), with the enclosing VStack clipped at the overview's bounds so scrolled cards can't bleed onto the sidebar. Live-verified in tian-debug.app.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/88"
-    },
-    {
-      "date": "2026-07-13",
-      "summary": "Stopped the app auto-installing repo-only skills (release, graphify, session-audit) into ~/.claude/skills: the Bundle Claude Skills build phase now bundles only the tian skill, and SkillInstaller skips symlinked destinations so a dev machine's ~/.claude/skills/tian → repo symlink survives version bumps. Leaked global copies removed by hand.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/87"
     }
   ]
 }
