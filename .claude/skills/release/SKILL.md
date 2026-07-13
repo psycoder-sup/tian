@@ -20,6 +20,17 @@ it with the two steps it doesn't do — **settling the tree** (the graphify comm
 **Invocation:** `/release [patch|minor|major|X.Y.Z]` — defaults to **`patch`**. `patch`/`minor`/`major`
 bump from the latest `v*` tag; an explicit `X.Y.Z` sets it outright.
 
+## Execution: delegate to a subagent
+
+Don't run Preconditions/Steps/Escape hatches/Gotchas below in the main thread. Instead, spawn exactly one
+`Agent` call (`model: "sonnet"`) and hand it this entire skill body verbatim — from **Preconditions** through
+**Gotchas** — plus the resolved bump argument (`patch`/`minor`/`major`/`X.Y.Z`, defaulting to `patch`). The
+subagent has no memory of this conversation, so the prompt must be self-contained: paste the full section
+text, don't summarize or reference "the skill file." Run it in the foreground (`run_in_background: false`) —
+this is a long, sequential, outward-facing operation (build → notarize → push → GitHub Release) and the main
+thread needs its final report (release URL, version, notarize/appcast status, or the failing step) before
+replying to the user. Relay that report back verbatim; don't re-run or hand-finish any step yourself.
+
 > **What publish.sh already does — don't duplicate it.** In one run it: builds, notarizes, staples,
 > tags `vX.Y.Z`, **pushes the tag**, creates the GitHub Release with the DMG, and **commits + pushes the
 > Sparkle appcast to `main`**. The tag is created *after* a successful notarize, so a build/notarize
