@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-13",
+  "lastUpdated": "2026-07-14",
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
@@ -23,6 +23,12 @@
   "blocked": [],
   "shipped": [
     {
+      "date": "2026-07-14",
+      "summary": "Cut idle CPU (~18% -> ~1-2% when not visible): decorative TimelineView animations (BusyDotView, RainbowGlow, RainbowBorder) now pause on window occlusion via a new \\.windowIsVisible environment, opacity-0 hidden sessions no longer mount their bell glow (\\.sessionIsVisible), tick rates dropped 12->8/10fps, RainbowGlow gained the missing reduceMotion support, and SystemMonitor stops polling when no window is visible. The separate non-git-repo git-watcher CPU issue is handled in another session.",
+      "commit": "3d2d47f",
+      "link": ""
+    },
+    {
       "date": "2026-07-13",
       "summary": "Released v1.5.9 (build 526) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the subagent-busy attention-clobber fix (PR #89): hook events now carry an origin id end-to-end so a background subagent's busy/active status can no longer clobber a pending AskUserQuestion raised by the main thread.",
       "commit": "cd34d05",
@@ -33,12 +39,6 @@
       "summary": "Fixed the sidebar burying a pending prompt: Claude fires a subagent's tool hooks from the parent's process under the same pane id, so a background subagent's PostToolUse (busy) clobbered the main thread's AskUserQuestion (needs_attention) seconds later. Hook events now carry their origin (payload agent_id, empty == main thread) through tian-hook-log.sh -> `tian status set --agent-id` -> IPC, and a pane records the attention owner that raised a needs_attention: only that origin's busy/active may clear it. Build + 1122 tianTests + 3 hook shell suites green.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/89"
-    },
-    {
-      "date": "2026-07-13",
-      "summary": "Released v1.5.8 (build 517) — notarized + stapled, Sparkle appcast live. Ships the overview selected-card glow-clip fix (PR #88) and the skill-install scoping fix (PR #87).",
-      "commit": "08aaa3d",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.8"
     }
   ]
 }
