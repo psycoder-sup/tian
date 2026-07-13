@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-13",
+      "summary": "Fixed the sidebar burying a pending prompt: Claude fires a subagent's tool hooks from the parent's process under the same pane id, so a background subagent's PostToolUse (busy) clobbered the main thread's AskUserQuestion (needs_attention) seconds later. Hook events now carry their origin (payload agent_id, empty == main thread) through tian-hook-log.sh -> `tian status set --agent-id` -> IPC, and a pane records the attention owner that raised a needs_attention: only that origin's busy/active may clear it. Build + 1122 tianTests + 3 hook shell suites green. Ships with the next release (the hook script and CLI live in the app bundle).",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/89"
+    },
+    {
+      "date": "2026-07-13",
       "summary": "Released v1.5.8 (build 517) — notarized + stapled, Sparkle appcast live. Ships the overview selected-card glow-clip fix (PR #88) and the skill-install scoping fix (PR #87).",
       "commit": "08aaa3d",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.8"

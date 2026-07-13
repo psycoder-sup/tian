@@ -23,6 +23,31 @@ final class IPCCommandHandler {
             statusManager: statusManager,
             notificationManager: notificationManager
         )
+
+        // Single delivery path for banners: every session-state transition the
+        // manager makes — an IPC `status.set` write *and* an internal one such as
+        // `releaseAttention` (a subagent dying with its prompt unanswered) — is
+        // routed to the notifier from here. The manager stays notifier-agnostic;
+        // the notifier's owner does the wiring.
+        statusManager.sessionStateDidChange = { [weak self] paneID, old, new in
+            self?.notifySessionStateChanged(paneID: paneID, old: old, new: new)
+        }
+    }
+
+    /// Forwards an effective session-state transition to the notifier, resolving the
+    /// pane it belongs to. Background work gates the "done" notification; a pane that
+    /// no longer resolves (closed mid-flight) simply drops the event.
+    private func notifySessionStateChanged(paneID: UUID, old: ClaudeSessionState?, new: ClaudeSessionState) {
+        guard let (session, pvm, _) = resolvePane(id: paneID) else { return }
+        let hasBackgroundWork = (statusManager.backgroundActivities[paneID] ?? []).contains { !$0.isStale }
+        claudeNotifier.sessionStateChanged(
+            paneID: paneID,
+            session: session,
+            pvm: pvm,
+            old: old,
+            new: new,
+            hasBackgroundWork: hasBackgroundWork
+        )
     }
 
     func handle(_ request: IPCRequest) async -> IPCResponse {
@@ -518,9 +543,17 @@ final class IPCCommandHandler {
 
     // MARK: - Status Commands
 
+    /// Sets the caller pane's status label and/or Claude session state.
+    ///
+    /// `agentId` is the hook payload's `agent_id` — absent/empty for a main-thread
+    /// event, an opaque id for one raised inside a subagent. It decides whether an
+    /// incoming `busy` is allowed to clear a pending question (see
+    /// `PaneStatusManager.setSessionState`); omitting it is exactly a main-thread
+    /// event, so older hook scripts keep working unchanged.
     private func handleStatusSet(_ request: IPCRequest) -> IPCResponse {
         let label = stringParam("label", from: request.params)
         let stateStr = stringParam("state", from: request.params)
+        let origin = ClaudeEventOrigin(agentID: stringParam("agentId", from: request.params))
 
         guard label != nil || stateStr != nil else {
             return .failure(
@@ -545,27 +578,16 @@ final class IPCCommandHandler {
             return invalidUUID(request.env.paneId, label: "pane UUID")
         }
 
-        guard let (session, pvm, _) = resolvePane(id: paneId) else {
+        guard resolvePane(id: paneId) != nil else {
             return .failure(code: 1, message: "Pane not found: \(request.env.paneId)")
         }
 
         if let sessionState {
-            // Capture the effective transition around the write: `setSessionState`
-            // may suppress it (canReplace), in which case old == new and the
-            // notifier no-ops. Background work gates the "done" notification.
-            let old = statusManager.sessionState(for: paneId)
-            statusManager.setSessionState(paneID: paneId, state: sessionState)
-            if let new = statusManager.sessionState(for: paneId) {
-                let hasBackgroundWork = (statusManager.backgroundActivities[paneId] ?? []).contains { !$0.isStale }
-                claudeNotifier.sessionStateChanged(
-                    paneID: paneId,
-                    session: session,
-                    pvm: pvm,
-                    old: old,
-                    new: new,
-                    hasBackgroundWork: hasBackgroundWork
-                )
-            }
+            // The notifier is driven by the manager's `sessionStateDidChange` hook
+            // (installed in `init`), which carries the effective transition — a write
+            // suppressed by `canReplace` or by the attention owner reports old == new
+            // and the notifier no-ops.
+            statusManager.setSessionState(paneID: paneId, state: sessionState, origin: origin)
         }
         if let label {
             statusManager.setStatus(paneID: paneId, label: label)

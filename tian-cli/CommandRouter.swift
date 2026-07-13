@@ -574,6 +574,12 @@ struct StatusSet: ParsableCommand {
     @Option(name: .long, help: "Claude session state (active, busy, idle, needs_attention, failed, inactive).")
     var state: String?
 
+    @Option(
+        name: .long,
+        help: "The hook payload's agent_id: empty (or omitted) for a main-thread event, the subagent's id for one raised inside a subagent. Decides whether this state may clear a pending question raised by someone else."
+    )
+    var agentId: String?
+
     func run() throws {
         guard label != nil || state != nil else {
             throw CLIError.general("At least one of --label or --state must be provided.")
@@ -585,6 +591,9 @@ struct StatusSet: ParsableCommand {
         }
         if let state {
             params["state"] = .string(state)
+        }
+        if let agentId, !agentId.isEmpty {
+            params["agentId"] = .string(agentId)
         }
 
         let response = try sendRequest(command: "status.set", params: params)
