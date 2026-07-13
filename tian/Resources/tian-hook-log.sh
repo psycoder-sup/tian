@@ -54,6 +54,7 @@ TOOL=$(jqr '.tool_name')
 PMODE=$(jqr '.permission_mode')
 NTYPE=$(jqr '.notification_type')
 MSG=$(jqr '.message' | tr '\n\r' '  ' | cut -c1-120)
+AGENT_ID=$(jqr '.agent_id')
 
 TS=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -66,12 +67,17 @@ TS=$(date '+%Y-%m-%d %H:%M:%S')
   printf ' cli=%s'  "${TIAN_CLI_PATH:+SET}${TIAN_CLI_PATH:-UNSET}"
   printf ' sock=%s' "${TIAN_SOCKET:+SET}${TIAN_SOCKET:-UNSET}"
   printf ' pane=%s' "${TIAN_PANE_ID:-UNSET}"
+  printf ' agent=%s' "${AGENT_ID:-main}"
   [ "$TIAN_HOOK_LOG_RAW_PAYLOAD" = "1" ] && printf ' payload=%s' "$INPUT"
   printf '\n'
 
   if [ -n "$STATE" ]; then
     if [ -n "$TIAN_CLI_PATH" ]; then
-      OUT=$("$TIAN_CLI_PATH" status set --state "$STATE" 2>&1)
+      if [ -n "$AGENT_ID" ]; then
+        OUT=$("$TIAN_CLI_PATH" status set --state "$STATE" --agent-id "$AGENT_ID" 2>&1)
+      else
+        OUT=$("$TIAN_CLI_PATH" status set --state "$STATE" 2>&1)
+      fi
       RC=$?
       printf '  -> status set --state %s rc=%s' "$STATE" "$RC"
       [ -n "$OUT" ] && printf ' out=%q' "$OUT"

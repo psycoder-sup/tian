@@ -267,6 +267,394 @@ struct PaneStatusManagerTests {
         #expect(manager.sessionStates[paneID] == .failed)
     }
 
+    // MARK: - Attention ownership (subagent vs main thread)
+
+    /// The bug this ownership tracking exists for: Claude Code fires a subagent's
+    /// PostToolUse in the parent's process under the same pane id, so a background
+    /// agent's `busy` used to bury the question the main thread is blocked on.
+    @Test func subagentBusyDoesNotClearMainThreadNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .agent("a911931f"))
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .main)
+    }
+
+    /// An empty `agent_id` is exactly what the main thread sends, so it must resolve
+    /// to the same origin as an omitted one.
+    @Test func emptyAgentIDIsTheMainThread() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: ClaudeEventOrigin(agentID: ""))
+        manager.setSessionState(paneID: paneID, state: .busy, origin: ClaudeEventOrigin(agentID: nil))
+
+        #expect(manager.sessionStates[paneID] == .busy)
+    }
+
+    @Test func mainThreadBusyClearsMainThreadNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .main)
+
+        // The user answered; the main thread's next tool call proves it.
+        #expect(manager.sessionStates[paneID] == .busy)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    /// A subagent's permission prompt is cleared by that same subagent proceeding.
+    @Test func subagentBusyClearsItsOwnNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .agent("a1"))
+
+        #expect(manager.sessionStates[paneID] == .busy)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    /// The mirror image of the bug: the parent kept working while a background
+    /// agent's permission prompt waits — the prompt has to survive that.
+    @Test func mainThreadBusyDoesNotClearSubagentNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .main)
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .agent("a1"))
+    }
+
+    /// One subagent's traffic must not clear another's prompt either.
+    @Test func otherSubagentBusyDoesNotClearSubagentNeedsAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.setSessionState(paneID: paneID, state: .active, origin: .agent("a2"))
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .agent("a1"))
+    }
+
+    /// A newer question takes ownership from an older one.
+    @Test func incomingNeedsAttentionRebindsTheOwner() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        #expect(manager.attentionOwners[paneID] == .agent("a1"))
+
+        // And now only the new owner may clear it.
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .main)
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+    }
+
+    /// Ownership is scoped to the prompt: `failed` and `inactive` end the turn (or
+    /// the session) whoever reports them, and both drop the owner.
+    @Test func failedFromAnyOriginClearsTheOwner() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+        manager.setSessionState(paneID: paneID, state: .failed, origin: .agent("a1"))
+
+        #expect(manager.sessionStates[paneID] == .failed)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    @Test func sessionEndClearsTheOwner() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.setSessionState(paneID: paneID, state: .inactive, origin: .main)
+
+        #expect(manager.sessionStates[paneID] == .inactive)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    /// A suppressed `idle` leaves both the prompt and its owner standing.
+    @Test func idleStillCannotDowngradeNeedsAttentionAndKeepsTheOwner() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.setSessionState(paneID: paneID, state: .idle, origin: .agent("a1"))
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .agent("a1"))
+    }
+
+    @Test func attentionOwnerMirrorsNothingToPaneViewModel() {
+        let manager = PaneStatusManager()
+        let pvm = PaneViewModel(kind: .claude)
+        let paneID = pvm.splitTree.focusedPaneID
+
+        manager.registerPane(paneID, owner: pvm)
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        #expect(pvm.sessionState(forPane: paneID) == .needsAttention)
+
+        // Suppressed update: the mirror must not drift from the manager.
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .main)
+        #expect(pvm.sessionState(forPane: paneID) == .needsAttention)
+    }
+
+    // MARK: - Attention released when its owner ends
+
+    /// A subagent that dies (or finishes) after raising a permission prompt will
+    /// never send the `busy` that would clear it — its stop hook has to, or the pane
+    /// stays orange forever.
+    @Test func activityEndReleasesAttentionOwnedByThatAgent() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a1", kind: .agent, label: "explore", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        // No other work outstanding → the pane falls back to idle.
+        #expect(manager.sessionStates[paneID] == .idle)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    @Test func activityEndFallsBackToBusyWhenOtherWorkRemains() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a1", kind: .agent, label: "explore", status: "running"))
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a2", kind: .agent, label: "review", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(manager.sessionStates[paneID] == .busy)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    /// An unrelated agent ending says nothing about someone else's prompt.
+    @Test func activityEndLeavesAttentionOwnedByAnotherOrigin() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a2", kind: .agent, label: "review", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+
+        manager.endActivity(paneID: paneID, id: "a2")
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .main)
+    }
+
+    /// The stop hook is proof the agent is gone even when its entry was already
+    /// evicted (by a snapshot, a reconcile, or a duplicate stop).
+    @Test func activityEndReleasesAttentionEvenWithNoTrackedActivity() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(manager.sessionStates[paneID] == .idle)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    @Test func activityEndReleaseMirrorsToOwnerPaneViewModel() {
+        let manager = PaneStatusManager()
+        let pvm = PaneViewModel(kind: .claude)
+        let paneID = pvm.splitTree.focusedPaneID
+
+        manager.registerPane(paneID, owner: pvm)
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(pvm.sessionState(forPane: paneID) == .idle)
+    }
+
+    // MARK: - Attention ownership fails closed (restored panes)
+
+    /// Session state is persisted, the owner map isn't — so a pane could come back
+    /// from disk in `needsAttention` with nothing recorded. The default has to be
+    /// `.main`, never "unowned".
+    @Test func unknownAttentionOwnerFailsClosedToMain() {
+        let manager = PaneStatusManager()
+
+        #expect(manager.effectiveAttentionOwner(paneID: UUID()) == .main)
+    }
+
+    @Test func recordedAttentionOwnerWinsOverTheDefault() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        #expect(manager.effectiveAttentionOwner(paneID: paneID) == .agent("a1"))
+    }
+
+    /// The restore path (`PaneViewModel.fromState`) replays the persisted state with
+    /// no origin — which must land as a main-thread-owned prompt, so a background
+    /// subagent's `busy` can't bury a question that survived a relaunch.
+    @Test func restoredNeedsAttentionRejectsSubagentBusy() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)   // as restore does
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .agent("a1"))
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+    }
+
+    @Test func restoredNeedsAttentionAcceptsMainThreadBusy() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)   // as restore does
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .main)
+
+        #expect(manager.sessionStates[paneID] == .busy)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    /// A subagent dying is proof about *its own* prompt only: an unknown owner is
+    /// `.main`, never `.agent(_)`, so its stop hook must not release the prompt.
+    @Test func subagentEndDoesNotReleaseAttentionWithUnknownOwner() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.setSessionState(paneID: paneID, state: .needsAttention)   // as restore does
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.effectiveAttentionOwner(paneID: paneID) == .main)
+    }
+
+    // MARK: - Attention release id spaces
+
+    /// A teammate's id is a `teammate_id`, not an `agent_id` — different id spaces.
+    /// Even when the two strings collide, ending the teammate must not release a
+    /// prompt owned by the agent of the same name.
+    @Test func teammateEndDoesNotReleaseAgentOwnedAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a1", kind: .teammate, label: "ada", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        manager.endActivity(paneID: paneID, label: "ada")
+
+        #expect(manager.sessionStates[paneID] == .needsAttention)
+        #expect(manager.attentionOwners[paneID] == .agent("a1"))
+    }
+
+    /// The label fallback still releases when the ended entry genuinely is an agent.
+    @Test func agentEndByLabelReleasesItsOwnAttention() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a1", kind: .agent, label: "explore", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        manager.endActivity(paneID: paneID, label: "explore")
+
+        #expect(manager.sessionStates[paneID] == .idle)
+        #expect(manager.attentionOwners[paneID] == nil)
+    }
+
+    // MARK: - sessionStateDidChange (notifier seam)
+
+    /// Every state write is published with its effective transition — the hook the
+    /// notifier's owner (`IPCCommandHandler`) installs to drive the banners.
+    @Test func sessionStateWritePublishesTransition() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        var seen: [(UUID, ClaudeSessionState?, ClaudeSessionState)] = []
+        manager.sessionStateDidChange = { seen.append(($0, $1, $2)) }
+
+        manager.setSessionState(paneID: paneID, state: .busy)
+        manager.setSessionState(paneID: paneID, state: .idle)
+
+        #expect(seen.count == 2)
+        #expect(seen[0].0 == paneID && seen[0].1 == nil && seen[0].2 == .busy)
+        #expect(seen[1].1 == .busy && seen[1].2 == .idle)
+    }
+
+    /// A write the manager refuses (`canReplace`, or the attention owner) reports
+    /// `old == new`, so the notifier sees a no-op rather than a phantom change.
+    @Test func suppressedWritePublishesUnchangedState() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+
+        var seen: [(ClaudeSessionState?, ClaudeSessionState)] = []
+        manager.sessionStateDidChange = { seen.append(($1, $2)) }
+
+        manager.setSessionState(paneID: paneID, state: .idle, origin: .main)              // canReplace refuses
+        manager.setSessionState(paneID: paneID, state: .busy, origin: .agent("a1"))       // owner refuses
+
+        #expect(seen.count == 2)
+        #expect(seen.allSatisfy { $0.0 == .needsAttention && $0.1 == .needsAttention })
+    }
+
+    /// The bug this seam exists for: a released prompt used to be written straight
+    /// into the dictionary, so the notifier never saw `needsAttention → idle` and no
+    /// "Finished" banner fired for a turn that really had ended.
+    @Test func attentionReleasePublishesTransition() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        var seen: [(ClaudeSessionState?, ClaudeSessionState)] = []
+        manager.sessionStateDidChange = { seen.append(($1, $2)) }
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(seen.count == 1)
+        #expect(seen[0].0 == .needsAttention && seen[0].1 == .idle)
+    }
+
+    /// A release with other work still outstanding lands on `busy` — and publishes
+    /// that, not `idle` (the notifier must not call the session done).
+    @Test func attentionReleaseToBusyPublishesBusy() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a1", kind: .agent, label: "explore", status: "running"))
+        manager.beginActivity(paneID: paneID, BackgroundActivity.lifecycle(id: "a2", kind: .agent, label: "review", status: "running"))
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .agent("a1"))
+
+        var seen: [(ClaudeSessionState?, ClaudeSessionState)] = []
+        manager.sessionStateDidChange = { seen.append(($1, $2)) }
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(seen.count == 1)
+        #expect(seen[0].0 == .needsAttention && seen[0].1 == .busy)
+    }
+
+    /// An `endActivity` that releases nothing publishes nothing.
+    @Test func unrelatedActivityEndPublishesNothing() {
+        let manager = PaneStatusManager()
+        let paneID = UUID()
+        manager.setSessionState(paneID: paneID, state: .needsAttention, origin: .main)
+
+        var count = 0
+        manager.sessionStateDidChange = { _, _, _ in count += 1 }
+
+        manager.endActivity(paneID: paneID, id: "a1")
+
+        #expect(count == 0)
+    }
+
     // MARK: - clearSessionState
 
     @Test func clearSessionStateClearsOnlySessionState() {

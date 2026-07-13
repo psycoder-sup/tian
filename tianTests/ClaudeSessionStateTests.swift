@@ -96,9 +96,41 @@ struct ClaudeSessionStateTests {
         #expect(ClaudeSessionState.inactive.canReplace(.failed))
     }
 
+    // MARK: - resumesWork
+
+    @Test func onlyBusyAndActiveResumeWork() {
+        // The states a pending prompt is resolved by — and so the ones gated on the
+        // origin that raised it.
+        #expect(ClaudeSessionState.busy.resumesWork)
+        #expect(ClaudeSessionState.active.resumesWork)
+        #expect(!ClaudeSessionState.needsAttention.resumesWork)
+        #expect(!ClaudeSessionState.failed.resumesWork)
+        #expect(!ClaudeSessionState.idle.resumesWork)
+        #expect(!ClaudeSessionState.inactive.resumesWork)
+    }
+
     // MARK: - CaseIterable
 
     @Test func allCasesContainsSixCases() {
         #expect(ClaudeSessionState.allCases.count == 6)
+    }
+}
+
+struct ClaudeEventOriginTests {
+
+    @Test func absentOrEmptyAgentIDIsTheMainThread() {
+        #expect(ClaudeEventOrigin(agentID: nil) == .main)
+        #expect(ClaudeEventOrigin(agentID: "") == .main)
+    }
+
+    @Test func nonEmptyAgentIDIsThatSubagent() {
+        #expect(ClaudeEventOrigin(agentID: "a911931f1e21d0c73") == .agent("a911931f1e21d0c73"))
+        #expect(ClaudeEventOrigin(agentID: "a1") != ClaudeEventOrigin(agentID: "a2"))
+        #expect(ClaudeEventOrigin(agentID: "a1") != .main)
+    }
+
+    @Test func agentIDRoundTrips() {
+        #expect(ClaudeEventOrigin.main.agentID == "")
+        #expect(ClaudeEventOrigin.agent("a1").agentID == "a1")
     }
 }

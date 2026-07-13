@@ -21,6 +21,29 @@ final class PaneStatusManager {
     private(set) var lastPrompts: [UUID: String] = [:]
     private(set) var backgroundActivities: [UUID: [BackgroundActivity]] = [:]
 
+    /// Who raised the pane's pending `needsAttention` — present only while the pane
+    /// actually is in that state.
+    ///
+    /// A prompt belongs to whoever asked it, because Claude Code fires a subagent's
+    /// tool hooks from the parent's process under the same pane id: without this,
+    /// a background agent's `PostToolUse` (`busy`) lands seconds after the main
+    /// thread's `AskUserQuestion` and buries a question the user never got to see.
+    /// Only the same origin's own `busy`/`active` may resume the pane.
+    private(set) var attentionOwners: [UUID: ClaudeEventOrigin] = [:]
+
+    /// Observation seam for session-state writes: `(paneID, old, new)` for the
+    /// *effective* transition, i.e. `new` is what the pane actually holds after the
+    /// write (a write suppressed by `canReplace` or by the attention owner reports
+    /// `old == new`).
+    ///
+    /// Exists so the notification layer can hear every transition without this type
+    /// having to know it exists: `ClaudeSessionNotifier` already depends on the
+    /// manager, so the reverse edge would invert the layering. `IPCCommandHandler`
+    /// — which owns the notifier — installs the single hook; every state write, IPC
+    /// or internal (`releaseAttention`), goes out through here, so there is exactly
+    /// one delivery path.
+    var sessionStateDidChange: ((UUID, ClaudeSessionState?, ClaudeSessionState) -> Void)?
+
     private var nextSequence: UInt64 = 0
 
     /// Repeating sweep that ages out stale background activities (see
@@ -57,6 +80,7 @@ final class PaneStatusManager {
         sessionStates.removeValue(forKey: paneID)
         lastPrompts.removeValue(forKey: paneID)
         backgroundActivities.removeValue(forKey: paneID)
+        attentionOwners.removeValue(forKey: paneID)
         lifecycleSeen.remove(paneID)
         if let pvm = owner(of: paneID) {
             pvm.paneStatuses.removeValue(forKey: paneID)
@@ -72,6 +96,7 @@ final class PaneStatusManager {
             sessionStates.removeValue(forKey: id)
             lastPrompts.removeValue(forKey: id)
             backgroundActivities.removeValue(forKey: id)
+            attentionOwners.removeValue(forKey: id)
             lifecycleSeen.remove(id)
             if let pvm = owner(of: id) {
                 pvm.paneStatuses.removeValue(forKey: id)
@@ -96,21 +121,74 @@ final class PaneStatusManager {
 
     // MARK: - Session State
 
-    func setSessionState(paneID: UUID, state: ClaudeSessionState) {
+    /// Applies a session state reported by a Claude hook, tracking *which* origin
+    /// reported it (`nil`/`.main` for the main thread, `.agent` for a subagent).
+    ///
+    /// Beyond `canReplace`, a pending `needsAttention` is guarded by its owner: the
+    /// resume states (`busy`/`active`) only clear it when they come from the origin
+    /// that raised it — the main thread's next tool call after the user answers a
+    /// question, or the subagent's own next call after its permission prompt is
+    /// approved. A `busy` from any *other* origin is dropped, because that agent's
+    /// tool traffic says nothing about the question still sitting on screen.
+    func setSessionState(paneID: UUID, state: ClaudeSessionState, origin: ClaudeEventOrigin = .main) {
         let oldState = sessionStates[paneID]
+
+        if state.resumesWork, oldState == .needsAttention {
+            let attentionOwner = effectiveAttentionOwner(paneID: paneID)
+            if attentionOwner != origin {
+                Log.ipc.debug("Session state for pane \(paneID): \(state.rawValue) from origin '\(origin.agentID)' ignored (attention owned by '\(attentionOwner.agentID)')")
+                publish(paneID: paneID, old: oldState)
+                return
+            }
+        }
+
         // A clean turn-end must not silently downgrade a pending prompt or a
         // recorded failure (see ClaudeSessionState.canReplace).
         guard state.canReplace(oldState) else {
             Log.ipc.debug("Session state for pane \(paneID): \(state.rawValue) suppressed (current \(oldState?.rawValue ?? "nil") outranks it)")
+            publish(paneID: paneID, old: oldState)
             return
         }
         sessionStates[paneID] = state
         owner(of: paneID)?.sessionStates[paneID] = state   // dual-write
+
+        // The prompt's owner lives exactly as long as the prompt does.
+        if state == .needsAttention {
+            attentionOwners[paneID] = origin
+        } else {
+            attentionOwners.removeValue(forKey: paneID)
+        }
+
         Log.ipc.debug("Session state changed for pane \(paneID): \(oldState?.rawValue ?? "nil") → \(state.rawValue)")
+        publish(paneID: paneID, old: oldState)
+    }
+
+    /// Who owns the pane's pending `needsAttention`, failing *closed* when nothing
+    /// was recorded.
+    ///
+    /// Session state is persisted across relaunches (`SessionState`) but the owner
+    /// map is in-memory, so a pane restored in `needsAttention` comes back ownerless.
+    /// Treating that as "unowned, anyone may clear it" would resurrect the very bug
+    /// the ownership check exists to kill — a background subagent's `busy` burying a
+    /// restored question. `.main` is the conservative default: only a main-thread
+    /// `busy`/`active` resumes the pane, and (since an unknown owner is never
+    /// `.agent(_)`) no subagent's lifecycle end can release it either.
+    func effectiveAttentionOwner(paneID: UUID) -> ClaudeEventOrigin {
+        attentionOwners[paneID] ?? .main
+    }
+
+    /// Emits the pane's *effective* session-state transition to `sessionStateDidChange`
+    /// — `new` is whatever the pane holds now, so a suppressed write reports
+    /// `old == new` and observers see a no-op rather than a phantom change.
+    /// Every session-state write path ends here.
+    private func publish(paneID: UUID, old: ClaudeSessionState?) {
+        guard let new = sessionStates[paneID] else { return }
+        sessionStateDidChange?(paneID, old, new)
     }
 
     func clearSessionState(paneID: UUID) {
         sessionStates.removeValue(forKey: paneID)
+        attentionOwners.removeValue(forKey: paneID)
         owner(of: paneID)?.sessionStates.removeValue(forKey: paneID)
     }
 
@@ -200,12 +278,23 @@ final class PaneStatusManager {
     /// turn-end reconcile already cleared the entry), older CLIs emit stops for
     /// starts they never sent, and a snapshot may have dropped the entry first.
     /// None of that is an error — "gone" is the desired state either way.
+    ///
+    /// Id-space invariant: `id` is the hook's `agent_id // teammate_id // task_id`,
+    /// so it is an *agent* id only for a subagent stop. That's fine here — an
+    /// attention owner is only ever keyed by an `agent_id`, so a teammate/task id
+    /// simply matches no owner and releases nothing.
     func endActivity(paneID: UUID, id: String) {
-        guard var activities = backgroundActivities[paneID] else { return }
-        let before = activities.count
-        activities.removeAll { $0.id == id }
-        guard activities.count != before else { return }
-        write(paneID: paneID, activities)
+        if var activities = backgroundActivities[paneID] {
+            let before = activities.count
+            activities.removeAll { $0.id == id }
+            if activities.count != before {
+                write(paneID: paneID, activities)
+            }
+        }
+        // Runs even when the entry was already gone (a snapshot or a reconcile can
+        // have evicted it first): the stop hook is still proof this agent is dead,
+        // and a prompt it owns has to be released either way.
+        releaseAttention(paneID: paneID, endedOrigin: .agent(id))
     }
 
     /// Ends the first activity carrying this label — the fallback for teammate
@@ -214,8 +303,47 @@ final class PaneStatusManager {
     func endActivity(paneID: UUID, label: String) {
         guard var activities = backgroundActivities[paneID] else { return }
         guard let index = activities.firstIndex(where: { $0.label == label }) else { return }
-        activities.remove(at: index)
+        let ended = activities.remove(at: index)
         write(paneID: paneID, activities)
+
+        // Only a subagent's id lives in the same id space as an attention owner
+        // (`agent_id`); a teammate/bash entry's id is a `teammate_id`/`task_id` and
+        // must never be reinterpreted as one. Today it could never collide with a
+        // real owner, but conflating the spaces is a trap waiting for the first id
+        // scheme change — so the release is narrowed to genuine agent entries.
+        guard ended.kind == .agent else { return }
+        releaseAttention(paneID: paneID, endedOrigin: .agent(ended.id))
+    }
+
+    /// Releases a `needsAttention` whose owner has just gone away.
+    ///
+    /// A prompt is normally cleared by its own origin's next `busy` — but a subagent
+    /// that was killed, or that simply finished, will never send one, which would
+    /// strand the pane orange forever with a question nobody can answer. Its
+    /// lifecycle end is the proof it's gone, so the pane falls back to the state it
+    /// would have had without the prompt: `busy` while other work is still
+    /// outstanding, otherwise `idle`.
+    ///
+    /// Writes directly rather than through `setSessionState`, which would refuse the
+    /// `idle` case (`canReplace` won't let `idle` displace `needsAttention` — for
+    /// good reason: only *this* path knows the prompt is unanswerable). It still
+    /// `publish`es the transition, so the notifier sees this `needsAttention → idle`
+    /// exactly like any other write and the "done" banner can fire for a turn that
+    /// genuinely ended.
+    ///
+    /// A pane whose owner is unknown (`effectiveAttentionOwner` → `.main`, the
+    /// restore case) is never released here: `endedOrigin` is always an `.agent`.
+    private func releaseAttention(paneID: UUID, endedOrigin: ClaudeEventOrigin) {
+        guard sessionStates[paneID] == .needsAttention,
+              effectiveAttentionOwner(paneID: paneID) == endedOrigin else { return }
+
+        attentionOwners.removeValue(forKey: paneID)
+        let hasOutstandingWork = (backgroundActivities[paneID] ?? []).contains { !$0.isStale }
+        let state: ClaudeSessionState = hasOutstandingWork ? .busy : .idle
+        sessionStates[paneID] = state
+        owner(of: paneID)?.sessionStates[paneID] = state   // dual-write
+        Log.ipc.debug("Attention for pane \(paneID) released: owner '\(endedOrigin.agentID)' ended → \(state.rawValue)")
+        publish(paneID: paneID, old: .needsAttention)
     }
 
     /// Whether this pane has ever reported a lifecycle event, i.e. whether the
