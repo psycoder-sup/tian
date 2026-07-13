@@ -28,6 +28,8 @@ enum SkillInstaller {
     }
 
     /// Pure file-copy: overwrite each skill subdirectory of `source` into `destination`.
+    /// A destination that is a symlink is left untouched — a dev machine links
+    /// ~/.claude/skills/tian to the repo checkout, which stays the source of truth.
     static func installSkills(from source: URL, to destination: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -36,6 +38,8 @@ enum SkillInstaller {
             guard (try entry.resourceValues(forKeys: [.isDirectoryKey])).isDirectory == true
             else { continue }
             let dest = destination.appendingPathComponent(entry.lastPathComponent, isDirectory: true)
+            if let type = try? fm.attributesOfItem(atPath: dest.path)[.type] as? FileAttributeType,
+               type == .typeSymbolicLink { continue }
             if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
             try fm.copyItem(at: entry, to: dest)
         }
