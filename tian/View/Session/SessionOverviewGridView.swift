@@ -39,11 +39,12 @@ struct SessionOverviewGridView: View {
     /// Persisted card order for the overview grid — survives app restarts.
     @AppStorage("sessionOverviewSortMode") private var sortMode: SessionOverviewSortMode = .defaultOrder
 
-    /// Inner padding around the scrolling grid content. Must exceed the selected
-    /// card's outer glow radius (`SessionOverviewCardView`'s 24pt shadow) or the
-    /// `ScrollView` clips the glow flat at the top edge when a top-row card is
-    /// selected. Also feeds `columnCount(forWidth:)`'s width calc, so this stays
-    /// the single source of truth for both.
+    /// Inner padding around the scrolling grid content. Stays modest because the
+    /// grid renders with `.scrollClipDisabled()` — the selected card's glow spills
+    /// past the `ScrollView`'s bounds rather than being clipped flat at the top
+    /// row, so this doesn't have to reserve room for the bloom. Also feeds
+    /// `columnCount(forWidth:)`'s width calc, so it stays the single source of
+    /// truth for both.
     private let contentPadding: CGFloat = 28
 
     /// Minimum card width and inter-card gap. Shared by both the adaptive
@@ -98,6 +99,11 @@ struct SessionOverviewGridView: View {
                     sortControl
                     gridContent
                 }
+                // `gridContent` renders with `.scrollClipDisabled()` so the selected
+                // card's glow isn't clipped flat at the top row. Re-clip here, at the
+                // overview's own bounds, so scrolled cards can't bleed out of the
+                // overlay onto the sidebar or window chrome.
+                .clipped()
             }
         }
         // The live terminal NSView behind this overlay stays the window's
@@ -225,6 +231,12 @@ struct SessionOverviewGridView: View {
                 }
                 .padding(contentPadding)
             }
+            // Let the selected card's glow (and its 1.035x scale) overflow the
+            // ScrollView's bounds instead of being clipped flat when the card sits
+            // in the top row or an edge column. The enclosing VStack still clips at
+            // the overview's bounds, so scrolled content can't escape the overlay —
+            // it can, however, ride over the sort header while scrolling.
+            .scrollClipDisabled()
             .onGeometryChange(for: Int.self) { geo in
                 columnCount(forWidth: geo.size.width - contentPadding * 2)
             } action: { newCount in
