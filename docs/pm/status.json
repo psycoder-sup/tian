@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-13",
+      "summary": "Stopped the app auto-installing repo-only skills (release, graphify, session-audit) into ~/.claude/skills: the Bundle Claude Skills build phase now bundles only the tian skill, and SkillInstaller skips symlinked destinations so a dev machine's ~/.claude/skills/tian → repo symlink survives version bumps. Leaked global copies removed by hand.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/87"
+    },
+    {
+      "date": "2026-07-13",
       "summary": "Released v1.5.7 (build 503) — fixed stuck busy/subagent/team indicators (PR #86). tian only learned about subagents from Claude's background_tasks snapshot (piped in on Stop/SubagentStop), which never mentions foreground subagents — and Stop doesn't fire on ESC, so a cancelled turn stayed pinned busy until a 180s TTL. Registered the three hooks tian never used (SubagentStart, TeammateIdle, PostToolUseFailure — all present in Claude Code 2.1.207) and added an explicit lifecycle refcount in PaneStatusManager alongside the snapshot feed: BackgroundActivity gains a Source (lifecycle/snapshot) + .teammate kind, syncActivities becomes a partial replace so a snapshot can't evict a live foreground subagent, dedupe-by-id kills the double-count, TTLs split 180s snapshot / 900s lifecycle, and SessionEnd gets a true clear-all. Teammates deliberately survive Stop/new-prompt (they outlive a turn); subagents don't. 1088/1089 tests (one pre-existing load-sensitive WorktreeOrchestrator flake), 11/11 new hook-shell tests; code review found 4 issues (incl. a SessionEnd clear regression), all fixed in-branch; security review clean. Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. Teammate payload field names (teammate_id/teammate_name) are still inferred from the Claude binary, not confirmed against a real agent-teams run — begin/end hooks log raw payloads to ~/Library/Logs/tian/claude-hooks.log for that check.",
       "commit": "dd1b0c5",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.7"
@@ -33,12 +39,6 @@
       "summary": "Fixed new normal-mode sessions launching in the terminal panel's wandered-to cwd. SessionCollection.resolveWorkingDirectory() now resolves to the workspace root (main worktree in a git repo) then $HOME, ignoring every pane's live OSC 7 cwd and the active session's own default — so a new session created while a worktree session is active still lands at the main repo root. Removed the sourcePaneDirectory() OSC-7 leak; terminal-panel splits still inherit their source pane's cwd via PaneViewModel. 43 resolver/session tests pass; Debug build clean.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/85"
-    },
-    {
-      "date": "2026-07-10",
-      "summary": "Released v1.5.6 (build 491) — worktree/skill/UX fixes: added the /release skill (settles graphify churn, drives scripts/publish.sh end-to-end, updates status.json); fixed session nav dying on empty workspaces (7001465); fixed selected-card glow clipping at scroll top in the session overview grid (735e880). Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
-      "commit": "8c98035",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.6"
     }
   ]
 }
