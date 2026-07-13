@@ -7,6 +7,7 @@ description: >-
   "release it". Handles the two things publish.sh can't: settling the graphify commit-hook churn so
   the tree is clean enough to publish, and the manual status.json shipped/now update. Trigger:
   /release [patch|minor|major|X.Y.Z].
+model: sonnet
 ---
 
 # Cutting a tian release with `/release`
