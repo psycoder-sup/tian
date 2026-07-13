@@ -6,9 +6,14 @@ import SwiftUI
 /// Respects the system's Reduce Motion accessibility setting.
 struct BusyDotView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.windowIsVisible) private var windowIsVisible
+
+    /// Paused when motion is reduced or nobody can see the window — a
+    /// ticking TimelineView in an occluded window is pure CPU waste.
+    private var paused: Bool { reduceMotion || !windowIsVisible }
 
     var body: some View {
-        TimelineView(reduceMotion ? .animation(minimumInterval: nil, paused: true) : .animation(minimumInterval: 1.0 / 12.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 8.0, paused: paused)) { timeline in
             let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let s = CGFloat(t) * 0.8
 

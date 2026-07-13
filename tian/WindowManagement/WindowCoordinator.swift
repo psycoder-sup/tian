@@ -56,6 +56,21 @@ final class WindowCoordinator {
 
     func removeController(_ controller: WorkspaceWindowController) {
         controllers.removeAll(where: { $0 === controller })
+        refreshSystemMonitorActivity()
+    }
+
+    /// Keeps the shared SystemMonitor running only while at least one
+    /// workspace window is visible on screen. Called on every occlusion
+    /// change and on window close.
+    func refreshSystemMonitorActivity() {
+        let anyVisible = controllers.contains {
+            $0.window?.occlusionState.contains(.visible) ?? false
+        }
+        if anyVisible {
+            SystemMonitor.shared.start()
+        } else {
+            SystemMonitor.shared.stop()
+        }
     }
 
     func controllerForKeyWindow() -> WorkspaceWindowController? {

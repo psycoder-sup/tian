@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkspaceWindowContent: View {
     let workspaceCollection: WorkspaceCollection
     let worktreeOrchestrator: WorktreeOrchestrator
+    let windowVisibility: WindowVisibilityState
 
     @State private var showDebugOverlay = false
     @State private var createSessionRequest: CreateSessionRequest?
@@ -55,6 +56,7 @@ struct WorkspaceWindowContent: View {
             }
         }
         .background(rootBackgroundColor.ignoresSafeArea())
+        .environment(\.windowIsVisible, windowVisibility.isVisible)
         .overlay {
             if let req = createSessionRequest, let workspace = req.workspace {
                 CreateSessionView(
