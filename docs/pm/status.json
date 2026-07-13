@@ -24,9 +24,9 @@
   "shipped": [
     {
       "date": "2026-07-13",
-      "summary": "Fixed stuck busy/subagent/team indicators. tian only learned about subagents from Claude's background_tasks snapshot (piped in on Stop/SubagentStop), which never mentions foreground subagents — and Stop doesn't fire on ESC, so a cancelled turn stayed pinned busy until a 180s TTL. Registered the three hooks tian never used (SubagentStart, TeammateIdle, PostToolUseFailure — all present in Claude Code 2.1.207) and added an explicit lifecycle refcount in PaneStatusManager alongside the snapshot feed: BackgroundActivity gains a Source (lifecycle/snapshot) + .teammate kind, syncActivities becomes a partial replace so a snapshot can't evict a live foreground subagent, dedupe-by-id kills the double-count, TTLs split 180s snapshot / 900s lifecycle, and SessionEnd gets a true clear-all. Teammates deliberately survive Stop/new-prompt (they outlive a turn); subagents don't. 1088/1089 tests (one pre-existing load-sensitive WorktreeOrchestrator flake), 11/11 new hook-shell tests; code review found 4 issues, all fixed in-branch; security review clean.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/86"
+      "summary": "Released v1.5.7 (build 503) — fixed stuck busy/subagent/team indicators (PR #86). tian only learned about subagents from Claude's background_tasks snapshot (piped in on Stop/SubagentStop), which never mentions foreground subagents — and Stop doesn't fire on ESC, so a cancelled turn stayed pinned busy until a 180s TTL. Registered the three hooks tian never used (SubagentStart, TeammateIdle, PostToolUseFailure — all present in Claude Code 2.1.207) and added an explicit lifecycle refcount in PaneStatusManager alongside the snapshot feed: BackgroundActivity gains a Source (lifecycle/snapshot) + .teammate kind, syncActivities becomes a partial replace so a snapshot can't evict a live foreground subagent, dedupe-by-id kills the double-count, TTLs split 180s snapshot / 900s lifecycle, and SessionEnd gets a true clear-all. Teammates deliberately survive Stop/new-prompt (they outlive a turn); subagents don't. 1088/1089 tests (one pre-existing load-sensitive WorktreeOrchestrator flake), 11/11 new hook-shell tests; code review found 4 issues (incl. a SessionEnd clear regression), all fixed in-branch; security review clean. Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. Teammate payload field names (teammate_id/teammate_name) are still inferred from the Claude binary, not confirmed against a real agent-teams run — begin/end hooks log raw payloads to ~/Library/Logs/tian/claude-hooks.log for that check.",
+      "commit": "dd1b0c5",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.7"
     },
     {
       "date": "2026-07-12",
@@ -39,18 +39,6 @@
       "summary": "Released v1.5.6 (build 491) — worktree/skill/UX fixes: added the /release skill (settles graphify churn, drives scripts/publish.sh end-to-end, updates status.json); fixed session nav dying on empty workspaces (7001465); fixed selected-card glow clipping at scroll top in the session overview grid (735e880). Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
       "commit": "8c98035",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.6"
-    },
-    {
-      "date": "2026-07-09",
-      "summary": "Released v1.5.5 (build 479) — sidebar/session-overview UX batch. Session overview grid (Cmd+Shift+O) gains a sort control (Default vs Session State: needs-input > busy > idle > fresh, persisted, `s` cycles; ordering in tian/Session/SessionOverviewSort.swift, unit-tested) — PR #78. Overview overlay lifted above every sessionContentStack branch with auto-dismiss re-keyed to a global hasAnySession, opens from the empty create-session page, and the sidebar workspace header now activates its workspace on title/row click with a new leading chevron for fold (Return mirrors click, VoiceOver disclosure restored) — PR #79/#80. Notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live. GUI click/keystroke path not yet human-verified.",
-      "commit": "a05d460",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.5"
-    },
-    {
-      "date": "2026-07-09",
-      "summary": "Released v1.5.4 — workspace now survives its last session — closing the last session no longer closes the workspace; its content area shows a new create-session empty state (SessionEmptyStateView) where the Claude pane renders. Removed the session→workspace auto-close cascade (SessionCollection.onEmpty/shouldQuit, Workspace.onEmpty, WorkspaceCollection.wireWorkspaceClose); explicit workspace close unchanged. Medium code-review caught a HIGH persistence data-loss (an empty workspace made SessionRestorer.validate discard the whole state file on restore) — fixed by dropping zero-session workspaces in SessionSerializer.snapshot; plus a session-overview flag desync (PR #76). 1032 tianTests pass (one WorktreeOrchestrator wall-clock flake, green in isolation). Built, notarized (Accepted), stapled, Gatekeeper-clean; GitHub Release + Sparkle appcast live.",
-      "commit": "701a925",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.4"
     }
   ]
 }
