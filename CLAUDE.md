@@ -89,8 +89,8 @@ A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace m
 
 **Live state lives in [`docs/pm/status.json`](docs/pm/status.json) — read it first each session.** It's structured JSON; keep this section to a 2–4 line summary of the current focus and let `status.json` carry the detail. Humans: launch the live dashboard with `python3 docs/pm/dashboard/serve.py`.
 
-- **Now:** v1.3.0 released — session & sidebar UX batch (background-subagent surfacing + false-idle fix, ⌘R rename, workspace reorder, auto-unfold). Daily-drive and triage regressions. See `status.json`.
-- **Next:** Validate the /tian implement harness v1.2.0 on a real multi-slice run (ADR 0003).
+- **Now:** v1.5.8 released (notarized, appcast live) — overview selected-card glow-clip fix, skill-install scoping. Daily-drive and triage regressions. See `status.json`.
+- **Next:** Remote-workspace phase 2 (IPC socket forwarding + remote shell integration); validate the /tian implement harness on a real multi-slice run (ADR 0003).
 
 ## Repo layout (context docs)
 
