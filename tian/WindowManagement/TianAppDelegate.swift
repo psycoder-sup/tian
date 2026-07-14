@@ -54,6 +54,10 @@ class TianAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenter
         // `.busy` floor instead of waiting for an incidental re-render.
         PaneStatusManager.shared.startStalenessPruning()
 
+        // Persist our own CPU/RSS to the log file so an idle-CPU regression is
+        // diagnosable after the fact (see `Log.perf` / `app_cpu:` lines).
+        ProcessCPUMonitor.shared.start()
+
         SkillInstaller.syncIfNeeded()
     }
 

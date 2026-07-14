@@ -405,6 +405,7 @@ struct SidebarContainerView: View {
                             )
                             .opacity(isActive ? 1 : 0)
                             .allowsHitTesting(isActive)
+                            .environment(\.sessionIsVisible, isActive)
                         }
                     }
                     .background(

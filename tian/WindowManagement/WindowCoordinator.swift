@@ -56,6 +56,24 @@ final class WindowCoordinator {
 
     func removeController(_ controller: WorkspaceWindowController) {
         controllers.removeAll(where: { $0 === controller })
+        refreshSystemMonitorActivity()
+    }
+
+    /// Keeps the shared SystemMonitor running only while at least one
+    /// workspace window is visible on screen, and feeds the visible-window
+    /// count to `ProcessCPUMonitor` so its log lines say whether a hot sample
+    /// happened with nobody looking. Called on every occlusion change and on
+    /// window close.
+    func refreshSystemMonitorActivity() {
+        let visibleCount = controllers.count {
+            $0.window?.occlusionState.contains(.visible) ?? false
+        }
+        ProcessCPUMonitor.shared.visibleWindowCount = visibleCount
+        if visibleCount > 0 {
+            SystemMonitor.shared.start()
+        } else {
+            SystemMonitor.shared.stop()
+        }
     }
 
     func controllerForKeyWindow() -> WorkspaceWindowController? {

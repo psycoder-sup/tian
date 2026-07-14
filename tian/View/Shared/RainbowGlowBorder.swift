@@ -16,6 +16,10 @@ let rainbowColors: [Color] = [
 
 private let glowCornerRadius: CGFloat = 6
 
+/// Tick interval for the rainbow overlays. 10 fps is indistinguishable from
+/// 12 fps once the gradients are blurred/stroked, and saves main-thread work.
+private let rainbowTickInterval: TimeInterval = 1.0 / 10.0
+
 /// Shared breathing envelope for rainbow overlays — oscillates in
 /// `[0.70, 1.00]` with a 2.5 s period. Drives `RainbowGlow`'s pulse.
 @inlinable func rainbowBreathe(_ t: TimeInterval) -> Double {
@@ -31,6 +35,7 @@ struct RainbowBorder: View {
     var cornerRadius: CGFloat = glowCornerRadius
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.windowIsVisible) private var windowIsVisible
 
     var body: some View {
         if reduceMotion {
@@ -45,7 +50,7 @@ struct RainbowBorder: View {
             }
             .allowsHitTesting(false)
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+            TimelineView(.animation(minimumInterval: rainbowTickInterval, paused: !windowIsVisible)) { timeline in
                 let angle = Angle.degrees(timeline.date.timeIntervalSinceReferenceDate * 60)
 
                 AngularGradient(
@@ -67,9 +72,16 @@ struct RainbowBorder: View {
 // MARK: - Notification indicator (soft inward glow, no border)
 
 struct RainbowGlow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.windowIsVisible) private var windowIsVisible
+
+    /// Paused when motion is reduced or the window is occluded. With `t`
+    /// frozen at 0 the glow renders once, statically, at a fixed angle.
+    private var paused: Bool { reduceMotion || !windowIsVisible }
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: rainbowTickInterval, paused: paused)) { timeline in
+            let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let angle = Angle.degrees(t * 60)
             let breathe = rainbowBreathe(t)
 

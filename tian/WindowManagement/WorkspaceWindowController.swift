@@ -5,6 +5,7 @@ import SwiftUI
 final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
     let workspaceCollection: WorkspaceCollection
     let worktreeOrchestrator: WorktreeOrchestrator
+    let windowVisibility = WindowVisibilityState()
     private weak var workspaceManager: WorkspaceManager?
     private weak var windowCoordinator: WindowCoordinator?
     private var eventMonitor: Any?
@@ -36,7 +37,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
 
         let contentView = WorkspaceWindowContent(
             workspaceCollection: workspaceCollection,
-            worktreeOrchestrator: worktreeOrchestrator
+            worktreeOrchestrator: worktreeOrchestrator,
+            windowVisibility: windowVisibility
         )
         let hostingView = NSHostingView(rootView: contentView)
         window.contentView = hostingView
@@ -258,6 +260,12 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         workspaceManager?.activeWorkspaceID = workspaceCollection.activeWorkspaceID
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let window else { return }
+        windowVisibility.update(from: window.occlusionState)
+        windowCoordinator?.refreshSystemMonitorActivity()
     }
 
     private func removeBgColorObserver() {

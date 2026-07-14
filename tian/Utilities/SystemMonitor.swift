@@ -36,6 +36,10 @@ final class SystemMonitor {
 
     private init() {}
 
+    /// True while the polling loop is live. Exposed for the coordinator's
+    /// idempotent start/stop and for tests.
+    var isRunning: Bool { pollingTask != nil }
+
     func start() {
         guard pollingTask == nil else { return }
         // Seed once so the first sparkline isn't all zeros.
@@ -47,6 +51,15 @@ final class SystemMonitor {
                 self?.sample()
             }
         }
+    }
+
+    /// Stops polling while no window is visible. Dropping the tick baseline
+    /// makes the first post-resume CPU sample re-seed (via readCPULoad's
+    /// count guard) instead of averaging over the whole paused interval.
+    func stop() {
+        pollingTask?.cancel()
+        pollingTask = nil
+        previousCPUTicks = []
     }
 
     // MARK: - Sampling

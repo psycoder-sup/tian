@@ -6,6 +6,8 @@ struct PaneView: View {
     let viewModel: PaneViewModel
     let isTabVisible: Bool
 
+    @Environment(\.sessionIsVisible) private var sessionIsVisible
+
     private var isFocused: Bool {
         isTabVisible && viewModel.splitTree.focusedPaneID == paneID
     }
@@ -14,8 +16,11 @@ struct PaneView: View {
         !isFocused && viewModel.splitTree.leafCount > 1
     }
 
+    /// Bell state persists in the view model, so a session hidden at
+    /// opacity 0 skips mounting the (animated) glow and re-mounts it when
+    /// the user switches back.
     private var showBellGlow: Bool {
-        viewModel.bellNotifications.contains(paneID)
+        sessionIsVisible && viewModel.bellNotifications.contains(paneID)
     }
 
     private var sessionState: ClaudeSessionState? {
