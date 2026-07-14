@@ -261,5 +261,9 @@
   "259": "TOMLKit",
   "260": "NSApplication",
   "261": "UUID",
+  "262": ".doCommand",
+  "263": ".claudePreviewText",
+  "264": "Bool",
+  "265": "Int",
   "835": "tian-hook-prompt.sh"
 }
