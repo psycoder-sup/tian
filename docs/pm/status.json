@@ -24,9 +24,9 @@
   "shipped": [
     {
       "date": "2026-07-14",
-      "summary": "Cut idle CPU (~18% -> ~1-2% when not visible): decorative TimelineView animations (BusyDotView, RainbowGlow, RainbowBorder) now pause on window occlusion via a new \\.windowIsVisible environment, opacity-0 hidden sessions no longer mount their bell glow (\\.sessionIsVisible), tick rates dropped 12->8/10fps, RainbowGlow gained the missing reduceMotion support, and SystemMonitor stops polling when no window is visible. The separate non-git-repo git-watcher CPU issue is handled in another session.",
-      "commit": "3d2d47f",
-      "link": ""
+      "summary": "Cut idle CPU (~18% -> ~1.3% occluded; 1.4% visible-idle): the three 12fps TimelineViews (BusyDotView, RainbowGlow, RainbowBorder) now pause on window occlusion via a new \\.windowIsVisible environment, opacity-0 hidden sessions no longer mount their bell glow (\\.sessionIsVisible), rates dropped to 8/10fps, RainbowGlow gained its missing reduceMotion branch, and SystemMonitor stops polling when no window is visible. Also adds ProcessCPUMonitor: own-process CPU/RSS sampled every 30s into the (now file-logged) perf category as `app_cpu:` lines, so the next regression is greppable instead of needing a live sample(1). Build + 1137 tianTests green. The non-git-repo git-watcher CPU issue is a separate session.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/91"
     },
     {
       "date": "2026-07-13",
