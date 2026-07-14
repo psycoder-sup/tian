@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-14",
+      "summary": "Ghostty preferences are now overridable from tian Settings (⌘, → Terminal): an Option-key picker (fixes Claude Code's alt+p, which macOS otherwise composes into Unicode) plus a free-form config box, rendered into a tian-owned file loaded after ~/.config/ghostty/config so tian's UI wins while \"Default\" emits no line and falls through. Applying reloads the config, which Ghostty pushes to every live surface — open panes update with no relaunch. Also fixes ⌘, itself: Ghostty binds cmd+, to open_config and the surface claimed the key equivalent before the menu bar, so Settings never opened from a pane. 18 tests green, five of them running the rendered file through the real Ghostty parser (line parses, tian's file beats a conflicting user config, Default leaves the user's value in charge, bad line yields a diagnostic); verified by hand in the app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/92"
+    },
+    {
+      "date": "2026-07-14",
       "summary": "Released v1.5.10 (build 542) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the idle-CPU animation gating (PR #91: ~18% -> ~1.3% occluded CPU, plus a new ProcessCPUMonitor logging app_cpu: lines every 30s) and the Inspect-panel scan-runaway fix (PR #90: bounded, genuinely cancellable file-tree walk with ScanRootGuard against $HOME//Users//Volumes root scans).",
       "commit": "ef9a1e6",
       "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.10"
