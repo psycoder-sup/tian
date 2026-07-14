@@ -2,10 +2,7 @@
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
   "lastUpdated": "2026-07-14",
-  "now": [
-    "Busy-state CPU fix on branch `worktree-cpu-spike-swiftui-relayout`: v1.5.10's occlusion gating (PR #91) never touched the *visible* busy window, which still ran a full SwiftUI relayout every vsync (Time Profiler: 49.6 NSHostingView.layout passes/s, 19.2% of a core — a live TimelineView re-walks the whole view graph per display cycle, whatever its minimumInterval).",
-    "Fix: BusyDotView is a static rainbow fill (no TimelineView), RainbowBorder spins on a CALayer/CABasicAnimation instead, and the overview's per-card 1 Hz preview timers collapse into one shared tick. Re-profiled same scenario (3 busy sessions + overview open): 1.5 passes/s, 3.8% of a core, on a Debug build. Build + tests green; needs PR."
-  ],
+  "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
     "Daily-drive the shipped app (now v1.5.10) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
@@ -25,6 +22,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-14",
+      "summary": "Killed the busy-session CPU spike: a *visible* window with a busy session ran a full SwiftUI relayout every vsync (Time Profiler on v1.5.10: 49.6 NSHostingView.layout passes/s, 19.2% of a core, 45% of process CPU in AttributeGraph). Cause was TimelineView itself — while one is on screen SwiftUI re-walks the window's whole view graph per display cycle, whatever its minimumInterval — so PR #91's occlusion gating never touched this case. BusyDotView is now a static rainbow fill (no TimelineView), RainbowBorder spins on a CABasicAnimation/CAGradientLayer (RainbowBorderLayer, backing-scale aware), and the overview's per-card 1 Hz preview timers collapse into one shared grid tick. Re-profiled same scenario (3 busy sessions + overview open) on a Debug build: 1.5 passes/s, 3.8% of a core. Full test suite green. RainbowGlow (bell) is the last TimelineView — follow-up.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/93"
+    },
     {
       "date": "2026-07-14",
       "summary": "Ghostty preferences are now overridable from tian Settings (⌘, → Terminal): an Option-key picker (fixes Claude Code's alt+p, which macOS otherwise composes into Unicode) plus a free-form config box, rendered into a tian-owned file loaded after ~/.config/ghostty/config so tian's UI wins while \"Default\" emits no line and falls through. Applying reloads the config, which Ghostty pushes to every live surface — open panes update with no relaunch. Also fixes ⌘, itself: Ghostty binds cmd+, to open_config and the surface claimed the key equivalent before the menu bar, so Settings never opened from a pane. 18 tests green, five of them running the rendered file through the real Ghostty parser (line parses, tian's file beats a conflicting user config, Default leaves the user's value in charge, bad line yields a diagnostic); verified by hand in the app.",
