@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-14",
+      "summary": "Killed the busy-session CPU spike: a *visible* window with a busy session ran a full SwiftUI relayout every vsync (Time Profiler on v1.5.10: 49.6 NSHostingView.layout passes/s, 19.2% of a core, 45% of process CPU in AttributeGraph). Cause was TimelineView itself — while one is on screen SwiftUI re-walks the window's whole view graph per display cycle, whatever its minimumInterval — so PR #91's occlusion gating never touched this case. BusyDotView is now a static rainbow fill (no TimelineView), RainbowBorder spins on a CABasicAnimation/CAGradientLayer (RainbowBorderLayer, backing-scale aware), and the overview's per-card 1 Hz preview timers collapse into one shared grid tick. Re-profiled same scenario (3 busy sessions + overview open) on a Debug build: 1.5 passes/s, 3.8% of a core. Full test suite green. RainbowGlow (bell) is the last TimelineView — follow-up.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/93"
+    },
+    {
+      "date": "2026-07-14",
       "summary": "Ghostty preferences are now overridable from tian Settings (⌘, → Terminal): an Option-key picker (fixes Claude Code's alt+p, which macOS otherwise composes into Unicode) plus a free-form config box, rendered into a tian-owned file loaded after ~/.config/ghostty/config so tian's UI wins while \"Default\" emits no line and falls through. Applying reloads the config, which Ghostty pushes to every live surface — open panes update with no relaunch. Also fixes ⌘, itself: Ghostty binds cmd+, to open_config and the surface claimed the key equivalent before the menu bar, so Settings never opened from a pane. 18 tests green, five of them running the rendered file through the real Ghostty parser (line parses, tian's file beats a conflicting user config, Default leaves the user's value in charge, bad line yields a diagnostic); verified by hand in the app.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/92"

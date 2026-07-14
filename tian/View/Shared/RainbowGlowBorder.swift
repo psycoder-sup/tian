@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Rainbow colors derived from the Figma conic gradient spec.
@@ -14,6 +15,11 @@ let rainbowColors: [Color] = [
     Color(red: 1.0,  green: 0.2,  blue: 0.2),
 ]
 
+/// The same palette as `CGColor`s, for the Core Animation path
+/// (`RainbowBorderLayer`). Derived from `rainbowColors` so the SwiftUI and
+/// CALayer borders can't drift apart.
+let rainbowCGColors: [CGColor] = rainbowColors.map { NSColor($0).cgColor }
+
 private let glowCornerRadius: CGFloat = 6
 
 /// Tick interval for the rainbow overlays. 10 fps is indistinguishable from
@@ -28,44 +34,21 @@ private let rainbowTickInterval: TimeInterval = 1.0 / 10.0
 
 // MARK: - Focus indicator (sharp rainbow border, no glow)
 
+/// The spin runs on a `CALayer` (`RainbowBorderLayer`), not a `TimelineView`.
+/// A live `TimelineView` forces SwiftUI to re-walk the window's whole view graph
+/// every display cycle — with a busy card on screen that was ~60 full layout
+/// passes a second, and it dominated the app's CPU. Core Animation drives the
+/// same rotation on the render server, leaving no main-thread work to gate on
+/// `\.windowIsVisible` (see `RainbowBorderLayer`).
 struct RainbowBorder: View {
     /// Corner radius of the border stroke. Defaults to the shared glow radius so
     /// existing callers are unaffected; larger surfaces (e.g. the 12pt overview
     /// card) pass their own so the rainbow hugs their rounded corners.
     var cornerRadius: CGFloat = glowCornerRadius
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.windowIsVisible) private var windowIsVisible
-
     var body: some View {
-        if reduceMotion {
-            // Static gradient — no animation
-            AngularGradient(
-                colors: rainbowColors,
-                center: .center
-            )
-            .mask {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(lineWidth: 2)
-            }
+        RainbowBorderLayer(cornerRadius: cornerRadius)
             .allowsHitTesting(false)
-        } else {
-            TimelineView(.animation(minimumInterval: rainbowTickInterval, paused: !windowIsVisible)) { timeline in
-                let angle = Angle.degrees(timeline.date.timeIntervalSinceReferenceDate * 60)
-
-                AngularGradient(
-                    colors: rainbowColors,
-                    center: .center,
-                    startAngle: angle,
-                    endAngle: angle + .degrees(360)
-                )
-                .mask {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(lineWidth: 2)
-                }
-            }
-            .allowsHitTesting(false)
-        }
     }
 }
 
