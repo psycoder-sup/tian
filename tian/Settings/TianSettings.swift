@@ -3,10 +3,11 @@ import Observation
 
 /// App-wide, user-editable preferences backed by `UserDefaults`.
 ///
-/// Currently holds a single setting: the command a fresh Claude pane
-/// auto-runs (see `PaneSpawner.claudeAutostartCommand`). The shell
-/// integration appends `; builtin exit`, so this value is just the command
-/// word(s) — e.g. `claude`, `claude --chrome`, or `headroom wrap claude`.
+/// Holds the command a fresh Claude pane auto-runs (see
+/// `PaneSpawner.claudeAutostartCommand`; the shell integration appends
+/// `; builtin exit`, so the value is just the command word(s) — e.g. `claude`,
+/// `claude --chrome`), the worktree-engine choice, and tian's Ghostty
+/// preference overrides (`GhosttyConfigOverrides`).
 @MainActor
 @Observable
 final class TianSettings {
@@ -27,6 +28,8 @@ final class TianSettings {
     private enum Keys {
         static let claudeCommand = "claudeCommand"
         static let useClaudeWorktreeEngine = "useClaudeWorktreeEngine"
+        static let optionAsAlt = "ghosttyOptionAsAlt"
+        static let ghosttyConfigOverrides = "ghosttyConfigOverrides"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -54,11 +57,41 @@ final class TianSettings {
         didSet { defaults.set(useClaudeWorktreeEngine, forKey: Keys.useClaudeWorktreeEngine) }
     }
 
+    // MARK: - Ghostty overrides
+
+    /// How the *Option* key reaches the terminal (`macos-option-as-alt`).
+    /// `.default` writes no line, leaving Ghostty's own default — and the
+    /// user's `~/.config/ghostty/config` — in charge.
+    var optionAsAlt: OptionAsAltSetting {
+        didSet { defaults.set(optionAsAlt.rawValue, forKey: Keys.optionAsAlt) }
+    }
+
+    /// Free-form Ghostty config lines (`key = value`, one per line) applied on
+    /// top of the user's own Ghostty config. The escape hatch for any
+    /// preference tian doesn't expose as a dedicated control.
+    var ghosttyConfigOverrides: String {
+        didSet { defaults.set(ghosttyConfigOverrides, forKey: Keys.ghosttyConfigOverrides) }
+    }
+
+    /// The body of the Ghostty config file tian loads last. Empty when nothing
+    /// is overridden.
+    var ghosttyOverrideText: String {
+        GhosttyConfigOverrides.render(
+            optionAsAlt: optionAsAlt,
+            rawOverrides: ghosttyConfigOverrides
+        )
+    }
+
     /// - Parameter defaults: the backing store. Defaults to `.standard`; tests
     ///   inject an isolated suite so they don't pollute the real preferences.
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.claudeCommand = defaults.string(forKey: Keys.claudeCommand) ?? Self.defaultClaudeCommand
         self.useClaudeWorktreeEngine = defaults.bool(forKey: Keys.useClaudeWorktreeEngine)
+        // An unknown/corrupt persisted value falls back to `.default` rather
+        // than trapping — the setting is cosmetic enough to recover silently.
+        self.optionAsAlt = defaults.string(forKey: Keys.optionAsAlt)
+            .flatMap(OptionAsAltSetting.init(rawValue:)) ?? .default
+        self.ghosttyConfigOverrides = defaults.string(forKey: Keys.ghosttyConfigOverrides) ?? ""
     }
 }

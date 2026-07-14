@@ -104,17 +104,10 @@ final class GhosttyApp: @unchecked Sendable {
         }
 
         // Load config
-        guard let primaryConfig = ghostty_config_new() else {
+        guard let primaryConfig = buildConfig() else {
             Log.ghostty.error("Failed to create ghostty config")
             return
         }
-        // Tian's default-overrides come first so the user's own config can
-        // still override them via ~/.config/ghostty/config. We seed our
-        // brand background here so the Metal layer and the SwiftUI window
-        // chrome paint the same color out of the box.
-        Self.loadTianDefaults(into: primaryConfig)
-        ghostty_config_load_default_files(primaryConfig)
-        ghostty_config_finalize(primaryConfig)
         updateDefaultBackground(from: primaryConfig)
 
         // Runtime config with callbacks
@@ -284,6 +277,15 @@ final class GhosttyApp: @unchecked Sendable {
             case GHOSTTY_ACTION_RING_BELL:
                 NSSound.beep()
                 return true
+            case GHOSTTY_ACTION_OPEN_CONFIG:
+                // Ghostty would open ~/.config/ghostty/config in an editor.
+                // In tian the config lives in Settings (⌘,), so send it there —
+                // this also covers a user-rebound open_config trigger.
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                return true
             default:
                 return false
             }
@@ -407,11 +409,29 @@ final class GhosttyApp: @unchecked Sendable {
 
     // MARK: - Config
 
-    private func reloadConfig() {
-        guard let newConfig = ghostty_config_new() else { return }
-        Self.loadTianDefaults(into: newConfig)
-        ghostty_config_load_default_files(newConfig)
-        ghostty_config_finalize(newConfig)
+    /// Builds a finalized Ghostty config with tian's load order:
+    ///
+    /// 1. tian's brand defaults (background) — seeds, meant to be overridable
+    /// 2. `~/.config/ghostty/config` and friends — the user's own Ghostty setup
+    /// 3. tian's Settings overrides — what the user picked in ⌘, **wins**, and
+    ///    anything they left at "Default" emits no line, falling through to (2)
+    ///
+    /// The only place this order is expressed, so init and reload can't drift.
+    private func buildConfig() -> ghostty_config_t? {
+        guard let config = ghostty_config_new() else { return nil }
+        Self.loadTianDefaults(into: config)
+        ghostty_config_load_default_files(config)
+        Self.loadTianOverrides(into: config)
+        ghostty_config_finalize(config)
+        configDiagnostics = Self.diagnostics(of: config)
+        return config
+    }
+
+    /// Rebuilds the config and pushes it to the app. Ghostty's core hands the
+    /// new config to every live surface, so open panes pick up changes without
+    /// a relaunch (see `App.updateConfig`).
+    func reloadConfig() {
+        guard let newConfig = buildConfig() else { return }
         if let app {
             ghostty_app_update_config(app, newConfig)
         }
@@ -420,6 +440,29 @@ final class GhosttyApp: @unchecked Sendable {
         }
         self.config = newConfig
         updateDefaultBackground(from: newConfig)
+    }
+
+    /// Writes the current Settings values to tian's override file and reloads,
+    /// applying them to every open pane. Called from the Settings UI.
+    @MainActor
+    func applySettingsOverrides() {
+        GhosttyConfigOverrides.write(TianSettings.shared.ghosttyOverrideText)
+        reloadConfig()
+    }
+
+    /// Warnings/errors Ghostty reported while parsing the last config build —
+    /// including typos in the user's Settings override box. Surfaced in the
+    /// Settings window so a bad line doesn't just silently do nothing.
+    private(set) var configDiagnostics: [String] = []
+
+    private static func diagnostics(of config: ghostty_config_t) -> [String] {
+        let count = ghostty_config_diagnostics_count(config)
+        guard count > 0 else { return [] }
+        return (0..<count).compactMap { index in
+            let diag = ghostty_config_get_diagnostic(config, index)
+            guard let ptr = diag.message else { return nil }
+            return String(cString: ptr)
+        }
     }
 
     /// Tian's brand bg used by both the seeded Ghostty config (so the Metal
@@ -450,6 +493,15 @@ final class GhosttyApp: @unchecked Sendable {
     /// set here.
     private static func loadTianDefaults(into config: ghostty_config_t) {
         tianDefaultsURL.path.withCString { ghostty_config_load_file(config, $0) }
+    }
+
+    /// Loads tian's Settings overrides *after* the user's own Ghostty config,
+    /// so a value picked in ⌘, beats the same key in `~/.config/ghostty/config`.
+    /// A missing file (nothing ever overridden) is a no-op in Ghostty.
+    private static func loadTianOverrides(into config: ghostty_config_t) {
+        let path = GhosttyConfigOverrides.fileURL.path
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        path.withCString { ghostty_config_load_file(config, $0) }
     }
 
     /// Mirrors a Ghostty bg color-change (app- or surface-level: OSC 11,
