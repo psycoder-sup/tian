@@ -48,6 +48,30 @@ struct InspectPanelNoDirectoryView: View {
     }
 }
 
+/// Centered placeholder shown when the scan is refused outright because the
+/// root is too broad to index — `$HOME`, `/`, or a volume root
+/// (`InspectScanOutcome.rootTooBroad`). No tree is rendered in this state.
+struct InspectPanelRootTooBroadView: View {
+    let path: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("This directory is too large to browse — open a project directory instead.")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Color.primary.opacity(0.35))
+                .multilineTextAlignment(.center)
+
+            Text(path)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(Color.primary.opacity(0.25))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// Generic centered, dim placeholder for any muted message in the inspect
 /// panel (loading, empty, no-repo, etc.). Used by Diff and Branch bodies
 /// to avoid duplicating the style (FR-T17 / FR-T19 / FR-T26 / FR-T27).
@@ -87,6 +111,12 @@ struct InspectPanelMutedMessage: View {
 
 #Preview("No directory") {
     InspectPanelNoDirectoryView()
+        .frame(width: 320, height: 400)
+        .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
+}
+
+#Preview("Root too broad") {
+    InspectPanelRootTooBroadView(path: "/Users/psycoder")
         .frame(width: 320, height: 400)
         .background(Color(red: 8/255, green: 11/255, blue: 18/255, opacity: 0.95))
 }

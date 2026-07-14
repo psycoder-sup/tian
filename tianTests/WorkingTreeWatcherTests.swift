@@ -89,6 +89,36 @@ struct WorkingTreeWatcherTests {
         #expect(tracker.fireCount == baseline)
     }
 
+    // A watcher constructed on a too-broad root (here: the user's home
+    // directory — see ScanRootGuard's doc comment for why home never goes
+    // quiet and drives runaway rescans) must never create an FSEventStream,
+    // so onChange can never fire. We don't write into the real home
+    // directory to prove this — doing so would be invasive and unnecessary,
+    // since the guard refuses to start the stream at all, independent of
+    // any activity under the root. Instead we confirm no callback fires
+    // within a bounded wait, which is the guard path being taken.
+    @Test func watcherRefusesTooBroadRootAndNeverFires() async throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+
+        let tracker = CallbackTracker()
+        let watcher = WorkingTreeWatcher(
+            root: home,
+            debounce: .milliseconds(50),
+            onChange: { tracker.fire() }
+        )
+        defer { watcher.stop() }
+
+        // Bounded wait: long enough that a wrongly-created stream would have
+        // delivered at least one debounced callback given ambient home
+        // directory activity (e.g. Claude Code rewriting its project logs).
+        try await Task.sleep(for: .milliseconds(800))
+        #expect(tracker.fireCount == 0)
+
+        // stop() must remain safe even though startStream() bailed early.
+        watcher.stop()
+        #expect(tracker.fireCount == 0)
+    }
+
     // MARK: - Helpers
 
     /// Polls `condition` until true or `timeout` elapses. Bounded so a broken

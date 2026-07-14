@@ -270,14 +270,14 @@
     "semantic_hash": "b964868f3179c1a2a49fd51bde720dac"
   },
   "tian/Core/InspectPanel/InspectFileScanner.swift": {
-    "mtime": 1783958904.932055,
-    "ast_hash": "159e53baf735ae25ce7851475f9fb600",
-    "semantic_hash": "159e53baf735ae25ce7851475f9fb600"
+    "mtime": 1783995028.0396745,
+    "ast_hash": "e1f7904f66482b9068af5b31105a8902",
+    "semantic_hash": ""
   },
   "tian/Core/InspectPanel/InspectFileTreeViewModel.swift": {
-    "mtime": 1783958904.932197,
-    "ast_hash": "ccc5c681abf011feb9d2e421e16c7ed9",
-    "semantic_hash": "ccc5c681abf011feb9d2e421e16c7ed9"
+    "mtime": 1783995028.0401716,
+    "ast_hash": "6c217a91d9c1600b020d432f851ff400",
+    "semantic_hash": ""
   },
   "tian/Core/InspectPanel/InspectPanelState.swift": {
     "mtime": 1783958904.9324424,
@@ -295,14 +295,14 @@
     "semantic_hash": "b16c67bc4b53aaa49dc73e95e05232b6"
   },
   "tian/Core/InspectPanel/RemoteInspectFileScanner.swift": {
-    "mtime": 1783958904.93269,
-    "ast_hash": "d39a0d019435a8c103188b6c307ed0e5",
-    "semantic_hash": "d39a0d019435a8c103188b6c307ed0e5"
+    "mtime": 1783995028.0409067,
+    "ast_hash": "3e77b38201a37b9aaf11577e2bfd2ba0",
+    "semantic_hash": ""
   },
   "tian/Core/InspectPanel/WorkingTreeWatcher.swift": {
-    "mtime": 1783958904.9327993,
-    "ast_hash": "4003c6dd7406f98c4db2d6f9a3f7cdcb",
-    "semantic_hash": "4003c6dd7406f98c4db2d6f9a3f7cdcb"
+    "mtime": 1783995028.0414681,
+    "ast_hash": "70feb6dba0455e2a9c20848e331bb764",
+    "semantic_hash": ""
   },
   "tian/Core/InspectPanel/WorktreeKind.swift": {
     "mtime": 1783958904.9331198,
@@ -590,7 +590,7 @@
     "semantic_hash": "3f2141250245d38ecc7e5d8c1456045e"
   },
   "tian/Utilities/Logger.swift": {
-    "mtime": 1783993929.4111319,
+    "mtime": 1783994872.0313413,
     "ast_hash": "4b406f11da64f615b89af8549a329b38",
     "semantic_hash": ""
   },
@@ -615,7 +615,7 @@
     "semantic_hash": ""
   },
   "tian/Utilities/SystemMonitor.swift": {
-    "mtime": 1783959092.5021029,
+    "mtime": 1783994839.7266872,
     "ast_hash": "a1ea203e8fb3b682bfb27a4bea84230c",
     "semantic_hash": ""
   },
@@ -690,14 +690,14 @@
     "semantic_hash": "f98a72097c6674c7216686334eb05a56"
   },
   "tian/View/InspectPanel/InspectPanelEmptyStates.swift": {
-    "mtime": 1783958904.9541688,
-    "ast_hash": "69da3add4afda20cebc153d3ca5dc724",
-    "semantic_hash": "69da3add4afda20cebc153d3ca5dc724"
+    "mtime": 1783995028.0425606,
+    "ast_hash": "2fd38986b79304641fe05e25b86dcd67",
+    "semantic_hash": ""
   },
   "tian/View/InspectPanel/InspectPanelFileBrowser.swift": {
-    "mtime": 1783958904.954306,
-    "ast_hash": "4c1e9dd81537eaac7e465b83ef3b95fc",
-    "semantic_hash": "4c1e9dd81537eaac7e465b83ef3b95fc"
+    "mtime": 1783995028.043572,
+    "ast_hash": "fa5653c01eba362e38bc15fc74b39ed8",
+    "semantic_hash": ""
   },
   "tian/View/InspectPanel/InspectPanelFileRow.swift": {
     "mtime": 1783958904.954654,
@@ -735,9 +735,9 @@
     "semantic_hash": "58152737a9b923fd32ffd810a362b5de"
   },
   "tian/View/InspectPanel/InspectPanelView.swift": {
-    "mtime": 1783958904.9564445,
-    "ast_hash": "1efd6613a9364f769aee9e008eb0597c",
-    "semantic_hash": "1efd6613a9364f769aee9e008eb0597c"
+    "mtime": 1783995028.0443063,
+    "ast_hash": "39e792c792ea075e667315498b77741d",
+    "semantic_hash": ""
   },
   "tian/View/MarkdownDiffView.swift": {
     "mtime": 1783958904.9568334,
@@ -760,7 +760,7 @@
     "semantic_hash": "65d57120622621698027131e5490f04d"
   },
   "tian/View/PaneView.swift": {
-    "mtime": 1783959052.4380443,
+    "mtime": 1783994839.7271812,
     "ast_hash": "97f2e9378c75dccd1f641136d3767bb1",
     "semantic_hash": ""
   },
@@ -840,7 +840,7 @@
     "semantic_hash": "86b68279c41ceb91e40092775105faf0"
   },
   "tian/View/Shared/RainbowGlowBorder.swift": {
-    "mtime": 1783959031.6722183,
+    "mtime": 1783994839.727764,
     "ast_hash": "881e84e17894df3ec61e91ba70042ad5",
     "semantic_hash": ""
   },
@@ -850,7 +850,7 @@
     "semantic_hash": ""
   },
   "tian/View/Sidebar/BusyDotView.swift": {
-    "mtime": 1783959013.689674,
+    "mtime": 1783994839.7279742,
     "ast_hash": "f9c5588ae6f562aec23ef9ded304b544",
     "semantic_hash": ""
   },
@@ -880,7 +880,7 @@
     "semantic_hash": "c1800619061630a0476d16cf7bdb949a"
   },
   "tian/View/Sidebar/SidebarContainerView.swift": {
-    "mtime": 1783959070.9376388,
+    "mtime": 1783994839.7283006,
     "ast_hash": "69884bb3865fa0281586c095b4af0cb7",
     "semantic_hash": ""
   },
@@ -965,7 +965,7 @@
     "semantic_hash": "fb9520078507b9bf395e1c5c927f4cd1"
   },
   "tian/View/Workspace/WorkspaceWindowContent.swift": {
-    "mtime": 1783958977.5554802,
+    "mtime": 1783994839.7285297,
     "ast_hash": "23fcbfb605fdb440df175d4a717fe06e",
     "semantic_hash": ""
   },
@@ -1000,7 +1000,7 @@
     "semantic_hash": "57e66ff00ee66170a8f27535e7580d9f"
   },
   "tian/WindowManagement/TianAppDelegate.swift": {
-    "mtime": 1783993947.360546,
+    "mtime": 1783994872.0323453,
     "ast_hash": "443dd3ae6bf954278f189d82b6681df4",
     "semantic_hash": ""
   },
@@ -1010,7 +1010,7 @@
     "semantic_hash": "e7b6a98f0d563e7b93c833646eed04a5"
   },
   "tian/WindowManagement/WindowCoordinator.swift": {
-    "mtime": 1783993937.4160993,
+    "mtime": 1783994872.032903,
     "ast_hash": "2ddafb0e241cd09096d39fc034b10928",
     "semantic_hash": ""
   },
@@ -1025,7 +1025,7 @@
     "semantic_hash": "6be97d9469c2088d4ce8dec52fc3d9b4"
   },
   "tian/WindowManagement/WorkspaceWindowController.swift": {
-    "mtime": 1783958957.6573796,
+    "mtime": 1783994839.7293596,
     "ast_hash": "1d7063b6d457af883baaf36f9cd5dda7",
     "semantic_hash": ""
   },
@@ -1260,14 +1260,14 @@
     "semantic_hash": "e375b45b1d439545a78205fe6f756bde"
   },
   "tianTests/InspectFileScannerTests.swift": {
-    "mtime": 1783958904.9908986,
-    "ast_hash": "25ea757a6cad7a7c180312d5a958dc79",
-    "semantic_hash": "25ea757a6cad7a7c180312d5a958dc79"
+    "mtime": 1783995028.0450761,
+    "ast_hash": "713ef277751e07e9781a6153f9ea7e69",
+    "semantic_hash": ""
   },
   "tianTests/InspectFileTreeViewModelTests.swift": {
-    "mtime": 1783958904.9910486,
-    "ast_hash": "0409f154885103845cfb8695cf49767b",
-    "semantic_hash": "0409f154885103845cfb8695cf49767b"
+    "mtime": 1783995028.0455518,
+    "ast_hash": "b3386606e937a3355fb9ad24a72409f8",
+    "semantic_hash": ""
   },
   "tianTests/InspectPanelStateTests.swift": {
     "mtime": 1783958904.991144,
@@ -1470,9 +1470,9 @@
     "semantic_hash": "7ce3f56a97bed7a92abaf8ac90fb4eab"
   },
   "tianTests/WorkingTreeWatcherTests.swift": {
-    "mtime": 1783958905.0023193,
-    "ast_hash": "d549cf48addd4f18a159f43587a05fd8",
-    "semantic_hash": "d549cf48addd4f18a159f43587a05fd8"
+    "mtime": 1783995028.0466976,
+    "ast_hash": "db2f69b922ec1a69c8353c920129df07",
+    "semantic_hash": ""
   },
   "tianTests/WorkspaceCreationFlowTests.swift": {
     "mtime": 1783958905.0023882,
@@ -1575,7 +1575,7 @@
     "semantic_hash": "7907a147c25621916282dca6f256eac7"
   },
   "CLAUDE.md": {
-    "mtime": 1783993967.6366518,
+    "mtime": 1783994872.021262,
     "ast_hash": "306899c3fb6fe07094d670d9394aa021",
     "semantic_hash": ""
   },
@@ -1714,24 +1714,34 @@
     "ast_hash": "199c7c73331008bbf703cc40c6e3554e",
     "semantic_hash": ""
   },
-  "tian/WindowManagement/WindowVisibilityState.swift": {
-    "mtime": 1783958928.5978513,
-    "ast_hash": "1318093d3690b006b9f767e823a08379",
+  "tian/Utilities/ScanRootGuard.swift": {
+    "mtime": 1783995028.0420332,
+    "ast_hash": "bb5fc40af8a4036823d5b6444951ed68",
     "semantic_hash": ""
   },
-  "tianTests/WindowVisibilityStateTests.swift": {
-    "mtime": 1783959125.0546942,
-    "ast_hash": "6773a5d5eed353c75d7d2299835a2aee",
+  "tianTests/ScanRootGuardTests.swift": {
+    "mtime": 1783995028.0461085,
+    "ast_hash": "316497316430f1daa92e0756953264ef",
     "semantic_hash": ""
   },
   "tian/Utilities/ProcessCPUMonitor.swift": {
-    "mtime": 1783994448.8843431,
+    "mtime": 1783994872.7678604,
     "ast_hash": "e8309034604b5c9e82c0523f061e0347",
     "semantic_hash": ""
   },
+  "tian/WindowManagement/WindowVisibilityState.swift": {
+    "mtime": 1783994839.7291477,
+    "ast_hash": "1318093d3690b006b9f767e823a08379",
+    "semantic_hash": ""
+  },
   "tianTests/ProcessCPUMonitorTests.swift": {
-    "mtime": 1783994456.6753807,
+    "mtime": 1783994872.7683449,
     "ast_hash": "a1ba50ccff6d507d7edd6426c40e2af3",
+    "semantic_hash": ""
+  },
+  "tianTests/WindowVisibilityStateTests.swift": {
+    "mtime": 1783994839.729611,
+    "ast_hash": "6773a5d5eed353c75d7d2299835a2aee",
     "semantic_hash": ""
   }
 }

@@ -13,30 +13,78 @@ struct InspectPanelFileBrowser: View {
     // MARK: - Body
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: 0) {
-                ForEach(viewModel.visibleRows) { node in
-                    InspectPanelFileRow(
-                        node: node,
-                        depth: node.depth,
-                        isExpanded: viewModel.expandedPaths.contains(node.id),
-                        isSelected: viewModel.selectedPath == node.id,
-                        status: viewModel.statusByRelativePath[node.relativePath],
-                        isIgnored: viewModel.isIgnored(node.relativePath),
-                        onTap: {
-                            if node.isDirectory {
-                                viewModel.toggle(node.id)
-                            } else {
-                                viewModel.select(node.id)
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.visibleRows) { node in
+                        InspectPanelFileRow(
+                            node: node,
+                            depth: node.depth,
+                            isExpanded: viewModel.expandedPaths.contains(node.id),
+                            isSelected: viewModel.selectedPath == node.id,
+                            status: viewModel.statusByRelativePath[node.relativePath],
+                            isIgnored: viewModel.isIgnored(node.relativePath),
+                            onTap: {
+                                if node.isDirectory {
+                                    viewModel.toggle(node.id)
+                                } else {
+                                    viewModel.select(node.id)
+                                }
+                            },
+                            onOpen: {
+                                if !node.isDirectory { onOpenFile(node.id) }
                             }
-                        },
-                        onOpen: {
-                            if !node.isDirectory { onOpenFile(node.id) }
-                        }
-                    )
+                        )
+                    }
                 }
             }
+            .frame(maxHeight: .infinity)
+
+            if case .truncated(let reason, let shown) = viewModel.scanOutcome {
+                InspectPanelTruncationBanner(reason: reason, shown: shown)
+            }
         }
+    }
+}
+
+// MARK: - Truncation banner
+
+/// Persistent footer strip shown when a bound cut the walk short
+/// (`InspectScanOutcome.truncated`) — the tree above it is partial. The text
+/// names the bound that was actually hit and the count actually rendered: a
+/// depth-pruned tree of 300 files must not claim it's showing the first 20,000.
+/// Matches the `InspectPanelStatusStrip` idiom: fixed height, hairline
+/// divider, small monospaced label.
+private struct InspectPanelTruncationBanner: View {
+    let reason: InspectScanTruncation
+    /// Paths actually in the tree above.
+    let shown: Int
+
+    static let height: CGFloat = 20
+
+    private var message: String {
+        switch reason {
+        case .entryCap, .examinedCap:
+            return "Showing first \(shown.formatted()) items — this directory is too large to index fully"
+        case .depthCap(let depth):
+            return "Showing \(shown.formatted()) items — folders nested deeper than \(depth) levels aren't indexed"
+        }
+    }
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 9.5, design: .monospaced))
+            .foregroundStyle(Color.primary.opacity(0.35))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: Self.height)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.05))
+                    .frame(height: 0.5)
+            }
     }
 }
 
