@@ -69,6 +69,17 @@ final class WorkingTreeWatcher: @unchecked Sendable {
     }
 
     private func startStream() {
+        // Defense in depth: the view model already refuses to construct a
+        // watcher for roots like `$HOME`, `/`, or a volume root (see
+        // ScanRootGuard's doc comment for why — a recursive watch there
+        // never goes quiet and drives runaway rescans). Refuse again here so
+        // the watcher itself can never end up recursively watching one of
+        // these roots, even if a future caller forgets to check.
+        guard !ScanRootGuard.isTooBroad(URL(filePath: root)) else {
+            Log.git.error("WorkingTreeWatcher refusing too-broad root: \(self.root)")
+            return
+        }
+
         let pathsToWatch = [root] as CFArray
         let box = Box(self)
         let raw = Unmanaged.passRetained(box).toOpaque()

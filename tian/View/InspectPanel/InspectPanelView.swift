@@ -91,7 +91,10 @@ struct InspectPanelView: View {
 
     @ViewBuilder
     private var filesBody: some View {
-        if viewModel.worktreeKind == .noWorkingDirectory
+        if case .rootTooBroad(let path) = viewModel.scanOutcome {
+            // Refused outright — no scan happened, so no tree renders (FR: rootTooBroad).
+            InspectPanelRootTooBroadView(path: path)
+        } else if viewModel.worktreeKind == .noWorkingDirectory
            && !viewModel.isInitialScanInFlight {
             InspectPanelNoDirectoryView()
         } else if viewModel.isInitialScanInFlight && viewModel.isInitialScanSlow {

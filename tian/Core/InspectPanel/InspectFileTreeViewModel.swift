@@ -8,7 +8,7 @@ import SwiftUI
 protocol InspectFileScanning: Sendable {
     func scanGitTracked(workingTree: String) async throws -> [String]
     func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries
-    func scanFileSystem(root: URL) async throws -> [String]
+    func scanFileSystem(root: URL) async throws -> InspectScanResult
     /// Returns immediate (non-recursive) children of `absolutePath`. Used to
     /// lazy-load descendants of rolled-up ignored directories on expand.
     func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry]
@@ -31,12 +31,25 @@ struct LiveInspectFileScanner: InspectFileScanning {
     func scanGitIgnored(workingTree: String) async throws -> InspectIgnoredEntries {
         try await InspectFileScanner.scanGitIgnored(workingTree: workingTree)
     }
-    func scanFileSystem(root: URL) async throws -> [String] {
+    func scanFileSystem(root: URL) async throws -> InspectScanResult {
         try await InspectFileScanner.scanFileSystem(root: root)
     }
     func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
         try await InspectFileScanner.scanImmediateChildren(absolutePath: absolutePath)
     }
+}
+
+/// How the tree currently on screen relates to what's actually on disk. Drives
+/// the panel's banner: a capped walk shows a partial tree, a refused root shows
+/// nothing at all.
+enum InspectScanOutcome: Equatable, Sendable {
+    case normal
+    /// A bound cut the walk short; the tree shown is partial. `shown` is how
+    /// many paths actually made it into the tree, so the banner can quote a
+    /// number that matches what's on screen rather than the cap it didn't hit.
+    case truncated(reason: InspectScanTruncation, shown: Int)
+    /// Root is $HOME / a volume root — refused outright: no scan, no watcher.
+    case rootTooBroad(path: String)
 }
 
 @MainActor @Observable
@@ -54,6 +67,9 @@ final class InspectFileTreeViewModel {
     private var ignoredEntries: Set<String> = []
     private(set) var isInitialScanInFlight: Bool = false
     private(set) var isInitialScanSlow: Bool = false
+    /// `.truncated` when the last walk hit the scanner's cap, `.rootTooBroad`
+    /// when we refused to scan the root at all.
+    private(set) var scanOutcome: InspectScanOutcome = .normal
 
     /// Returns `true` if `relativePath` is gitignored, either directly or
     /// because one of its parent directories is.
@@ -82,6 +98,8 @@ final class InspectFileTreeViewModel {
         slowFlagTask?.cancel()
         slowFlagTask = nil
         isInitialScanSlow = false
+        isScanInFlight = false
+        refreshPending = false
 
         cancelPendingIgnoredChildrenLoads()
 
@@ -95,15 +113,36 @@ final class InspectFileTreeViewModel {
 
         guard let url else {
             // Empty state.
-            allNodes = []
-            childrenByParent = [:]
-            nodeByID = [:]
-            visibleRows = []
+            clearTree()
             worktreeKind = .noWorkingDirectory
             isInitialScanInFlight = false
+            scanOutcome = .normal
             return
         }
 
+        // $HOME, "/", a volume root: a recursive walk here is millions of
+        // entries and an FSEvents stream that never goes quiet. Refuse the root
+        // outright — no scan, no watcher — and let the panel say so.
+        guard !ScanRootGuard.isTooBroad(url) else {
+            clearTree()
+            isInitialScanInFlight = false
+            scanOutcome = .rootTooBroad(path: url.path)
+            // Still resolve the kind so the header label stays truthful: that's
+            // one git call, not a walk.
+            let target = url
+            let classify = self.classify
+            scanTask = Task { [weak self] in
+                let kind = await classify(target.path)
+                guard !Task.isCancelled else { return }
+                self?.worktreeKind = kind
+            }
+            return
+        }
+
+        // The outcome describes the tree we're about to replace, so it can't
+        // survive a re-root — a banner from the previous root would otherwise
+        // sit over this one's Loading… state.
+        scanOutcome = .normal
         isInitialScanInFlight = true
 
         // Slow-flag timer: flips after `slowFlagDelay` if we're still in flight.
@@ -119,15 +158,7 @@ final class InspectFileTreeViewModel {
             }
         }
 
-        // Scan task. Keep the URL captured so `runScan` knows what root we
-        // expected — protects against races where `setRoot` is called again
-        // before our task completes.
-        let target = url
-        let scanner = self.scanner
-        let classify = self.classify
-        scanTask = Task { [weak self] in
-            await self?.runScan(url: target, scanner: scanner, classify: classify)
-        }
+        startScan(url: url, isRefresh: false)
     }
 
     /// Toggles directory expansion (FR-13). Expanding a rolled-up ignored
@@ -181,14 +212,23 @@ final class InspectFileTreeViewModel {
     /// `isInitialScanInFlight` or restarting the watcher. The existing tree
     /// stays visible while the rescan runs, so FS-event refreshes don't blink
     /// the panel back to the Loading… state.
+    ///
+    /// Refreshes arriving while a scan is in flight are *coalesced*: they set a
+    /// pending flag and exactly one trailing rescan runs when the in-flight scan
+    /// lands. Cancelling and immediately respawning would be wrong — a cancelled
+    /// walk takes time to unwind, so a chatty root (an FS-event per second) piles
+    /// walkers on top of each other until the app is pegged.
     func refresh() {
         guard let url = rootDirectory else { return }
-        scanTask?.cancel()
-        let scanner = self.scanner
-        let classify = self.classify
-        scanTask = Task { [weak self] in
-            await self?.runScan(url: url, scanner: scanner, classify: classify, isRefresh: true)
+        // A refused root never scans; a stray watcher/poll tick must not
+        // resurrect the walk.
+        guard !ScanRootGuard.isTooBroad(url) else { return }
+
+        guard !isScanInFlight else {
+            refreshPending = true
+            return
         }
+        startScan(url: url, isRefresh: true)
     }
 
     /// Tears down the watcher and cancels the scan (called on workspace close).
@@ -197,6 +237,8 @@ final class InspectFileTreeViewModel {
         scanTask = nil
         slowFlagTask?.cancel()
         slowFlagTask = nil
+        isScanInFlight = false
+        refreshPending = false
         cancelPendingIgnoredChildrenLoads()
         watcher?.stop()
         watcher = nil
@@ -220,6 +262,23 @@ final class InspectFileTreeViewModel {
     func waitForFirstScan() async {
         await scanTask?.value
     }
+
+    /// Test affordance: awaits the current scan *and* any trailing coalesced
+    /// rescan it spawns, so assertions see the settled tree.
+    func waitForScansToSettle() async {
+        while let task = scanTask {
+            await task.value
+            if scanTask == task { return }
+        }
+    }
+
+    /// Test affordance: true while a watcher (not a poller) is running.
+    var hasWatcherForTest: Bool { watcher != nil }
+
+    /// Test affordance: the debounce handed to the most recently started
+    /// watcher. `nil` when no watcher has been started for this root.
+    @ObservationIgnored
+    private(set) var startedWatcherDebounceForTest: Duration?
 
     /// Test affordance: replaces the scanner. Called between scans when a
     /// test wants subsequent `setRoot`s to use different scanner behavior.
@@ -265,6 +324,13 @@ final class InspectFileTreeViewModel {
 
     private var scanTask: Task<Void, Never>?
     private var slowFlagTask: Task<Void, Never>?
+    /// True from the moment a scan task is spawned until it finishes (or is
+    /// cancelled by `setRoot`/`teardown`, both of which clear it). Gates
+    /// `refresh()` so at most one scan runs per root at a time.
+    private var isScanInFlight: Bool = false
+    /// Set when a `refresh()` arrives during an in-flight scan. Any number of
+    /// them collapse into the single trailing rescan run by `scanDidFinish()`.
+    private var refreshPending: Bool = false
     private var watcher: WorkingTreeWatcher?
     /// Used instead of `watcher` for a remote scanner (FSEvents can't watch
     /// another host).
@@ -287,6 +353,39 @@ final class InspectFileTreeViewModel {
 
     // MARK: - Scan flow
 
+    /// Spawns the one scan task allowed to be in flight for `url`. Callers must
+    /// have cancelled (or coalesced against) any previous scan first.
+    private func startScan(url: URL, isRefresh: Bool) {
+        isScanInFlight = true
+        let scanner = self.scanner
+        let classify = self.classify
+        scanTask = Task { [weak self] in
+            await self?.runScan(url: url, scanner: scanner, classify: classify, isRefresh: isRefresh)
+            // A cancelled task's flags belong to whoever cancelled it
+            // (`setRoot`/`teardown` reset them, and `setRoot` starts the
+            // replacement scan) — don't clobber them from here.
+            guard !Task.isCancelled else { return }
+            self?.scanDidFinish()
+        }
+    }
+
+    /// Clears the in-flight gate and runs the single trailing rescan that the
+    /// `refresh()` calls arriving during the scan coalesced into.
+    private func scanDidFinish() {
+        isScanInFlight = false
+        guard refreshPending else { return }
+        refreshPending = false
+        guard let url = rootDirectory, !ScanRootGuard.isTooBroad(url) else { return }
+        startScan(url: url, isRefresh: true)
+    }
+
+    private func clearTree() {
+        allNodes = []
+        childrenByParent = [:]
+        nodeByID = [:]
+        visibleRows = []
+    }
+
     private func runScan(
         url: URL,
         scanner: InspectFileScanning,
@@ -305,27 +404,28 @@ final class InspectFileTreeViewModel {
         self.worktreeKind = kind
 
         // Pick the right scanner method based on kind.
-        let paths: [String]
+        let scanResult: InspectScanResult
         var ignored: InspectIgnoredEntries = .empty
         do {
             switch kind {
             case .linkedWorktree, .mainCheckout:
                 async let pathsFetch = scanner.scanGitTracked(workingTree: url.path)
                 async let ignoredFetch = scanner.scanGitIgnored(workingTree: url.path)
-                paths = try await pathsFetch
+                scanResult = .complete(try await pathsFetch)
                 ignored = (try? await ignoredFetch) ?? .empty
             case .notARepo:
-                paths = try await scanner.scanFileSystem(root: url)
+                scanResult = try await scanner.scanFileSystem(root: url)
             case .noWorkingDirectory:
-                paths = []
+                scanResult = .complete([])
             }
         } catch is CancellationError {
             return
         } catch {
             // Treat scan failures as empty results — view will show the empty
             // state. The error is already logged by the scanner.
-            paths = []
+            scanResult = .complete([])
         }
+        let paths = scanResult.paths
 
         // After awaiting the scan, re-check cancellation. A second `setRoot`
         // landing during the scan must not let us write stale results.
@@ -351,15 +451,30 @@ final class InspectFileTreeViewModel {
         let allIgnored = ignored.all
 
         // Build the tree off the MainActor — at 10k+ entries this loop is
-        // non-trivial and would visibly stall the UI if run inline.
+        // non-trivial and would visibly stall the UI if run inline. A detached
+        // task does NOT inherit cancellation, so forward it explicitly:
+        // otherwise a cancelled scan keeps grinding through the build (which is
+        // half of what stacked up walkers on a huge root).
         let urlPath = url.path
-        let result = await Task.detached(priority: .userInitiated) {
-            InspectFileTreeViewModel.buildNodes(
+        let buildTask = Task.detached(priority: .userInitiated) {
+            try InspectFileTreeViewModel.buildNodes(
                 rootPath: urlPath,
                 paths: mergedPaths,
                 ignoredDirectories: ignoredDirs
             )
-        }.value
+        }
+        let result: (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]])
+        do {
+            result = try await withTaskCancellationHandler {
+                try await buildTask.value
+            } onCancel: {
+                buildTask.cancel()
+            }
+        } catch {
+            // Cancelled mid-build: the partial tree belongs to a root we no
+            // longer care about.
+            return
+        }
         if Task.isCancelled { return }
 
         allNodes = result.nodes
@@ -368,6 +483,13 @@ final class InspectFileTreeViewModel {
         if ignoredEntries != allIgnored {
             ignoredEntries = allIgnored
         }
+
+        // A bounded walk means the tree below is partial — say which bound, and
+        // how much we actually rendered. A clean scan clears any banner a
+        // previous truncated one left behind.
+        scanOutcome = scanResult.truncation.map {
+            .truncated(reason: $0, shown: mergedPaths.count)
+        } ?? .normal
 
         // FR-26: clear selection if it points at a path that no longer exists.
         if let selected = selectedPath, !result.nodes.contains(where: { $0.id == selected }) {
@@ -398,7 +520,7 @@ final class InspectFileTreeViewModel {
             slowFlagTask?.cancel()
             slowFlagTask = nil
             isInitialScanSlow = false
-            startWatcher(for: url)
+            startWatcher(for: url, kind: kind)
         }
     }
 
@@ -466,7 +588,7 @@ final class InspectFileTreeViewModel {
         ignoredChildrenLoadTasks[id] = task
     }
 
-    private func startWatcher(for url: URL) {
+    private func startWatcher(for url: URL, kind: WorktreeKind) {
         // Remote scanner: FSEvents can't watch another host, so poll on an
         // interval instead. Each tick does the same in-place `refresh()`.
         if let interval = scanner.pollInterval {
@@ -479,9 +601,19 @@ final class InspectFileTreeViewModel {
             return
         }
 
+        // A git repo's rescan is an `ls-files` and its events are edit-shaped,
+        // so 250 ms feels live. A non-repo root is rescanned by walking the
+        // filesystem and tends to sit in noisier territory (caches, downloads,
+        // build output) — a quarter second of quiet is a bar it may never clear,
+        // so give the trailing debounce far more room.
+        let debounce: Duration = kind == .notARepo ? .seconds(2) : .milliseconds(250)
+        #if DEBUG
+        startedWatcherDebounceForTest = debounce
+        #endif
+
         // Each FS-event burst triggers an in-place `refresh()` — the tree
         // stays visible while the rescan runs (no Loading… flicker).
-        watcher = WorkingTreeWatcher(root: url.path) { [weak self] in
+        watcher = WorkingTreeWatcher(root: url.path, debounce: debounce) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard self.rootDirectory == url else { return }
@@ -501,16 +633,32 @@ final class InspectFileTreeViewModel {
     ///            directories-first, alphabetical within each level.
     ///   - childrenByParent: parent-id → ordered children, used by the
     ///                       expansion walker in `recomputeVisibleRows()`.
+    ///
+    /// Throws `CancellationError` if the enclosing task is cancelled — at the
+    /// scanner's entry cap this is tens of thousands of iterations, so a
+    /// re-rooted or torn-down panel must be able to abandon it mid-flight.
+    /// Cancellation is polled every `cancellationCheckStride` iterations; a
+    /// check per element would cost more than the work it guards.
     nonisolated static func buildNodes(
         rootPath: String,
         paths: [String],
         ignoredDirectories: Set<String> = []
-    ) -> (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]]) {
+    ) throws -> (nodes: [FileTreeNode], childrenByParent: [String: [FileTreeNode]]) {
+        var sinceLastCheck = 0
+        func checkCancellation() throws {
+            sinceLastCheck += 1
+            guard sinceLastCheck >= cancellationCheckStride else { return }
+            sinceLastCheck = 0
+            try Task.checkCancellation()
+        }
+        try Task.checkCancellation()
+
         // Collect directory relative paths (every prefix of every file path)
         // plus any rolled-up ignored directories the caller supplied.
         var dirRelative = ignoredDirectories
         var fileRelative = Set<String>()
         for raw in paths {
+            try checkCancellation()
             // Defensive: some scanners might emit "" for an empty root —
             // skip them.
             guard !raw.isEmpty else { continue }
@@ -523,12 +671,14 @@ final class InspectFileTreeViewModel {
             for prefix in parentPrefixes(of: raw) { dirRelative.insert(prefix) }
         }
         for dir in ignoredDirectories {
+            try checkCancellation()
             for prefix in parentPrefixes(of: dir) { dirRelative.insert(prefix) }
         }
 
         // Build nodes (directories + files), keyed by relativePath.
         var nodesByRelative: [String: FileTreeNode] = [:]
         for rel in dirRelative {
+            try checkCancellation()
             // depth = number of "/" separators in the relative path
             let depth = rel.filter { $0 == "/" }.count
             let node = FileTreeNode(
@@ -541,6 +691,7 @@ final class InspectFileTreeViewModel {
             nodesByRelative[rel] = node
         }
         for rel in fileRelative {
+            try checkCancellation()
             let depth = rel.filter { $0 == "/" }.count
             let node = FileTreeNode(
                 id: absoluteJoin(rootPath, rel),
@@ -555,12 +706,14 @@ final class InspectFileTreeViewModel {
         // Index by parent relative path.
         var childrenIndex: [String: [FileTreeNode]] = [:]
         for (rel, node) in nodesByRelative {
+            try checkCancellation()
             let parentRel = parentRelative(rel)
             childrenIndex[parentRel, default: []].append(node)
         }
         // Sort each child list: directories first (alphabetical), files
         // alphabetical.
         for (k, v) in childrenIndex {
+            try checkCancellation()
             childrenIndex[k] = v.sorted(by: nodeOrder)
         }
 
@@ -568,6 +721,7 @@ final class InspectFileTreeViewModel {
         var ordered: [FileTreeNode] = []
         var stack: [FileTreeNode] = (childrenIndex[""] ?? []).reversed()
         while let next = stack.popLast() {
+            try checkCancellation()
             ordered.append(next)
             if next.isDirectory, let children = childrenIndex[next.relativePath] {
                 // Push reversed so the stack pops them in order.
@@ -603,6 +757,9 @@ final class InspectFileTreeViewModel {
     }
 
     // MARK: - Helpers
+
+    /// Iterations between `Task.checkCancellation()` calls in `buildNodes`.
+    private nonisolated static let cancellationCheckStride = 1024
 
     private nonisolated static func absoluteJoin(_ root: String, _ relative: String) -> String {
         if root.hasSuffix("/") { return root + relative }
