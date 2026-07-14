@@ -363,6 +363,12 @@ final class TerminalSurfaceView: NSView {
 
         // Check split shortcuts before ghostty
         if let chars = layoutChars {
+            // Cmd+, belongs to tian's Settings window. Ghostty binds it to its
+            // own open_config, so without this the surface would claim the key
+            // equivalent and the menu bar's Settings item would never see it.
+            if chars == "," && flags == [.command] {
+                return false
+            }
             if chars == "d" && flags == [.command, .shift] {
                 delegate?.terminalSurfaceViewRequestSplit(self, direction: .horizontal)
                 return true

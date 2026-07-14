@@ -277,6 +277,15 @@ final class GhosttyApp: @unchecked Sendable {
             case GHOSTTY_ACTION_RING_BELL:
                 NSSound.beep()
                 return true
+            case GHOSTTY_ACTION_OPEN_CONFIG:
+                // Ghostty would open ~/.config/ghostty/config in an editor.
+                // In tian the config lives in Settings (⌘,), so send it there —
+                // this also covers a user-rebound open_config trigger.
+                DispatchQueue.main.async {
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                return true
             default:
                 return false
             }
