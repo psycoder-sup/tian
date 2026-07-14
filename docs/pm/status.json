@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-13",
+  "lastUpdated": "2026-07-14",
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
@@ -22,6 +22,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-14",
+      "summary": "Fixed the Inspect-panel scan runaway that pegged the app at ~600% CPU / 5.4 GB RSS and hung it: a session rooted at $HOME hit an unbounded FileManager walk that ran in Task.detached (no cancellation inherited, no isCancelled polling), while a 250ms-debounced FSEventStream on a never-quiet home fired refresh() ~1/sec — so cancel-and-respawn stacked ~10 concurrent full-home walks. Walk is now bounded (20k files / 200k entries examined / depth 12 pruned), genuinely cancellable (flag polled every 256 entries under withTaskCancellationHandler), refreshes coalesce into one trailing rescan, and ScanRootGuard refuses $HOME, /, /Users, /Volumes, and /System/Volumes/Data outright in both the view model and the watcher. Build + 1155 tianTests green.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/90"
+    },
     {
       "date": "2026-07-13",
       "summary": "Released v1.5.9 (build 526) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the subagent-busy attention-clobber fix (PR #89): hook events now carry an origin id end-to-end so a background subagent's busy/active status can no longer clobber a pending AskUserQuestion raised by the main thread.",
