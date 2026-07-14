@@ -61,7 +61,9 @@ final class ProcessCPUMonitor {
 
     // MARK: - Sampling
 
-    private func sample() {
+    /// Internal (not private) so tests can drive one tick directly instead of
+    /// waiting out `sampleInterval`.
+    func sample() {
         guard let current = Self.readCPU() else { return }
         let now = clock.now
         defer { previous = (current.cpuNanos, now) }

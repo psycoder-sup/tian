@@ -36,6 +36,25 @@ struct ProcessCPUMonitorTests {
         #expect(ProcessCPUMonitor.nanoseconds(in: .zero) == 0)
     }
 
+    /// Drives one tick directly (rather than waiting out the 30s interval) to
+    /// check the seed → delta → percent path produces a live reading.
+    @Test func sampleProducesLiveReading() {
+        let monitor = ProcessCPUMonitor.shared
+        let wasRunning = monitor.isRunning
+        monitor.stop()  // clear any stale baseline
+        monitor.start()  // seeds the baseline
+
+        var sink = 0
+        for i in 0..<2_000_000 { sink &+= i }
+        #expect(sink != 0)
+
+        monitor.sample()
+        #expect(monitor.cpuPercent > 0)
+        #expect(monitor.threadCount > 0)
+
+        if !wasRunning { monitor.stop() }
+    }
+
     /// One test for the shared singleton's lifecycle so the transitions run in
     /// a fixed order; ends stopped, matching a fresh process.
     @Test func startStopLifecycle() {
