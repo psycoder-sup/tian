@@ -109,10 +109,13 @@ struct InspectFileScannerTests {
         try "b".write(toFile: nestedFile, atomically: true, encoding: .utf8)
 
         let result = try await InspectFileScanner.scanFileSystem(root: URL(filePath: dir))
-        #expect(result.contains("a.txt"))
-        #expect(result.contains("nested/b.txt"))
+        #expect(result.paths.contains("a.txt"))
+        #expect(result.paths.contains("nested/b.txt"))
         // No leading `./`.
-        #expect(!result.contains(where: { $0.hasPrefix("./") }))
+        #expect(!result.paths.contains(where: { $0.hasPrefix("./") }))
+        // Well under every cap — the tree shown is complete.
+        #expect(result.truncation == nil)
+        #expect(result.isTruncated == false)
     }
 
     @Test func fileSystemFallbackOnEmptyDirReturnsEmpty() async throws {
@@ -120,7 +123,8 @@ struct InspectFileScannerTests {
         defer { cleanup(dir) }
 
         let result = try await InspectFileScanner.scanFileSystem(root: URL(filePath: dir))
-        #expect(result.isEmpty)
+        #expect(result.paths.isEmpty)
+        #expect(result.isTruncated == false)
     }
 
     // FR-16 — hidden dotfiles (`.env`) shown when not gitignored.
@@ -151,12 +155,217 @@ struct InspectFileScannerTests {
         try FileManager.default.createSymbolicLink(atPath: linkPath, withDestinationPath: targetPath)
 
         let result = try await InspectFileScanner.scanFileSystem(root: URL(filePath: dir))
-        #expect(result.contains("link.txt"))
+        #expect(result.paths.contains("link.txt"))
         // Symlink target must not surface under the symlink path.
-        #expect(!result.contains(where: { $0.contains("target.txt") }))
+        #expect(!result.paths.contains(where: { $0.contains("target.txt") }))
+    }
+
+    // MARK: - Bounded, cancellable filesystem walk
+
+    // The bug this guards: the walk ran in a `Task.detached` (which does not
+    // inherit cancellation) and never polled for it, so every "cancelled" scan
+    // kept enumerating to completion. FS-event refreshes fire ~1/sec, so
+    // walkers piled up until the app hit 600% CPU / multi-GB RSS.
+    //
+    // Asserting only that `CancellationError` surfaces would have PASSED
+    // against the buggy code (the awaiting task throws on cancellation while
+    // the detached walk grinds on). So this test proves the walk itself halts:
+    // it counts entries examined via the walk's own probe, cancels early, then
+    // waits long enough for a runaway walk to have visited the whole tree and
+    // asserts the counter never moved again and never reached the total.
+    @Test func cancelledFileSystemScanStopsWalking() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        // 20 dirs x 50 files = 1020 entries. The probe sleeps 2ms per entry, so
+        // an uncancelled walk needs ~2s to finish.
+        let directoryCount = 20
+        let filesPerDirectory = 50
+        let totalEntries = directoryCount + directoryCount * filesPerDirectory
+        for d in 0..<directoryCount {
+            let sub = (dir as NSString).appendingPathComponent("dir\(d)")
+            try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
+            for f in 0..<filesPerDirectory {
+                let file = (sub as NSString).appendingPathComponent("f\(f).txt")
+                try "x".write(toFile: file, atomically: true, encoding: .utf8)
+            }
+        }
+
+        let examined = Counter()
+        let task = Task {
+            try await InspectFileScanner.scanFileSystem(
+                root: URL(filePath: dir),
+                maxEntries: 100_000,
+                maxDepth: 32,
+                onEntryExamined: {
+                    examined.increment()
+                    usleep(2_000)  // 2ms — slow the walk so cancellation lands mid-flight
+                }
+            )
+        }
+
+        // Wait for the walk to get going, then cancel it mid-flight.
+        var waited = 0
+        while examined.value < 20 && waited < 300 {
+            try await Task.sleep(for: .milliseconds(10))
+            waited += 1
+        }
+        #expect(examined.value >= 20, "walk never started; the rest of this test proves nothing")
+        task.cancel()
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await task.value
+        }
+
+        let atCancellation = examined.value
+        // A runaway walk would visit the remaining ~800 entries in this window.
+        try await Task.sleep(for: .milliseconds(1_500))
+
+        #expect(examined.value == atCancellation, "enumeration kept running after cancellation")
+        #expect(examined.value < totalEntries, "walk ran to completion despite cancellation")
+        // Cancellation is polled every 256 entries, so the walk stops within
+        // one stride of the flag being set — nowhere near the full tree.
+        #expect(examined.value <= 512)
+    }
+
+    // Caps are injected here so the test doesn't have to materialize 20k files;
+    // the production defaults are `maxFileSystemEntries` / `maxFileSystemDepth`.
+    @Test func fileSystemScanEnforcesEntryCap() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        for i in 0..<10 {
+            let file = (dir as NSString).appendingPathComponent("f\(i).txt")
+            try "x".write(toFile: file, atomically: true, encoding: .utf8)
+        }
+
+        let result = try await InspectFileScanner.scanFileSystem(
+            root: URL(filePath: dir),
+            maxEntries: 4
+        )
+        #expect(result.paths.count == 4)
+        #expect(result.truncation == .entryCap(limit: 4))
+    }
+
+    // The entry cap bounds the *result*, not the *work*: directories are visited
+    // but never land in `paths`, so a forest of directories holding almost no
+    // files would walk forever under the entry cap alone. The examined ceiling
+    // is what actually bounds the walk — this tree has zero files, so nothing
+    // but that ceiling can stop it.
+    @Test func fileSystemScanEnforcesExaminedCapOnDirectoryHeavyTree() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        // 60 directories, no files, all at depth 1-2 — under the entry and
+        // depth caps by a mile.
+        for d in 0..<30 {
+            let sub = (dir as NSString).appendingPathComponent("dir\(d)/inner")
+            try FileManager.default.createDirectory(atPath: sub, withIntermediateDirectories: true)
+        }
+
+        let examined = Counter()
+        let result = try await InspectFileScanner.scanFileSystem(
+            root: URL(filePath: dir),
+            maxEntries: 20_000,
+            maxExamined: 10,
+            maxDepth: 12,
+            onEntryExamined: { examined.increment() }
+        )
+
+        #expect(result.truncation == .examinedCap(limit: 10))
+        #expect(result.paths.isEmpty)
+        // The walk stopped at the ceiling instead of enumerating all 60 dirs.
+        #expect(examined.value == 10)
+    }
+
+    @Test func fileSystemScanEnforcesDepthCap() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        // f0.txt, l1/f1.txt, l1/l2/f2.txt, ... one file per level.
+        var current = dir
+        let root = (dir as NSString).appendingPathComponent("f0.txt")
+        try "x".write(toFile: root, atomically: true, encoding: .utf8)
+        for level in 1...5 {
+            current = (current as NSString).appendingPathComponent("l\(level)")
+            try FileManager.default.createDirectory(atPath: current, withIntermediateDirectories: true)
+            let file = (current as NSString).appendingPathComponent("f\(level).txt")
+            try "x".write(toFile: file, atomically: true, encoding: .utf8)
+        }
+
+        let result = try await InspectFileScanner.scanFileSystem(
+            root: URL(filePath: dir),
+            maxDepth: 3
+        )
+        // Depth 3 admits `f0.txt` (1), `l1/f1.txt` (2), `l1/l2/f2.txt` (3);
+        // `l1/l2/l3` is at the cap, so it is never descended into.
+        #expect(result.paths.sorted() == ["f0.txt", "l1/f1.txt", "l1/l2/f2.txt"])
+        #expect(!result.paths.contains(where: { $0.split(separator: "/").count > 3 }))
+        // Pruned by depth, NOT stopped at the entry cap — the banner would
+        // otherwise offer to show "the first 20,000" of these three files.
+        #expect(result.truncation == .depthCap(depth: 3))
+    }
+
+    @Test func fileSystemScanUnderCapsIsNotTruncated() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let nested = (dir as NSString).appendingPathComponent("a/b")
+        try FileManager.default.createDirectory(atPath: nested, withIntermediateDirectories: true)
+        try "x".write(toFile: (dir as NSString).appendingPathComponent("top.txt"),
+                      atomically: true, encoding: .utf8)
+        try "x".write(toFile: (nested as NSString).appendingPathComponent("deep.txt"),
+                      atomically: true, encoding: .utf8)
+
+        let result = try await InspectFileScanner.scanFileSystem(root: URL(filePath: dir))
+        #expect(result.paths.sorted() == ["a/b/deep.txt", "top.txt"])
+        #expect(result.truncation == nil)
+        #expect(result.isTruncated == false)
+    }
+
+    // Both bounds hit at once: the one that STOPPED the walk wins over the one
+    // that merely trimmed a branch, so the banner says "too large", not "too deep".
+    @Test func stoppingBoundOutranksDepthPruning() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        // Files at the root (so the entry cap can bite) plus a branch below the
+        // depth cap (so pruning happens too).
+        for i in 0..<10 {
+            try "x".write(toFile: (dir as NSString).appendingPathComponent("f\(i).txt"),
+                          atomically: true, encoding: .utf8)
+        }
+        let deep = (dir as NSString).appendingPathComponent("a/b/c/d")
+        try FileManager.default.createDirectory(atPath: deep, withIntermediateDirectories: true)
+
+        let result = try await InspectFileScanner.scanFileSystem(
+            root: URL(filePath: dir),
+            maxEntries: 2,
+            maxDepth: 2
+        )
+        #expect(result.truncation == .entryCap(limit: 2))
     }
 
     // MARK: - Helpers
+
+    /// Counts entries the walk examined. Mutated from the walk's queue and read
+    /// from the test's task, hence the lock.
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+
+        var value: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
+
+        func increment() {
+            lock.lock()
+            defer { lock.unlock() }
+            count += 1
+        }
+    }
 
     private func makeTempGitRepo() throws -> String {
         let dir = FileManager.default.temporaryDirectory

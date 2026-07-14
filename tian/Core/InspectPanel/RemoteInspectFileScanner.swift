@@ -45,16 +45,19 @@ struct RemoteInspectFileScanner: InspectFileScanning {
         return InspectIgnoredEntries(directories: directories, files: files)
     }
 
-    func scanFileSystem(root: URL) async throws -> [String] {
+    func scanFileSystem(root: URL) async throws -> InspectScanResult {
         // Non-repo remote directory: enumerate files with `find`, null-delimited.
+        // `-maxdepth` mirrors the local scanner's depth cap; the entry cap is
+        // applied here, on the results, since `find` has no equivalent flag.
         let result = await channel.run(
-            argv: ["find", ".", "-type", "f", "-print0"],
+            argv: ["find", ".", "-maxdepth", "\(InspectFileScanner.maxFileSystemDepth)",
+                   "-type", "f", "-print0"],
             workingDirectory: root.path
         )
         guard result.exitCode == 0 else {
             throw RemoteScanError.commandFailed(exitCode: result.exitCode, stderr: result.stderr)
         }
-        return Self.splitNulPaths(result.stdout).compactMap { raw in
+        let paths = Self.splitNulPaths(result.stdout).compactMap { raw -> String? in
             var path = raw
             if path.hasPrefix("./") { path.removeFirst(2) }
             guard !path.isEmpty else { return nil }
@@ -65,6 +68,9 @@ struct RemoteInspectFileScanner: InspectFileScanning {
             }
             return path
         }
+        let limit = InspectFileScanner.maxFileSystemEntries
+        guard paths.count > limit else { return .complete(paths) }
+        return InspectScanResult(paths: Array(paths.prefix(limit)), isTruncated: true)
     }
 
     func scanImmediateChildren(absolutePath: String) async throws -> [InspectChildEntry] {
