@@ -6,7 +6,7 @@ extension ClaudeSessionState {
     /// read this, so those two can't drift apart. (Not yet the whole app's
     /// single source: `PaneView`'s status border still hardcodes the same
     /// needs-attention orange — a candidate to migrate here too.) `nil` for
-    /// `.busy` (whose dot animates rather than showing a flat swatch) and
+    /// `.busy` (whose dot is a rainbow gradient, not a flat swatch) and
     /// `.inactive` (no swatch — the sidebar shows nothing).
     var solidStatusColor: Color? {
         switch self {

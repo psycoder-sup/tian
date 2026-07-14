@@ -35,6 +35,10 @@ struct SessionOverviewGridView: View {
     /// Live column count of the adaptive grid, measured from the overview's
     /// content width. Drives Up/Down (±one row) arrow navigation. Defaults to 1.
     @State private var columnCount = 1
+    /// Every card's Claude-pane preview text, keyed by session id, refreshed by
+    /// the single tick in `refreshPreviews()`. One shared clock — and so one
+    /// SwiftUI transaction a second — instead of a `.task` timer per card.
+    @State private var previews: [UUID: String] = [:]
 
     /// Persisted card order for the overview grid — survives app restarts.
     @AppStorage("sessionOverviewSortMode") private var sortMode: SessionOverviewSortMode = .defaultOrder
@@ -130,6 +134,10 @@ struct SessionOverviewGridView: View {
         // Belt-and-suspenders: harmless if first-responder routing ever changes.
         .onExitCommand { onDismiss() }
         .onAppear { selectedSessionID = defaultSelection() }
+        // The overview's only clock: reads every card's Claude pane once a second
+        // and hands the text down. Cancelled with the overlay, so nothing polls a
+        // pane the user can't see.
+        .task { await refreshPreviews() }
         // Keep the selection valid as sessions come or go while the overview is
         // up: a missing (nil) selection, or one whose id is no longer present,
         // falls back to the adjacent card — the neighbor that slid into the
@@ -265,6 +273,7 @@ struct SessionOverviewGridView: View {
                 && session.id == workspace.sessionCollection.activeSessionID,
             isSelected: session.id == selectedSessionID,
             isOrchestrator: entry.isOrchestrator,
+            previewText: previews[session.id] ?? "",
             // Only the selected card renames; committing/cancelling clears the shared flag.
             isRenaming: Binding(
                 get: { isRenamingSelection && session.id == selectedSessionID },
@@ -279,6 +288,25 @@ struct SessionOverviewGridView: View {
             onConfirmDelete: confirmPendingDelete,
             onSelect: { onSelect(workspace.id, session.id) }
         )
+    }
+
+    // MARK: - Previews
+
+    /// Rebuilds every card's preview text once a second for as long as the
+    /// overview is up. Reading a pane's visible VT text is a MainActor hop per
+    /// session, so the whole sweep is one batch: the dict is written once, and
+    /// only when something actually changed, which keeps a quiet overview from
+    /// invalidating the grid at all.
+    private func refreshPreviews() async {
+        while !Task.isCancelled {
+            var next: [UUID: String] = [:]
+            next.reserveCapacity(cardEntries.count)
+            for entry in cardEntries {
+                next[entry.session.id] = entry.session.claudePreviewText(maxLines: 14)
+            }
+            if next != previews { previews = next }
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 
     // MARK: - Selection & navigation

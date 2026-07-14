@@ -24,6 +24,11 @@ struct SessionOverviewCardView: View {
     /// Defaulted like `SidebarSessionRowView`'s `isOrchestrator`; the grid
     /// supplies the real value from `hierarchicalOrder()`.
     var isOrchestrator: Bool = false
+    /// Live preview of the Claude pane's last output lines. Refreshed by the
+    /// grid's single ~1 Hz tick rather than a per-card timer: N cards each
+    /// writing their own `@State` meant N SwiftUI transactions a second, each
+    /// invalidating the whole grid.
+    var previewText: String = ""
     /// Drives inline rename of the session name when the overview's `R` shortcut
     /// targets this (selected) card. Cleared on commit/cancel by `InlineRenameView`.
     @Binding var isRenaming: Bool
@@ -36,9 +41,6 @@ struct SessionOverviewCardView: View {
     let onConfirmDelete: () -> Void
     let onSelect: () -> Void
 
-    /// Live preview of the Claude pane's last output lines, refreshed on a
-    /// per-card timer (see `.task` below).
-    @State private var previewText = ""
     @State private var isHovering = false
 
     /// The card's border color: the session's aggregate Claude status, or a
@@ -181,15 +183,6 @@ struct SessionOverviewCardView: View {
         // take key focus (see `OverviewKeyboardResponder`).
         .popover(isPresented: $isConfirmingDelete, arrowEdge: .top) {
             deleteConfirmationPopover
-        }
-        // Reads the Claude pane's visible VT text on the MainActor at ~1 Hz per
-        // card — fine for a handful of sessions. If session counts grow large
-        // this can move to a single shared timer tick driving every card.
-        .task {
-            while !Task.isCancelled {
-                previewText = session.claudePreviewText(maxLines: 14)
-                try? await Task.sleep(for: .seconds(1))
-            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
