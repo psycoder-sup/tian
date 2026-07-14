@@ -590,9 +590,9 @@
     "semantic_hash": "3f2141250245d38ecc7e5d8c1456045e"
   },
   "tian/Utilities/Logger.swift": {
-    "mtime": 1783958904.950262,
-    "ast_hash": "cfefa13a8ba1072f8aa1b06c4ec21566",
-    "semantic_hash": "cfefa13a8ba1072f8aa1b06c4ec21566"
+    "mtime": 1783993929.4111319,
+    "ast_hash": "4b406f11da64f615b89af8549a329b38",
+    "semantic_hash": ""
   },
   "tian/Utilities/MarkdownFileType.swift": {
     "mtime": 1783958904.9505575,
@@ -1000,9 +1000,9 @@
     "semantic_hash": "57e66ff00ee66170a8f27535e7580d9f"
   },
   "tian/WindowManagement/TianAppDelegate.swift": {
-    "mtime": 1783958904.9733567,
-    "ast_hash": "575bcb8bed7d4b7603ee52c185352bf1",
-    "semantic_hash": "575bcb8bed7d4b7603ee52c185352bf1"
+    "mtime": 1783993947.360546,
+    "ast_hash": "443dd3ae6bf954278f189d82b6681df4",
+    "semantic_hash": ""
   },
   "tian/WindowManagement/TrafficLightAligner.swift": {
     "mtime": 1783958904.973478,
@@ -1010,8 +1010,8 @@
     "semantic_hash": "e7b6a98f0d563e7b93c833646eed04a5"
   },
   "tian/WindowManagement/WindowCoordinator.swift": {
-    "mtime": 1783959110.8191516,
-    "ast_hash": "6dcf0e208091a0e4d661c0d1f8ae5054",
+    "mtime": 1783993937.4160993,
+    "ast_hash": "2ddafb0e241cd09096d39fc034b10928",
     "semantic_hash": ""
   },
   "tian/WindowManagement/WindowDragBlocker.swift": {
@@ -1575,8 +1575,8 @@
     "semantic_hash": "7907a147c25621916282dca6f256eac7"
   },
   "CLAUDE.md": {
-    "mtime": 1783958904.8958344,
-    "ast_hash": "eaf0c4367521810f4882765062765a02",
+    "mtime": 1783993967.6366518,
+    "ast_hash": "306899c3fb6fe07094d670d9394aa021",
     "semantic_hash": ""
   },
   "README.md": {
@@ -1722,6 +1722,16 @@
   "tianTests/WindowVisibilityStateTests.swift": {
     "mtime": 1783959125.0546942,
     "ast_hash": "6773a5d5eed353c75d7d2299835a2aee",
+    "semantic_hash": ""
+  },
+  "tian/Utilities/ProcessCPUMonitor.swift": {
+    "mtime": 1783993922.5113811,
+    "ast_hash": "97e5bade26cde085695719c258f936b6",
+    "semantic_hash": ""
+  },
+  "tianTests/ProcessCPUMonitorTests.swift": {
+    "mtime": 1783993958.421395,
+    "ast_hash": "57ecdc2343beda32f8751aa571858bd4",
     "semantic_hash": ""
   }
 }

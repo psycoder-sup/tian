@@ -79,7 +79,9 @@ Use `.dev/tmp/` for temporary code, experiments, and scratch files instead of `/
 
 ## Logs
 
-File-logged categories (`ipc`, `lifecycle`, `persistence`, `git`) dual-write to `os.Logger` and `~/Library/Logs/tian/tian.log` (rotated to `tian.1.log`). The debug build writes to `~/Library/Logs/tian-debug/tian.log` instead, so a running debug app and production app don't race on the same file. See `tian/Utilities/FileLogWriter.swift`. Other categories (`core`, `view`, `ghostty`, `perf`, `worktree`) go to unified logging only — read with `log stream --predicate 'subsystem == "com.tian.app"'`.
+File-logged categories (`ipc`, `lifecycle`, `persistence`, `git`, `worktree`, `perf`) dual-write to `os.Logger` and `~/Library/Logs/tian/tian.log` (rotated to `tian.1.log`). The debug build writes to `~/Library/Logs/tian-debug/tian.log` instead, so a running debug app and production app don't race on the same file. See `tian/Utilities/FileLogWriter.swift`. Other categories (`core`, `view`, `ghostty`, `remote`) go to unified logging only — read with `log stream --predicate 'subsystem == "com.tian.app"'`.
+
+`perf` carries `app_cpu:` lines from `ProcessCPUMonitor` — tian's own CPU (as a % of one core, same basis as `top`), thread count, RSS, and the visible-window count, sampled every 30s and written when the app is hot (≥5%) or once per 5min heartbeat. Grep them to diagnose a CPU regression after the fact: `grep app_cpu ~/Library/Logs/tian/tian.log`. A hot sample with `visible_windows=0` means the occlusion gating on animations/polling leaked.
 
 <!-- project-kit:begin — managed block. Safe to edit; re-running /project-kit updates only between these markers. -->
 
