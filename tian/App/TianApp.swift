@@ -11,6 +11,11 @@ struct TianApp: App {
             setenv("GHOSTTY_RESOURCES_DIR", resourcesPath, 1)
         }
 
+        // Materialize the Ghostty overrides from Settings *before* the singleton
+        // builds its first config, so a persisted choice (e.g. Option-as-Alt)
+        // is live in the very first pane rather than after a reload.
+        GhosttyConfigOverrides.write(TianSettings.shared.ghosttyOverrideText)
+
         // Initialize the ghostty singleton (triggers ghostty_init + app creation)
         _ = GhosttyApp.shared
     }
