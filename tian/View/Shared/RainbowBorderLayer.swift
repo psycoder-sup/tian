@@ -9,9 +9,10 @@ import SwiftUI
 /// the border. A `CABasicAnimation` runs on the render server: the main thread
 /// touches it once, at setup, and never again.
 ///
-/// Pausing on occlusion is handled for free — Core Animation stops advancing
-/// animations for windows nobody can see — so unlike the SwiftUI version this
-/// needs no `\.windowIsVisible` plumbing.
+/// It needs no `\.windowIsVisible` gating, but not because Core Animation stops:
+/// the animation keeps advancing on the render server. It needs none because
+/// there is no main-thread work left to gate — an occluded window isn't
+/// composited, so what remains costs nothing worth pausing.
 struct RainbowBorderLayer: NSViewRepresentable {
     var cornerRadius: CGFloat
     var lineWidth: CGFloat = 2
@@ -60,10 +61,7 @@ final class RainbowBorderNSView: NSView {
         super.init(frame: .zero)
 
         wantsLayer = true
-        // Decorative only — the SwiftUI overlay it sits in is already
-        // non-interactive, but this keeps the AppKit view out of hit testing too.
-        let container = layer ?? CALayer()
-        layer = container
+        guard let container = layer else { return }
 
         gradientLayer.type = .conic
         gradientLayer.colors = rainbowCGColors
@@ -78,15 +76,30 @@ final class RainbowBorderNSView: NSView {
         maskLayer.strokeColor = NSColor.black.cgColor
         container.mask = maskLayer
 
+        applyScale()
         applyAnimation()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    /// Decorative only. The SwiftUI overlay it sits in is already non-interactive;
+    /// this keeps the AppKit view out of hit testing too.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    override var isFlipped: Bool { true }
+    /// Sublayers created in code default to `contentsScale == 1`, unlike the
+    /// view's own backing layer — on a Retina display that renders the gradient
+    /// and the stroke mask at half resolution (visibly soft, stair-stepped edge).
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        applyScale()
+    }
+
+    private func applyScale() {
+        let scale = window?.backingScaleFactor ?? 2
+        gradientLayer.contentsScale = scale
+        maskLayer.contentsScale = scale
+    }
 
     func update(cornerRadius: CGFloat, lineWidth: CGFloat, period: CFTimeInterval, animates: Bool) {
         let geometryChanged = cornerRadius != self.cornerRadius || lineWidth != self.lineWidth

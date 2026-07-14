@@ -38,8 +38,8 @@ private let rainbowTickInterval: TimeInterval = 1.0 / 10.0
 /// A live `TimelineView` forces SwiftUI to re-walk the window's whole view graph
 /// every display cycle — with a busy card on screen that was ~60 full layout
 /// passes a second, and it dominated the app's CPU. Core Animation drives the
-/// same rotation on the render server for free, and pauses itself when the
-/// window is occluded (hence no `\.windowIsVisible` here).
+/// same rotation on the render server, leaving no main-thread work to gate on
+/// `\.windowIsVisible` (see `RainbowBorderLayer`).
 struct RainbowBorder: View {
     /// Corner radius of the border stroke. Defaults to the shared glow radius so
     /// existing callers are unaffected; larger surfaces (e.g. the 12pt overview
