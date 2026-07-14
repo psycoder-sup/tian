@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.10) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.11) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-14",
+      "summary": "Released v1.5.11 (build 553) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships PR #93 (busy-session CPU spike fix: TimelineView-driven relayout replaced with a static rainbow fill + CALayer-driven RainbowBorder) and PR #92 (Ghostty preference overrides in tian Settings).",
+      "commit": "77e3ecd",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.11"
+    },
+    {
+      "date": "2026-07-14",
       "summary": "Killed the busy-session CPU spike: a *visible* window with a busy session ran a full SwiftUI relayout every vsync (Time Profiler on v1.5.10: 49.6 NSHostingView.layout passes/s, 19.2% of a core, 45% of process CPU in AttributeGraph). Cause was TimelineView itself — while one is on screen SwiftUI re-walks the window's whole view graph per display cycle, whatever its minimumInterval — so PR #91's occlusion gating never touched this case. BusyDotView is now a static rainbow fill (no TimelineView), RainbowBorder spins on a CABasicAnimation/CAGradientLayer (RainbowBorderLayer, backing-scale aware), and the overview's per-card 1 Hz preview timers collapse into one shared grid tick. Re-profiled same scenario (3 busy sessions + overview open) on a Debug build: 1.5 passes/s, 3.8% of a core. Full test suite green. RainbowGlow (bell) is the last TimelineView — follow-up.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/93"
@@ -33,24 +39,6 @@
       "summary": "Ghostty preferences are now overridable from tian Settings (⌘, → Terminal): an Option-key picker (fixes Claude Code's alt+p, which macOS otherwise composes into Unicode) plus a free-form config box, rendered into a tian-owned file loaded after ~/.config/ghostty/config so tian's UI wins while \"Default\" emits no line and falls through. Applying reloads the config, which Ghostty pushes to every live surface — open panes update with no relaunch. Also fixes ⌘, itself: Ghostty binds cmd+, to open_config and the surface claimed the key equivalent before the menu bar, so Settings never opened from a pane. 18 tests green, five of them running the rendered file through the real Ghostty parser (line parses, tian's file beats a conflicting user config, Default leaves the user's value in charge, bad line yields a diagnostic); verified by hand in the app.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/92"
-    },
-    {
-      "date": "2026-07-14",
-      "summary": "Released v1.5.10 (build 542) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the idle-CPU animation gating (PR #91: ~18% -> ~1.3% occluded CPU, plus a new ProcessCPUMonitor logging app_cpu: lines every 30s) and the Inspect-panel scan-runaway fix (PR #90: bounded, genuinely cancellable file-tree walk with ScanRootGuard against $HOME//Users//Volumes root scans).",
-      "commit": "ef9a1e6",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.10"
-    },
-    {
-      "date": "2026-07-14",
-      "summary": "Cut idle CPU (~18% -> ~1.3% occluded; 1.4% visible-idle): the three 12fps TimelineViews (BusyDotView, RainbowGlow, RainbowBorder) now pause on window occlusion via a new \\.windowIsVisible environment, opacity-0 hidden sessions no longer mount their bell glow (\\.sessionIsVisible), rates dropped to 8/10fps, RainbowGlow gained its missing reduceMotion branch, and SystemMonitor stops polling when no window is visible. Also adds ProcessCPUMonitor: own-process CPU/RSS sampled every 30s into the (now file-logged) perf category as `app_cpu:` lines, so the next regression is greppable instead of needing a live sample(1). Build + 1137 tianTests green. The non-git-repo git-watcher CPU issue is a separate session.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/91"
-    },
-    {
-      "date": "2026-07-14",
-      "summary": "Fixed the Inspect-panel scan runaway that pegged the app at ~600% CPU / 5.4 GB RSS and hung it: a session rooted at $HOME hit an unbounded FileManager walk that ran in Task.detached (no cancellation inherited, no isCancelled polling), while a 250ms-debounced FSEventStream on a never-quiet home fired refresh() ~1/sec — so cancel-and-respawn stacked ~10 concurrent full-home walks. Walk is now bounded (20k files / 200k entries examined / depth 12 pruned), genuinely cancellable (flag polled every 256 entries under withTaskCancellationHandler), refreshes coalesce into one trailing rescan, and ScanRootGuard refuses $HOME, /, /Users, /Volumes, and /System/Volumes/Data outright in both the view model and the watcher. Build + 1155 tianTests green.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/90"
     }
   ]
 }
