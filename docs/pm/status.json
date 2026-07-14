@@ -5,7 +5,7 @@
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.9) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.10) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -24,6 +24,12 @@
   "shipped": [
     {
       "date": "2026-07-14",
+      "summary": "Released v1.5.10 (build 542) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the idle-CPU animation gating (PR #91: ~18% -> ~1.3% occluded CPU, plus a new ProcessCPUMonitor logging app_cpu: lines every 30s) and the Inspect-panel scan-runaway fix (PR #90: bounded, genuinely cancellable file-tree walk with ScanRootGuard against $HOME//Users//Volumes root scans).",
+      "commit": "ef9a1e6",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.10"
+    },
+    {
+      "date": "2026-07-14",
       "summary": "Cut idle CPU (~18% -> ~1.3% occluded; 1.4% visible-idle): the three 12fps TimelineViews (BusyDotView, RainbowGlow, RainbowBorder) now pause on window occlusion via a new \\.windowIsVisible environment, opacity-0 hidden sessions no longer mount their bell glow (\\.sessionIsVisible), rates dropped to 8/10fps, RainbowGlow gained its missing reduceMotion branch, and SystemMonitor stops polling when no window is visible. Also adds ProcessCPUMonitor: own-process CPU/RSS sampled every 30s into the (now file-logged) perf category as `app_cpu:` lines, so the next regression is greppable instead of needing a live sample(1). Build + 1137 tianTests green. The non-git-repo git-watcher CPU issue is a separate session.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/91"
@@ -33,18 +39,6 @@
       "summary": "Fixed the Inspect-panel scan runaway that pegged the app at ~600% CPU / 5.4 GB RSS and hung it: a session rooted at $HOME hit an unbounded FileManager walk that ran in Task.detached (no cancellation inherited, no isCancelled polling), while a 250ms-debounced FSEventStream on a never-quiet home fired refresh() ~1/sec — so cancel-and-respawn stacked ~10 concurrent full-home walks. Walk is now bounded (20k files / 200k entries examined / depth 12 pruned), genuinely cancellable (flag polled every 256 entries under withTaskCancellationHandler), refreshes coalesce into one trailing rescan, and ScanRootGuard refuses $HOME, /, /Users, /Volumes, and /System/Volumes/Data outright in both the view model and the watcher. Build + 1155 tianTests green.",
       "commit": "",
       "link": "https://github.com/psycoder-sup/tian/pull/90"
-    },
-    {
-      "date": "2026-07-13",
-      "summary": "Released v1.5.9 (build 526) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the subagent-busy attention-clobber fix (PR #89): hook events now carry an origin id end-to-end so a background subagent's busy/active status can no longer clobber a pending AskUserQuestion raised by the main thread.",
-      "commit": "cd34d05",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.9"
-    },
-    {
-      "date": "2026-07-13",
-      "summary": "Fixed the sidebar burying a pending prompt: Claude fires a subagent's tool hooks from the parent's process under the same pane id, so a background subagent's PostToolUse (busy) clobbered the main thread's AskUserQuestion (needs_attention) seconds later. Hook events now carry their origin (payload agent_id, empty == main thread) through tian-hook-log.sh -> `tian status set --agent-id` -> IPC, and a pane records the attention owner that raised a needs_attention: only that origin's busy/active may clear it. Build + 1122 tianTests + 3 hook shell suites green.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/89"
     }
   ]
 }
