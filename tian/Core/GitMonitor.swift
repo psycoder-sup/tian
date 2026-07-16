@@ -208,6 +208,10 @@ final class GitMonitor {
     /// it so an OSC 7 cwd storm doesn't re-shell `git rev-parse` per event.
     private let detectionCache = DetectionCache()
 
+    /// In-flight detection tasks keyed by directory. Coalesces concurrent
+    /// cache-miss `detect(directory:)` callers onto one `git rev-parse` shell-out.
+    private var inFlightDetections: [String: Task<RepoLocation?, Never>] = [:]
+
     /// Repo detection seam. Defaults to `GitStatusService.detectRepo`; injectable
     /// so tests can assert `detect` caches without shelling out.
     @ObservationIgnored
@@ -295,11 +299,25 @@ final class GitMonitor {
         case .hit(let location):
             return location
         case .miss:
-            await gitLocal.acquire()
-            let location = await detector(directory)
-            await gitLocal.release()
-            detectionCache.set(directory: directory, location: location)
-            return location
+            // Coalesce concurrent misses for the same directory: the first
+            // caller creates the detection Task, later callers await the same
+            // one, so an OSC 7 cwd storm shells `git rev-parse` once, not once
+            // per event.
+            if let inFlight = inFlightDetections[directory] {
+                return await inFlight.value
+            }
+            let detector = self.detector
+            let gitLocal = self.gitLocal
+            let task = Task { [weak self] () -> RepoLocation? in
+                await gitLocal.acquire()
+                let location = await detector(directory)
+                await gitLocal.release()
+                self?.detectionCache.set(directory: directory, location: location)
+                self?.inFlightDetections.removeValue(forKey: directory)
+                return location
+            }
+            inFlightDetections[directory] = task
+            return await task.value
         }
     }
 
@@ -523,7 +541,18 @@ final class GitMonitor {
         let repoID = owningRepoID(target)
         let gitLocal = self.gitLocal
         let task = Task { [weak self] in
+            // A superseded (re-entrant) or torn-down task must not shell git.
+            guard !Task.isCancelled else {
+                self?.inFlightBranchTasks.removeValue(forKey: target)
+                return
+            }
             await gitLocal.acquire()
+            // Cancellation can also land while queued on the lane.
+            guard !Task.isCancelled else {
+                await gitLocal.release()
+                self?.inFlightBranchTasks.removeValue(forKey: target)
+                return
+            }
             let branch = await GitStatusService.currentBranch(directory: directory)
             await gitLocal.release()
 
@@ -551,6 +580,20 @@ final class GitMonitor {
 
             self.writeStatus(status, for: target)
             self.inFlightBranchTasks.removeValue(forKey: target)
+
+            // PR-on-miss: once a branch resolves and its PR cache misses, fetch
+            // the new branch's PR — but ONLY while the working-tree gate is open
+            // (a local branch switch or a sibling-worktree root subscribed while
+            // the gate is already open would otherwise leave the badge nil for
+            // up to the 300s poll). Respects network backoff; a genuine miss +
+            // `markPending` dedup keeps this from double-fetching with
+            // `fetchPROnGateOpen`. This is NEVER reachable from the working-tree
+            // refresh path, so working-tree churn still never drives a PR fetch.
+            if let branchName = branch?.name,
+               self.prFetchGateOpen(repoID: repoID),
+               case .miss = self.prCache.get(repoID: repoID, branch: branchName) {
+                self.maybeFetchPR(target: target, bypassBackoff: false)
+            }
         }
         inFlightBranchTasks[target] = task
     }
@@ -574,7 +617,18 @@ final class GitMonitor {
         let repoID = owningRepoID(target)
         let gitLocal = self.gitLocal
         let task = Task { [weak self] in
+            // A superseded (re-entrant) or torn-down task must not shell git.
+            guard !Task.isCancelled else {
+                self?.inFlightWorkingTreeTasks.removeValue(forKey: target)
+                return
+            }
             await gitLocal.acquire()
+            // Cancellation can also land while queued on the lane.
+            guard !Task.isCancelled else {
+                await gitLocal.release()
+                self?.inFlightWorkingTreeTasks.removeValue(forKey: target)
+                return
+            }
             let diff = await GitStatusService.diffStatus(directory: directory)
             await gitLocal.release()
 
@@ -718,6 +772,15 @@ final class GitMonitor {
         } else if !shouldBeOpen && isOpen {
             stopWorkingTreeWatcher(repoID: repoID)
         }
+    }
+
+    /// Whether a PR-on-miss fetch is permitted for this repo right now: only
+    /// while the working-tree gate is actually open (a visible/busy subscriber),
+    /// so a hidden/idle session doesn't fetch PR on a branch resolve. Remote
+    /// repos have no FSEvents gate — allow it (they poll for everything).
+    private func prFetchGateOpen(repoID: GitRepoID) -> Bool {
+        if isRemote(repoID) { return true }
+        return workingTreeWatchers[repoID] != nil
     }
 
     private func gateShouldBeOpen(repoID: GitRepoID) -> Bool {

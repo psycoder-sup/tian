@@ -346,6 +346,104 @@ struct GitMonitorTests {
         #expect(await counter.value == 1)
     }
 
+    /// `detect` coalesces concurrent misses: two overlapping calls for the same
+    /// not-yet-cached directory invoke the injected detector exactly once (the
+    /// first creates the in-flight Task, the second awaits it).
+    @Test func detectCoalescesConcurrentMisses() async {
+        let counter = CallCounter()
+        let location = RepoLocation(
+            gitDir: "/repo/.git",
+            commonDir: "/repo/.git",
+            workingTree: "/repo",
+            isWorktree: false
+        )
+        let monitor = GitMonitor(detector: { _ in
+            await counter.increment()
+            // Hold the detector so both callers genuinely overlap on the miss.
+            try? await Task.sleep(for: .milliseconds(80))
+            return location
+        })
+
+        async let first = monitor.detect(directory: "/repo")
+        async let second = monitor.detect(directory: "/repo")
+        let (a, b) = await (first, second)
+
+        #expect(a == location)
+        #expect(b == location)
+        // Coalesced: the shared in-flight Task ran the detector once.
+        #expect(await counter.value == 1)
+    }
+
+    // MARK: - PR-on-Miss After Branch Resolve (gated)
+
+    /// A branch resolve with the working-tree gate OPEN and a PR cache MISS
+    /// launches a PR fetch (regression: a local branch switch used to leave the
+    /// new branch's PR badge nil until the 300s poll). Driven by switching to a
+    /// fresh branch — a genuine cache miss with no active backoff — then forcing
+    /// a branch refresh, and asserting via `prFetchLaunchCount`.
+    @Test func branchResolveWithOpenGateAndPRMissLaunchesFetch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let monitor = GitMonitor()
+        let location = try await detectLocation(for: repo)
+        let repoID = GitRepoID(path: location.commonDir)
+
+        // Default-visible subscriber → gate open. Wait for the initial branch to
+        // resolve and let the gate-open PR fetch settle so the baseline is stable.
+        let token = monitor.subscribe(location: location, worktreeRoot: location.workingTree)
+        try await pollUntil(timeout: 10.0) {
+            monitor.status(forRepo: repoID)?.branchName?.isEmpty == false
+        }
+        try await Task.sleep(for: .milliseconds(400))
+        let before = monitor.prFetchLaunchCount
+
+        // Switch to a NEW branch: its PR cache key is a fresh miss with no
+        // backoff, and the gate is open → the branch resolve must launch a fetch.
+        try runGitSync(["checkout", "-b", "feat/pr-on-miss"], in: repo)
+        monitor.refreshBranchAndRefs(repoID: repoID)
+
+        try await pollUntil(timeout: 10.0) { monitor.prFetchLaunchCount > before }
+        #expect(monitor.prFetchLaunchCount > before)
+
+        monitor.unsubscribe(token)
+    }
+
+    /// The mirror: a branch resolve with the working-tree gate CLOSED and a PR
+    /// cache MISS must NOT launch a PR fetch (hidden/idle sessions don't hit the
+    /// network on a branch resolve). `checkout -b` touches only HEAD/refs/heads,
+    /// which never triggers the refs watcher's PR-eviction path, so the closed
+    /// gate is the only variable.
+    @Test func branchResolveWithClosedGateAndPRMissDoesNotFetch() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let monitor = GitMonitor()
+        let location = try await detectLocation(for: repo)
+        let repoID = GitRepoID(path: location.commonDir)
+
+        let token = monitor.subscribe(location: location, worktreeRoot: location.workingTree)
+        try await pollUntil(timeout: 10.0) {
+            monitor.status(forRepo: repoID)?.branchName?.isEmpty == false
+        }
+        try await Task.sleep(for: .milliseconds(400))
+
+        // Close the gate.
+        monitor.setSubscriberActivity(token, visible: false, busy: false)
+        #expect(monitor.activeWorkingTreeWatcherCount == 0)
+
+        let before = monitor.prFetchLaunchCount
+        try runGitSync(["checkout", "-b", "feat/no-fetch-when-closed"], in: repo)
+        monitor.refreshBranchAndRefs(repoID: repoID)
+
+        // Give the branch resolve time to run; with the gate closed the
+        // PR-on-miss path must not fetch.
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(monitor.prFetchLaunchCount == before)
+
+        monitor.unsubscribe(token)
+    }
+
     // MARK: - Global Concurrency Lanes
 
     /// The monitor configures its two lanes at the ADR-mandated caps.

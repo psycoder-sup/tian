@@ -254,8 +254,13 @@ struct SessionGitContextTests {
             }
         }
 
-        try await pollUntil(timeout: 5.0) {
-            !context.repoStatuses.isEmpty
+        // Poll on the actual condition asserted below (branchName resolved), not
+        // just `!isEmpty`: `repoStatuses` can gain its entry from the working-tree
+        // refresh (whichever wins the race for the shared `gitLocal` lane) with
+        // branchName still nil, so `!isEmpty` alone flakes under full parallel
+        // load. Generous timeout for the same lane-starvation reason.
+        try await pollUntil(timeout: 10.0) {
+            context.repoStatuses.values.first?.branchName != nil
         }
 
         // Should end up with exactly one repo status (not duplicated)
@@ -290,6 +295,35 @@ struct SessionGitContextTests {
         #expect(context.repoStatuses.isEmpty)
         #expect(context.pinnedRepoOrder.isEmpty)
         #expect(context.activeSubscriptionCount == 0)
+    }
+
+    /// Regression: a pane removed WHILE its detection is still in flight must not
+    /// be resurrected when `detect` finally resolves — no monitor subscription is
+    /// created (leak) and no `paneWorktreeRoot` entry lingers. `paneAdded` spawns
+    /// the async detection Task (which suspends on `detect`); the synchronous
+    /// `paneRemoved` that follows drops the pane from the live set before the task
+    /// resolves, so the post-detect guard bails.
+    @Test func paneRemovedDuringDetectionDoesNotResurrectOrLeak() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
+        let paneID = UUID()
+
+        // Spawn detection, then remove the pane synchronously before the
+        // in-flight `detect` can resolve.
+        context.paneAdded(paneID: paneID, workingDirectory: repo)
+        context.paneRemoved(paneID: paneID)
+
+        // Let the detection task run to completion so a resurrection would have
+        // happened under the old (isTornDown-only) guard.
+        try await Task.sleep(for: .milliseconds(600))
+
+        // No subscription leaked, and no mapping resurrected for the dead pane.
+        #expect(context.activeSubscriptionCount == 0)
+        #expect(context.paneWorktreeRoot[paneID] == nil)
+        #expect(context.paneRepoAssignments[paneID] == nil)
     }
 
     // MARK: - Teardown

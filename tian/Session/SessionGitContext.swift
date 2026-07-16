@@ -64,6 +64,14 @@ final class SessionGitContext {
                 result[root] = status
             }
         }
+        // Also surface the worktree-init subscription's root, which has no owning
+        // pane — otherwise a freshly-created worktree session shows no status
+        // until a pane maps to that root. Deduped against the pane roots above.
+        if let root = worktreeInitSubscription?.worktreeRoot,
+           result[root] == nil,
+           let status = monitorStatuses[root] {
+            result[root] = status
+        }
         return result
     }
 
@@ -104,6 +112,13 @@ final class SessionGitContext {
 
     /// Last-known working directory per pane.
     private var paneDirectories: [UUID: String] = [:]
+
+    /// Pane IDs currently known to this session — a pane is inserted the moment
+    /// it drives detection and dropped by `paneRemoved`/`teardown`. Detached
+    /// detection tasks re-check this AFTER their async `detect(...)` resolves so a
+    /// pane removed mid-detection can't resurrect its mapping or leak a monitor
+    /// subscription for a pane that no longer exists.
+    private var livePanes: Set<UUID> = []
 
     /// Root working tree path per repo, used for same-repo prefix checks and the
     /// worktree parent-collision guard.
@@ -170,6 +185,7 @@ final class SessionGitContext {
 
     /// Called when a pane's working directory changes (OSC 7).
     func paneWorkingDirectoryChanged(paneID: UUID, newDirectory: String) {
+        livePanes.insert(paneID)
         paneDirectories[paneID] = newDirectory
 
         // Skip re-detection if this pane is already assigned to a repo and the
@@ -197,6 +213,10 @@ final class SessionGitContext {
 
             let repo = await GitMonitor.shared.detect(directory: newDirectory)
             guard !self.isTornDown else { return }
+
+            // If the pane was removed while `detect` was in flight, bail without
+            // resurrecting its mapping or leaking a monitor subscription.
+            guard self.livePanes.contains(paneID) else { return }
 
             if let repo {
                 let newRepoID = GitRepoID(path: repo.commonDir)
@@ -243,6 +263,7 @@ final class SessionGitContext {
     /// Called when a new pane is created or restored with a known working directory.
     func paneAdded(paneID: UUID, workingDirectory: String?) {
         guard let wd = workingDirectory, !wd.isEmpty, wd != "~" else { return }
+        livePanes.insert(paneID)
         paneDirectories[paneID] = wd
         detectAndRefresh(paneID: paneID, directory: wd)
     }
@@ -266,6 +287,7 @@ final class SessionGitContext {
         // against it would let an OSC 7 event to a nested worktree silently
         // suppress the very full detect this method exists to force.
         guard paneBridgeDirectory[paneID] != directory else { return }
+        livePanes.insert(paneID)
         paneBridgeDirectory[paneID] = directory
         paneDirectories[paneID] = directory
         detectAndRefresh(paneID: paneID, directory: directory)
@@ -274,6 +296,7 @@ final class SessionGitContext {
     /// Called when a pane is closed. Releases the pane's monitor subscription,
     /// cleans up assignments, and garbage-collects orphaned repos.
     func paneRemoved(paneID: UUID) {
+        livePanes.remove(paneID)
         paneDirectories.removeValue(forKey: paneID)
         paneBridgeDirectory.removeValue(forKey: paneID)
         paneWorktreeRoot.removeValue(forKey: paneID)
@@ -381,6 +404,7 @@ final class SessionGitContext {
         paneWorktreeRoot.removeAll()
         paneBridgeDirectory.removeAll()
         paneDirectories.removeAll()
+        livePanes.removeAll()
         repoRoots.removeAll()
         worktreeRepoID = nil
     }
@@ -504,6 +528,11 @@ final class SessionGitContext {
 
             let repo = await GitMonitor.shared.detect(directory: directory)
             guard !Task.isCancelled, !self.isTornDown else { return }
+
+            // If the pane was removed while `detect` was in flight, bail without
+            // resurrecting its mapping or leaking a monitor subscription. The
+            // worktree-init path (paneID == nil) is unaffected.
+            if let paneID, !self.livePanes.contains(paneID) { return }
 
             guard let repo else {
                 if let paneID {

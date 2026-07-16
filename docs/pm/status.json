@@ -1,8 +1,10 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-14",
-  "now": [],
+  "lastUpdated": "2026-07-16",
+  "now": [
+    "Git-watch redesign (ADR 0005) implemented on branch worktree-git-watch-redesign-adr: per-Session watching replaced by an app-global repo-keyed GitMonitor — dedup watchers + global concurrency lanes, split refs(always-on)/working-tree(gated) signal, visible+busy gating, cached detection, QoS .utility + PR TTL 300s. Fixes the daily-drive lag (~12k git spawns/3d, 96/min 'Not a git repo' storm, dead-worktree churn, 899 uncapped gh calls). Build + 1207 tests green; PR pending."
+  ],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
     "Daily-drive the shipped app (now v1.5.11) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
