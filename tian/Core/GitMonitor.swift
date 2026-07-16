@@ -588,6 +588,25 @@ final class GitMonitor {
 
     // MARK: - PR Fetch (off the working-tree path)
 
+    /// On-demand PR refresh for a repo — the `git.refresh` IPC path. Evicts the
+    /// repo's PR cache, clears any PR network-backoff for its (repo, branch)
+    /// targets, and forces a PR refetch (bypassing backoff) for each currently
+    /// subscribed worktree-root branch, reusing the private PR-fetch machinery +
+    /// the `ghNetwork` lane. Same shape as the refs-eviction branch of
+    /// `processRefsFSEventBatch`, but triggered explicitly rather than by an
+    /// FSEvents remote-ref change: `gh pr create` against an already-pushed branch
+    /// makes no local ref change, so the watcher never fires and only this can
+    /// update the badge without waiting for the slow poll. No-op when the repo
+    /// isn't subscribed.
+    func refreshPR(repoID: GitRepoID) {
+        guard repoRefCounts[repoID] != nil else { return }
+        prCache.evict(repoID: repoID)
+        clearPRBackoff(repoID: repoID)
+        for target in targets(for: repoID) {
+            maybeFetchPR(target: target, bypassBackoff: true)
+        }
+    }
+
     /// Considers a PR fetch for a target. Skips when the branch is unknown, when
     /// backoff is active (unless `bypassBackoff`), or when the cache is fresh.
     /// Eviction paths pass `bypassBackoff` and have already made the cache miss.

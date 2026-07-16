@@ -212,6 +212,89 @@ struct GitMonitorTests {
         monitor.unsubscribe(token)
     }
 
+    // MARK: - Refs Batch → branchGraphDirty
+    //
+    // Migrated from the deleted `SessionGitContextBranchDirtyTests`: that
+    // behaviour now lives on `GitMonitor.processRefsFSEventBatch(...)` +
+    // `branchGraphDirty` / `clearBranchGraphDirty`. Driven directly (no
+    // subscribe needed) with a synthetic repoID — a refs/heads path is
+    // branch-graph-only, so it never touches the PR-eviction/fetch path.
+
+    /// A refs FSEvents batch under `refs/heads/*` sets `branchGraphDirty` for
+    /// the repo.
+    @Test func refsHeadsBatchSetsBranchGraphDirty() {
+        let monitor = GitMonitor()
+        let commonDir = "/tmp/testrepo/.git"
+        let repoID = GitRepoID(path: commonDir)
+        let paths = [commonDir + "/refs/heads/feature"]
+
+        monitor.processRefsFSEventBatch(repoID: repoID, paths: paths, canonicalCommonDir: commonDir)
+
+        #expect(monitor.branchGraphDirty.contains(repoID))
+    }
+
+    /// A working-tree-only batch does NOT set `branchGraphDirty`.
+    @Test func workingTreeBatchDoesNotSetBranchGraphDirty() {
+        let monitor = GitMonitor()
+        let commonDir = "/tmp/testrepo/.git"
+        let repoID = GitRepoID(path: commonDir)
+        let paths = ["/tmp/testrepo/src/main.swift", "/tmp/testrepo/README.md"]
+
+        monitor.processRefsFSEventBatch(repoID: repoID, paths: paths, canonicalCommonDir: commonDir)
+
+        #expect(!monitor.branchGraphDirty.contains(repoID))
+    }
+
+    /// `clearBranchGraphDirty(repoID:)` removes the repo from the set.
+    @Test func clearBranchGraphDirtyRemovesEntry() {
+        let monitor = GitMonitor()
+        let commonDir = "/tmp/testrepo/.git"
+        let repoID = GitRepoID(path: commonDir)
+        let paths = [commonDir + "/refs/heads/main"]
+
+        // Pre-populate via a branch-graph-affecting batch.
+        monitor.processRefsFSEventBatch(repoID: repoID, paths: paths, canonicalCommonDir: commonDir)
+        #expect(monitor.branchGraphDirty.contains(repoID))
+
+        monitor.clearBranchGraphDirty(repoID: repoID)
+
+        #expect(!monitor.branchGraphDirty.contains(repoID))
+    }
+
+    // MARK: - On-Demand PR Refresh
+
+    /// `refreshPR(repoID:)` forces a fresh PR fetch even when the branch already
+    /// has a cached result and active network-backoff: it evicts the PR cache,
+    /// clears the backoff, and launches a fetch bypassing backoff. Asserted via
+    /// the `prFetchLaunchCount` seam — one `refreshPR` call launches exactly one
+    /// additional fetch. (Both guards it defeats — the cache `.hit` and the
+    /// backoff — would otherwise make `maybeFetchPR` skip.)
+    @Test func refreshPRForcesRefetchBypassingCacheAndBackoff() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let monitor = GitMonitor()
+        let location = try await detectLocation(for: repo)
+        let repoID = GitRepoID(path: location.commonDir)
+
+        let token = monitor.subscribe(location: location, worktreeRoot: location.workingTree)
+        // The PR cache key is the branch name, so wait until it resolves. The
+        // gate-open fetch (nil PR on a remote-less temp repo) seeds cache + backoff.
+        try await pollUntil(timeout: 5.0) {
+            monitor.status(forRepo: repoID)?.branchName?.isEmpty == false
+        }
+        // Let the gate-open fetch settle so the seed (cached nil PR + recorded
+        // backoff) is genuinely in place; `refreshPR`'s evict also clears any
+        // lingering pending, so the launch count is deterministic regardless.
+        try await Task.sleep(for: .milliseconds(400))
+
+        let before = monitor.prFetchLaunchCount
+        monitor.refreshPR(repoID: repoID)
+        #expect(monitor.prFetchLaunchCount == before + 1)
+
+        monitor.unsubscribe(token)
+    }
+
     // MARK: - Centralized Detection Cache
 
     /// `detect` caches: a second call for the same directory within the TTL does

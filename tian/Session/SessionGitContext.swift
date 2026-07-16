@@ -1,22 +1,73 @@
 import Foundation
 import Observation
-import OSLog
 
-/// Per-Session git repository context. Detects repos from pane working directories,
-/// tracks pane-to-repo assignments, and maintains branch name status for the sidebar.
+/// Per-Session git repository context — a THIN ADAPTER over the app-global
+/// `GitMonitor` (ADR 0005, wave 3).
+///
+/// This type no longer owns watchers, caches, a refresh scheduler, or the
+/// git-shelling refresh loop. It keeps only the Session's own pane→repo /
+/// pane→worktree-root mapping and the pinned-repo display order, detects repos
+/// through `GitMonitor.shared.detect(...)` (cached + globally concurrency-capped),
+/// SUBSCRIBES/UNSUBSCRIBES its panes to `GitMonitor.shared`, and PROXIES every
+/// status read straight through to the monitor's `@Observable` state.
+///
+/// The public surface is unchanged so `Session` and the sidebar views are
+/// untouched. The observable read properties (`repoStatuses`,
+/// `statusByWorktreeRoot`, `branchGraphDirty`) are computed passthroughs that
+/// touch `GitMonitor.shared`'s observable storage AT CALL TIME — never a stored
+/// snapshot — so SwiftUI re-renders when the monitor updates.
+///
+/// Wave 3 does NOT feed the monitor real visible/busy signals yet (that's
+/// wave 4); it relies on the monitor's default-open working-tree gate, so
+/// runtime behaviour is preserved.
 @MainActor @Observable
 final class SessionGitContext {
 
-    // MARK: - Observable State
+    // MARK: - Observable Read State (proxied to GitMonitor.shared)
 
-    /// Map of detected repos to their current status. Drives sidebar re-renders.
-    private(set) var repoStatuses: [GitRepoID: GitRepoStatus] = [:]
+    /// This session's pinned repos mapped to their current status, read through
+    /// from the app-global monitor. Filtered to `pinnedRepoOrder` so a session
+    /// only ever sees its own repos even though the monitor is process-global.
+    ///
+    /// Computed (not stored) so the read touches `GitMonitor.shared.repoStatuses`
+    /// — an `@Observable` property — on every access, keeping the sidebar's
+    /// observation dependency live.
+    var repoStatuses: [GitRepoID: GitRepoStatus] {
+        let monitorStatuses = GitMonitor.shared.repoStatuses
+        var result: [GitRepoID: GitRepoStatus] = [:]
+        for repoID in pinnedRepoOrder {
+            if let status = monitorStatuses[repoID] {
+                result[repoID] = status
+            }
+        }
+        return result
+    }
 
-    /// Set of repos whose branch graph has been invalidated by an FSEvents
-    /// batch since the last successful Branch-tab fetch. The Branch view-
-    /// model reads + clears this. Working-tree-only events do NOT add to
-    /// this set.
-    private(set) var branchGraphDirty: Set<GitRepoID> = []
+    /// Set of this session's repos whose branch graph the monitor has flagged
+    /// dirty. Intersected with `pinnedRepoOrder` so a sibling session's dirty
+    /// repo never leaks into this one's Branch view. Reads the monitor's
+    /// `@Observable` `branchGraphDirty` at call time.
+    var branchGraphDirty: Set<GitRepoID> {
+        GitMonitor.shared.branchGraphDirty.intersection(Set(pinnedRepoOrder))
+    }
+
+    /// Full git status (branch + diff + PR) per worktree root for the roots this
+    /// session's panes live in, read through from the monitor. Lets the sidebar
+    /// render each tab's own branch AND change/PR badges even when several tabs
+    /// share one `GitRepoID` (e.g. sibling worktrees). Reads the monitor's
+    /// `@Observable` `statusByWorktreeRoot` at call time.
+    var statusByWorktreeRoot: [String: GitRepoStatus] {
+        let monitorStatuses = GitMonitor.shared.statusByWorktreeRoot
+        var result: [String: GitRepoStatus] = [:]
+        for root in paneWorktreeRoot.values where result[root] == nil {
+            if let status = monitorStatuses[root] {
+                result[root] = status
+            }
+        }
+        return result
+    }
+
+    // MARK: - Observable Mapping State (session-owned)
 
     /// Maps each pane ID to its detected repo (nil entry = not yet detected or not in a repo).
     private(set) var paneRepoAssignments: [UUID: GitRepoID] = [:]
@@ -30,22 +81,13 @@ final class SessionGitContext {
     /// same repo resolve to different roots.
     private(set) var paneWorktreeRoot: [UUID: String] = [:]
 
-    /// Full git status (branch + diff + PR) per worktree root. Lets the sidebar
-    /// render each tab's own branch AND change/PR badges even when several tabs
-    /// share one `GitRepoID` (e.g. sibling worktrees), which the `GitRepoID`-keyed
-    /// `repoStatuses` cannot distinguish.
-    private(set) var statusByWorktreeRoot: [String: GitRepoStatus] = [:]
-
-    /// In-flight per-worktree-root refresh tasks, cancelled on re-entry.
-    private var inFlightWorktreeTasks: [String: Task<Void, Never>] = [:]
+    // MARK: - Private Mapping State (session-owned)
 
     /// Directory last applied to each pane via `setPaneDirectory` (the Claude
     /// bridge). Kept separate from `paneDirectories` (which the OSC 7 path also
     /// writes) so an OSC 7 update to the same path can't suppress the bridge's
     /// forced full detect — see `setPaneDirectory`.
     private var paneBridgeDirectory: [UUID: String] = [:]
-
-    // MARK: - Private State
 
     /// The repo ID derived from worktreePath (if set). Always sorted first in pinnedRepoOrder.
     private var worktreeRepoID: GitRepoID?
@@ -55,73 +97,45 @@ final class SessionGitContext {
     /// removing the restore-time parent-vs-worktree race.
     private var worktreeDetectionTask: Task<Void, Never>?
 
-    /// Tracks in-flight refresh tasks per repo for cancellation on rapid re-triggers.
-    private var inFlightTasks: [GitRepoID: Task<Void, Never>] = [:]
-
-    /// Set to true by `teardown()`. Guards `refreshRepo` against late-firing
-    /// scheduled refreshes that pass through `await semaphore.acquire()` after
-    /// the Session has been torn down.
+    /// Set to true by `teardown()`. Guards the detection tasks against a
+    /// late-firing subscribe after the Session has been torn down (they resolve
+    /// `detect` asynchronously and would otherwise re-subscribe to the monitor).
     private var isTornDown = false
-
-    /// Trailing-debounce + global concurrency cap for git refresh during
-    /// FSEvents storms (e.g., active dev server churning files across many
-    /// pinned repos). The scheduler dispatches to `refreshRepo` after the
-    /// debounce window, throttling at most 2 concurrent git pipelines.
-    ///
-    /// `@ObservationIgnored` because the scheduler is internal mutation
-    /// plumbing, not observable model state — and `lazy` is incompatible
-    /// with the `@ObservationTracked` accessor the macro otherwise emits.
-    @ObservationIgnored
-    private lazy var refreshScheduler = RefreshScheduler<GitRepoID>(
-        debounce: .milliseconds(250),
-        maxConcurrent: 2
-    ) { [weak self] repoID in
-        await MainActor.run { [weak self] in
-            guard let self else { return }
-            guard let dir = self.repoDirectories[repoID] else { return }
-            self.refreshRepo(repoID: repoID, directory: dir)
-        }
-    }
 
     /// Last-known working directory per pane.
     private var paneDirectories: [UUID: String] = [:]
 
-    /// A directory we know maps to a specific repo, used for branch refresh.
-    private var repoDirectories: [GitRepoID: String] = [:]
-
-    /// Root working tree path per repo, used for same-repo prefix checks.
+    /// Root working tree path per repo, used for same-repo prefix checks and the
+    /// worktree parent-collision guard.
     private var repoRoots: [GitRepoID: String] = [:]
 
-    /// PR status cache with 60-second TTL.
-    private let prCache = PRStatusCache()
+    // MARK: - Subscription State
 
-    /// Tracks in-flight PR fetch tasks per repo, keyed inner by a per-call
-    /// UUID so a completing task removes only its own entry. The outer key
-    /// exists so `teardown`/`unpinRepo` can cancel all fetches for a repo
-    /// in one pass.
-    private var prFetchTasks: [GitRepoID: [UUID: Task<Void, Never>]] = [:]
+    /// One live `GitMonitor` subscription — the token plus the (repoID, root) it
+    /// resolves to, so a pane move can tell "same target, skip" from "different
+    /// target, re-subscribe" without querying the monitor.
+    private struct Subscription {
+        let token: GitMonitor.SubscriptionToken
+        let repoID: GitRepoID
+        let worktreeRoot: String
+    }
 
-    /// Active FSEvents watchers per repo.
-    private var watchers: [GitRepoID: GitRepoWatcher] = [:]
+    /// Live monitor subscriptions keyed by pane. Replaced when a pane moves to a
+    /// different repo/root; released on `paneRemoved`/`teardown`.
+    private var paneSubscriptions: [UUID: Subscription] = [:]
 
-    /// Interval pollers standing in for FSEvents on remote repos (FSEvents can't
-    /// watch another host). Mutually exclusive with `watchers` per repo.
-    private var remotePollers: [GitRepoID: PollingRefresher] = [:]
-    /// Per-repo tick counter so the remote poller can do the heavier
-    /// FSEvents-only work (PR-cache evict + branch-graph dirty) only every Nth
-    /// tick instead of every refresh.
-    private var remotePollTicks: [GitRepoID: Int] = [:]
+    /// The subscription for the Session's OWN worktree (from `worktreePath`),
+    /// which has no owning pane. Kept apart so pane GC can never release it.
+    private var worktreeInitSubscription: Subscription?
 
-    /// Remote git-context refresh cadence. Every tick reschedules a status/branch
-    /// refresh; every `remotePollHeavyEvery`-th tick also raises the signals a
-    /// local FSEvents batch would (PR re-fetch, branch-graph re-render).
-    private static let remotePollInterval: Duration = .seconds(5)
-    private static let remotePollHeavyEvery = 6
+    // MARK: - Test Seams
 
-    // MARK: - Public Computed
-
-    /// Number of active FSEvents watchers. Exposed for testing.
-    var activeWatcherCount: Int { watchers.count }
+    /// Number of live `GitMonitor` subscriptions this session holds (pane
+    /// subscriptions plus the worktree-init one). Exposed for testing the
+    /// adapter's subscribe/unsubscribe lifecycle.
+    var activeSubscriptionCount: Int {
+        paneSubscriptions.count + (worktreeInitSubscription != nil ? 1 : 0)
+    }
 
     // MARK: - Init
 
@@ -148,16 +162,15 @@ final class SessionGitContext {
     func paneWorkingDirectoryChanged(paneID: UUID, newDirectory: String) {
         paneDirectories[paneID] = newDirectory
 
-        // Skip re-detection if this pane is already assigned to a repo
-        // and the new directory is within the same repo root.
+        // Skip re-detection if this pane is already assigned to a repo and the
+        // new directory is within the same repo root: a `cd` inside the repo
+        // can't change the branch/worktree, so just poke the monitor to refresh
+        // rather than re-shelling `detectRepo`.
         if let existingRepoID = paneRepoAssignments[paneID],
            let repoRoot = repoRoots[existingRepoID],
            pathIsWithin(newDirectory, repoRoot) {
-            // Same repo — just refresh branch info without re-detecting.
-            // Set repoDirectories BEFORE scheduling so the scheduler's
-            // handler resolves the latest directory when it fires.
-            repoDirectories[existingRepoID] = newDirectory
-            refreshScheduler.schedule(key: existingRepoID)
+            GitMonitor.shared.refreshBranchAndRefs(repoID: existingRepoID)
+            GitMonitor.shared.refreshWorkingTree(repoID: existingRepoID)
             return
         }
 
@@ -170,8 +183,10 @@ final class SessionGitContext {
             // detectAndRefresh). await returns immediately for non-worktree
             // spaces (task is nil).
             await self.worktreeDetectionTask?.value
+            guard !self.isTornDown else { return }
 
-            let repo = await GitStatusService.detectRepo(directory: newDirectory)
+            let repo = await GitMonitor.shared.detect(directory: newDirectory)
+            guard !self.isTornDown else { return }
 
             if let repo {
                 let newRepoID = GitRepoID(path: repo.commonDir)
@@ -180,23 +195,10 @@ final class SessionGitContext {
                 // (rapid calls could have reassigned pane to an intermediate repo)
                 let previousRepoID = self.paneRepoAssignments[paneID]
 
-                // Update pane assignment
+                // Update pane assignment + worktree root.
                 self.paneRepoAssignments[paneID] = newRepoID
-                // Track the pane's worktree root + status (see paneWorktreeRoot).
                 self.paneWorktreeRoot[paneID] = repo.workingTree
-                self.refreshWorktreeStatus(worktreeRoot: repo.workingTree, repoID: newRepoID)
-                self.pruneWorktreeStatuses()
 
-                // A worktree and its parent repo share one GitRepoID. A pane
-                // whose directory is in the parent (not the worktree) must not
-                // overwrite the worktree's authoritative directory/status — but
-                // is still tracked below for pinning/GC.
-                let collidesWithParent = self.collidesWithParentWorktree(
-                    repoID: newRepoID, directory: newDirectory)
-
-                if !collidesWithParent {
-                    self.repoDirectories[newRepoID] = newDirectory
-                }
                 if self.repoRoots[newRepoID] == nil {
                     self.repoRoots[newRepoID] = repo.workingTree
                 }
@@ -205,13 +207,14 @@ final class SessionGitContext {
                 if !self.pinnedRepoOrder.contains(newRepoID) {
                     self.pinnedRepoOrder.append(newRepoID)
                     self.sortPinnedRepoOrder()
-                    self.startWatcher(repoID: newRepoID, location: repo)
                     Log.git.debug("Pinned new repo: \(newRepoID.path)")
                 }
 
-                if !collidesWithParent {
-                    self.refreshScheduler.schedule(key: newRepoID)
-                }
+                // (Re)subscribe this pane to its (possibly new) repo/root. The
+                // monitor's first-subscriber-wins keeps a worktree authoritative
+                // over a colliding parent pane, so no special collision handling
+                // is needed here beyond the mapping above.
+                self.subscribePane(paneID, location: repo, worktreeRoot: repo.workingTree)
 
                 // Garbage collect previous repo if pane moved to a different repo
                 if let previousRepoID, newRepoID != previousRepoID {
@@ -221,8 +224,9 @@ final class SessionGitContext {
                     }
                 }
             }
-            // If repo is nil (non-git dir), do NOT update pane assignment.
-            // The pane keeps its previous repo association (sticky pinning FR-020.3).
+            // If repo is nil (non-git dir), do NOT update pane assignment or
+            // release the subscription. The pane keeps its previous repo
+            // association (sticky pinning FR-020.3).
         }
     }
 
@@ -236,13 +240,13 @@ final class SessionGitContext {
     /// Applies a pane's working directory reported out-of-band — e.g. a Claude
     /// `CwdChanged` / `EnterWorktree` hook — rather than via the shell's OSC 7.
     ///
-    /// Unlike `paneWorkingDirectoryChanged`, this always runs a full
-    /// `detectRepo` (via `detectAndRefresh`) instead of the same-repo fast path.
-    /// That matters because Claude's default worktrees live at
-    /// `.claude/worktrees/<name>`, physically nested inside the main working
-    /// tree: the fast path's path-prefix check would treat such a directory as
-    /// "still the main repo" and never update `paneWorktreeRoot`, so the tab's
-    /// branch would stay wrong. A full detect resolves the worktree's own root.
+    /// Unlike `paneWorkingDirectoryChanged`, this always runs a full detect (via
+    /// `detectAndRefresh`) instead of the same-repo fast path. That matters
+    /// because Claude's default worktrees live at `.claude/worktrees/<name>`,
+    /// physically nested inside the main working tree: the fast path's
+    /// path-prefix check would treat such a directory as "still the main repo"
+    /// and never update `paneWorktreeRoot`, so the tab's branch would stay wrong.
+    /// A full detect resolves the worktree's own root.
     func setPaneDirectory(paneID: UUID, directory: String) {
         guard !directory.isEmpty else { return }
         // Dedupe repeated CwdChanged for the same dir so a busy `cd` loop
@@ -257,12 +261,21 @@ final class SessionGitContext {
         detectAndRefresh(paneID: paneID, directory: directory)
     }
 
-    /// Called when a pane is closed. Cleans up assignments and garbage-collects orphaned repos.
+    /// Called when a pane is closed. Releases the pane's monitor subscription,
+    /// cleans up assignments, and garbage-collects orphaned repos.
     func paneRemoved(paneID: UUID) {
         paneDirectories.removeValue(forKey: paneID)
         paneBridgeDirectory.removeValue(forKey: paneID)
         paneWorktreeRoot.removeValue(forKey: paneID)
-        pruneWorktreeStatuses()
+
+        // Release this pane's subscription (if any) BEFORE the assignment guard
+        // so a pane that had `cd`'d to a non-git dir (its assignment cleared but
+        // its subscription still live) can't leak a token. The monitor's
+        // refcount GC reclaims the repo once no session references it.
+        if let sub = paneSubscriptions.removeValue(forKey: paneID) {
+            GitMonitor.shared.unsubscribe(sub.token)
+        }
+
         guard let repoID = paneRepoAssignments.removeValue(forKey: paneID) else { return }
 
         let stillReferenced = paneRepoAssignments.values.contains(repoID)
@@ -271,44 +284,42 @@ final class SessionGitContext {
         }
     }
 
-    /// Manually triggers a git status refresh for all pinned repos.
+    /// Manually triggers a git status refresh for all pinned repos, forwarding to
+    /// the monitor.
     func refresh() {
         for repoID in pinnedRepoOrder {
-            guard let directory = repoDirectories[repoID] else { continue }
-            // Drop any pending scheduler debounce so it can't race-cancel the
-            // manual refresh we're about to start.
-            refreshScheduler.cancel(key: repoID)
-            refreshRepo(repoID: repoID, directory: directory)
+            GitMonitor.shared.refreshBranchAndRefs(repoID: repoID)
+            GitMonitor.shared.refreshWorkingTree(repoID: repoID)
         }
     }
 
-    /// Evicts cached PR status for every pinned repo and triggers a refresh.
-    /// Used by the `git.refresh` IPC so callers (e.g. a Claude PostToolUse
-    /// hook after `gh pr create`) can update the badge without waiting for
-    /// the 60s cache TTL to expire — `gh pr create` against an already-pushed
-    /// branch makes no local file change, so the FSEvents-based eviction
-    /// path doesn't fire.
+    /// Requests a PR-status refresh for every pinned repo. Used by the
+    /// `git.refresh` IPC so callers (e.g. a Claude PostToolUse hook after
+    /// `gh pr create`) can update the badge without waiting for the poll cadence.
+    ///
+    /// Forwards to the monitor's on-demand `refreshPR`, which evicts the PR cache
+    /// + clears network-backoff + forces a refetch — so a PR created against an
+    /// already-pushed branch (no local ref change the refs watcher would catch)
+    /// is re-fetched here.
     func refreshPR() {
         for repoID in pinnedRepoOrder {
-            prCache.evict(repoID: repoID)
-            guard let directory = repoDirectories[repoID] else { continue }
-            refreshRepo(repoID: repoID, directory: directory)
+            GitMonitor.shared.refreshPR(repoID: repoID)
         }
     }
 
-    /// Removes a repo from the `branchGraphDirty` set. Called by the Branch
-    /// view-model after a successful branch-graph refetch.
+    /// Removes a repo from the monitor's `branchGraphDirty` set. Called by the
+    /// Branch view-model after a successful branch-graph refetch.
     func clearBranchGraphDirty(repoID: GitRepoID) {
-        branchGraphDirty.remove(repoID)
+        GitMonitor.shared.clearBranchGraphDirty(repoID: repoID)
     }
 
     /// The full git status (branch + diff + PR) for the worktree the given pane
     /// lives in, or nil when the pane isn't in a git repo (or it hasn't resolved
-    /// yet). Distinct from `repoStatuses[...]`, which is per-`GitRepoID` and so
-    /// collapses sibling worktrees onto one shared status.
+    /// yet). Proxies `paneWorktreeRoot[paneID]` → the monitor's per-root status,
+    /// so sibling worktrees sharing a `GitRepoID` stay distinguishable.
     func status(forPane paneID: UUID) -> GitRepoStatus? {
         guard let root = paneWorktreeRoot[paneID] else { return nil }
-        return statusByWorktreeRoot[root]
+        return GitMonitor.shared.status(forWorktreeRoot: root)
     }
 
     /// Convenience: the branch name for the worktree the given pane lives in.
@@ -316,38 +327,34 @@ final class SessionGitContext {
         status(forPane: paneID)?.branchName
     }
 
-    /// Cancels all in-flight tasks and clears state. Called on Session close.
+    /// Releases every monitor subscription and clears state. Called on Session
+    /// close. Idempotent — safe to call twice.
     func teardown() {
         isTornDown = true
         worktreeDetectionTask?.cancel()
         worktreeDetectionTask = nil
-        for task in inFlightTasks.values { task.cancel() }
-        inFlightTasks.removeAll()
-        for inner in prFetchTasks.values {
-            for task in inner.values { task.cancel() }
+
+        // Release every subscription so the monitor's refcount GC can reclaim
+        // repos no other session references.
+        for sub in paneSubscriptions.values {
+            GitMonitor.shared.unsubscribe(sub.token)
         }
-        prFetchTasks.removeAll()
-        refreshScheduler.cancelAll()
-        repoStatuses.removeAll()
+        paneSubscriptions.removeAll()
+        if let sub = worktreeInitSubscription {
+            GitMonitor.shared.unsubscribe(sub.token)
+        }
+        worktreeInitSubscription = nil
+
         paneRepoAssignments.removeAll()
         pinnedRepoOrder.removeAll()
         paneWorktreeRoot.removeAll()
-        for task in inFlightWorktreeTasks.values { task.cancel() }
-        inFlightWorktreeTasks.removeAll()
-        statusByWorktreeRoot.removeAll()
         paneBridgeDirectory.removeAll()
         paneDirectories.removeAll()
-        repoDirectories.removeAll()
         repoRoots.removeAll()
-        for watcher in watchers.values { watcher.stop() }
-        watchers.removeAll()
-        for poller in remotePollers.values { poller.stop() }
-        remotePollers.removeAll()
-        remotePollTicks.removeAll()
-        prCache.evictAll()
+        worktreeRepoID = nil
     }
 
-    // MARK: - Private
+    // MARK: - Private: Path Helpers
 
     /// True when `dir` is `root` itself or a descendant of `root`. Centralizes
     /// the path-prefix logic shared by the same-repo fast path and the worktree
@@ -360,9 +367,10 @@ final class SessionGitContext {
 
     /// True when `repoID` is the Session's own worktree repo but `directory` is
     /// OUTSIDE the worktree working tree — i.e. a pane in the PARENT repo (which
-    /// shares the worktree's GitRepoID). Such a pane must not drive the shared
-    /// repo's directory/status. Anchored on `repoRoots[worktreeRepoID]`, the same
-    /// git-derived path the same-repo fast path compares against.
+    /// shares the worktree's GitRepoID). Such a pane is tracked for lifecycle but
+    /// must not become the repo-level status driver. Anchored on
+    /// `repoRoots[worktreeRepoID]`, the same git-derived path the same-repo fast
+    /// path compares against.
     private func collidesWithParentWorktree(repoID: GitRepoID, directory: String) -> Bool {
         guard let wtID = worktreeRepoID, repoID == wtID, let wtRoot = repoRoots[wtID]
         else { return false }
@@ -379,143 +387,83 @@ final class SessionGitContext {
         }
     }
 
-    /// Resolves branch + diff (+ PR) for a single worktree root and stores it in
-    /// `statusByWorktreeRoot`, cancelling any in-flight refresh for that root on
-    /// re-entry. Skips when the root is no longer referenced by any pane (so a
-    /// pruned root isn't resurrected) or when nothing visible changed (avoids
-    /// Observable churn). Mirrors `refreshRepo` but scoped to one worktree root
-    /// so sibling worktrees sharing a `GitRepoID` get independent diff/PR badges.
-    private func refreshWorktreeStatus(worktreeRoot: String, repoID: GitRepoID) {
-        guard !isTornDown else { return }
-        inFlightWorktreeTasks[worktreeRoot]?.cancel()
+    // MARK: - Private: Subscription Management
 
-        let task = Task { [weak self] in
-            async let branchResult = GitStatusService.currentBranch(directory: worktreeRoot)
-            async let diffResult = GitStatusService.diffStatus(directory: worktreeRoot)
-            let branch = await branchResult
-            let diff = await diffResult
-
-            guard !Task.isCancelled, let self, !self.isTornDown else { return }
-            // Root was pruned (pane closed / moved) while we were fetching.
-            guard self.paneWorktreeRoot.values.contains(worktreeRoot) else {
-                self.statusByWorktreeRoot.removeValue(forKey: worktreeRoot)
-                self.inFlightWorktreeTasks.removeValue(forKey: worktreeRoot)
+    /// Ensures `paneID` holds a live monitor subscription for
+    /// `(location, worktreeRoot)`, replacing any prior subscription to a
+    /// different repo/root. No-ops when the pane is already subscribed to the
+    /// exact same target (avoids monitor refcount churn on repeated detects).
+    private func subscribePane(_ paneID: UUID, location: RepoLocation, worktreeRoot: String) {
+        let repoID = GitRepoID(path: location.commonDir)
+        if let existing = paneSubscriptions[paneID] {
+            if existing.repoID == repoID && existing.worktreeRoot == worktreeRoot {
                 return
             }
-
-            // PR is branch-specific; the (repoID, branch) cache key distinguishes
-            // sibling worktrees even though they share a GitRepoID.
-            var prStatus: PRStatus? = nil
-            if let branchName = branch?.name {
-                if self.statusByWorktreeRoot[worktreeRoot]?.branchName == branchName {
-                    prStatus = self.statusByWorktreeRoot[worktreeRoot]?.prStatus
-                }
-                switch self.prCache.get(repoID: repoID, branch: branchName) {
-                case .hit(let cached):
-                    prStatus = cached
-                case .miss:
-                    self.launchWorktreePRFetch(
-                        worktreeRoot: worktreeRoot,
-                        repoID: repoID,
-                        branch: branchName
-                    )
-                }
-            }
-
-            let status = GitRepoStatus(
-                repoID: repoID,
-                branchName: branch?.name,
-                isDetachedHead: branch?.isDetached ?? false,
-                diffSummary: diff.summary,
-                changedFiles: diff.files,
-                prStatus: prStatus,
-                lastUpdated: Date()
-            )
-            if self.statusByWorktreeRoot[worktreeRoot] != status {
-                self.statusByWorktreeRoot[worktreeRoot] = status
-            }
-            self.inFlightWorktreeTasks.removeValue(forKey: worktreeRoot)
+            GitMonitor.shared.unsubscribe(existing.token)
         }
-        inFlightWorktreeTasks[worktreeRoot] = task
+        let token = GitMonitor.shared.subscribe(location: location, worktreeRoot: worktreeRoot)
+        paneSubscriptions[paneID] = Subscription(token: token, repoID: repoID, worktreeRoot: worktreeRoot)
     }
 
-    /// PR fetch for a specific worktree root's branch, writing the result back
-    /// into `statusByWorktreeRoot`. Dedupes concurrently with `refreshRepo`'s
-    /// PR fetch via the shared `(repoID, branch)` cache; whichever loses the
-    /// `markPending` race seeds its value from the cache on the next refresh.
-    private func launchWorktreePRFetch(worktreeRoot: String, repoID: GitRepoID, branch: String) {
-        guard let fetchGen = prCache.markPending(repoID: repoID, branch: branch) else { return }
-        let taskID = UUID()
-        let prTask = Task { [weak self] in
-            defer {
-                self?.prCache.clearPending(repoID: repoID, branch: branch, generation: fetchGen)
-                self?.prFetchTasks[repoID]?.removeValue(forKey: taskID)
+    /// Ensures the worktree-init subscription (the Session's own `worktreePath`,
+    /// with no owning pane) is live for `(location, worktreeRoot)`, replacing a
+    /// prior one on a re-detect. Kept apart from `paneSubscriptions` so pane GC
+    /// can never release it.
+    private func subscribeWorktreeInit(location: RepoLocation, worktreeRoot: String) {
+        let repoID = GitRepoID(path: location.commonDir)
+        if let existing = worktreeInitSubscription {
+            if existing.repoID == repoID && existing.worktreeRoot == worktreeRoot {
+                return
             }
-            let fetched = await GitStatusService.fetchPRStatus(directory: worktreeRoot, branch: branch)
-            guard !Task.isCancelled, let self else { return }
-            self.prCache.set(repoID: repoID, branch: branch, status: fetched, generation: fetchGen)
-            if let current = self.statusByWorktreeRoot[worktreeRoot],
-               current.branchName == branch,
-               current.prStatus != fetched {
-                var updated = current
-                updated.prStatus = fetched
-                self.statusByWorktreeRoot[worktreeRoot] = updated
-            }
+            GitMonitor.shared.unsubscribe(existing.token)
         }
-        prFetchTasks[repoID, default: [:]][taskID] = prTask
+        let token = GitMonitor.shared.subscribe(location: location, worktreeRoot: worktreeRoot)
+        worktreeInitSubscription = Subscription(token: token, repoID: repoID, worktreeRoot: worktreeRoot)
     }
 
-    /// Drops per-worktree statuses for roots no longer referenced by any pane,
-    /// cancelling their in-flight refreshes.
-    private func pruneWorktreeStatuses() {
-        let live = Set(paneWorktreeRoot.values)
-        for root in statusByWorktreeRoot.keys where !live.contains(root) {
-            statusByWorktreeRoot.removeValue(forKey: root)
-            inFlightWorktreeTasks.removeValue(forKey: root)?.cancel()
-        }
-    }
-
-    /// Unpins a repo and cleans up all associated state.
+    /// Unpins a repo from this session's display and drops its local mapping.
+    /// Subscription release is handled at the pane level (`subscribePane` on a
+    /// move, `paneRemoved` on close), so this only cleans the session-owned
+    /// display state; the monitor's refcount reclaims the watchers.
     private func unpinRepo(_ repoID: GitRepoID) {
         // Never GC the Session's own worktree repo — it's owned by the Session's
-        // worktreePath, not by any pane, so pane removal/move must not remove it.
-        // teardown() clears everything directly and does not route through here.
+        // worktreePath (the worktree-init subscription), not by any pane, so pane
+        // removal/move must not remove it. teardown() clears everything directly.
         guard repoID != worktreeRepoID else { return }
 
-        inFlightTasks[repoID]?.cancel()
-        inFlightTasks.removeValue(forKey: repoID)
-        if let inner = prFetchTasks[repoID] {
-            for task in inner.values { task.cancel() }
-        }
-        prFetchTasks.removeValue(forKey: repoID)
-        refreshScheduler.cancel(key: repoID)
-        repoStatuses.removeValue(forKey: repoID)
-        repoDirectories.removeValue(forKey: repoID)
         repoRoots.removeValue(forKey: repoID)
         pinnedRepoOrder.removeAll { $0 == repoID }
-        stopWatcher(repoID: repoID)
         Log.git.debug("Unpinned orphaned repo: \(repoID.path)")
     }
 
-    /// Detects the git repo for a directory and refreshes its status.
+    // MARK: - Private: Detection
+
+    /// Detects the git repo for a directory (through the monitor's cached,
+    /// concurrency-capped `detect`), records the session-owned mapping, and
+    /// subscribes to `GitMonitor.shared` for the resolved repo/root.
     /// - Parameters:
     ///   - paneID: The pane that triggered detection (nil for worktree-path init).
     ///   - directory: The working directory to detect from.
-    ///   - isWorktreeInit: If true, sets worktreeRepoID for sort priority.
+    ///   - isWorktreeInit: If true, sets worktreeRepoID for sort priority and
+    ///     subscribes as the Session's worktree (no owning pane).
     private func detectAndRefresh(paneID: UUID?, directory: String, isWorktreeInit: Bool = false) {
         let task = Task { [weak self] in
             guard let self else { return }
 
             // A pane-driven detection must not race the worktree-init detection:
             // both target the shared worktree/parent GitRepoID, and the
-            // worktree's authoritative state must settle before we decide
-            // whether this pane may drive it. The worktree-init task must not
-            // await itself; the await is a no-op for non-worktree spaces (nil).
+            // worktree's authoritative subscription must settle first. The
+            // worktree-init task must not await itself; the await is a no-op for
+            // non-worktree spaces (nil).
             if !isWorktreeInit {
                 await self.worktreeDetectionTask?.value
             }
+            guard !Task.isCancelled, !self.isTornDown else { return }
 
-            guard let repo = await GitStatusService.detectRepo(directory: directory) else {
+            let repo = await GitMonitor.shared.detect(directory: directory)
+            guard !Task.isCancelled, !self.isTornDown else { return }
+
+            guard let repo else {
                 if let paneID {
                     self.paneRepoAssignments.removeValue(forKey: paneID)
                 }
@@ -533,12 +481,12 @@ final class SessionGitContext {
                 // Key status by worktree root (unique per branch), not by the
                 // shared GitRepoID, so sibling worktrees stay distinguishable.
                 self.paneWorktreeRoot[paneID] = repo.workingTree
-                self.refreshWorktreeStatus(worktreeRoot: repo.workingTree, repoID: repoID)
             }
 
             // For worktrees this resolves to the worktree's own root, not the
-            // main repo — so the same-repo prefix check at paneWorkingDirectoryChanged
-            // works correctly for panes scoped to a linked worktree.
+            // main repo — so the same-repo prefix check at
+            // paneWorkingDirectoryChanged works for panes scoped to a linked
+            // worktree.
             if self.repoRoots[repoID] == nil {
                 self.repoRoots[repoID] = repo.workingTree
             }
@@ -550,22 +498,26 @@ final class SessionGitContext {
                 Log.git.debug("Pinned new repo: \(repoID.path)")
             }
 
-            self.startWatcher(repoID: repoID, location: repo)
-
             // A worktree and its parent repo share one GitRepoID (keyed on
             // --git-common-dir). On restore, a claude pane persisted in the
-            // PARENT repo would otherwise overwrite the worktree's authoritative
-            // directory and render the parent's branch. Track the pane for
-            // lifecycle above, but never let it drive the shared repo's status.
+            // PARENT repo is tracked for lifecycle/pinning but must NOT drive the
+            // shared repo-level status — the monitor's first-subscriber-wins
+            // keeps the worktree (subscribed first, during init) authoritative.
             let collidesWithParent = !isWorktreeInit
                 && self.collidesWithParentWorktree(repoID: repoID, directory: directory)
             if collidesWithParent {
-                Log.git.debug("Worktree space: parent-repo pane tracked but not driving status: \(directory)")
-                return
+                Log.git.debug("Worktree space: parent-repo pane tracked but not driving repo-level status: \(directory)")
             }
 
-            self.repoDirectories[repoID] = directory
-            self.refreshRepo(repoID: repoID, directory: directory)
+            // Subscribe to the app-global monitor. The worktree-init subscribes
+            // for the Session's worktree; a pane subscribes for its own worktree
+            // root. A colliding parent pane still subscribes so it gets its own
+            // per-root branch — it just isn't the repo-level driver.
+            if isWorktreeInit {
+                self.subscribeWorktreeInit(location: repo, worktreeRoot: repo.workingTree)
+            } else if let paneID {
+                self.subscribePane(paneID, location: repo, worktreeRoot: repo.workingTree)
+            }
         }
 
         // Retain the worktree-init task synchronously so pane paths can await it.
@@ -573,191 +525,5 @@ final class SessionGitContext {
             worktreeDetectionTask?.cancel()
             worktreeDetectionTask = task
         }
-    }
-
-    /// Refreshes branch and diff status for a specific repo, cancelling any
-    /// in-flight branch + diff task on re-entry.
-    ///
-    /// PR fetches are not cancelled on re-entry: `markPending` dedupes
-    /// concurrent fetches per (repo, branch) and the completion handler
-    /// skips writes when the branch has moved. Each fetch is tracked by a
-    /// per-call UUID so its completion removes only its own entry, even
-    /// when a later refresh spawned a fresh fetch after an `evict`.
-    private func refreshRepo(repoID: GitRepoID, directory: String) {
-        guard !isTornDown else { return }
-        inFlightTasks[repoID]?.cancel()
-
-        let task = Task { [weak self] in
-            async let branchResult = GitStatusService.currentBranch(directory: directory)
-            async let diffResult = GitStatusService.diffStatus(directory: directory)
-
-            let branch = await branchResult
-            let diff = await diffResult
-
-            guard !Task.isCancelled else { return }
-            guard let self else { return }
-
-            // Check PR cache. On miss, seed from the previously-rendered
-            // status only when the branch name is unchanged — so the badge
-            // keeps its old value through a TTL-expiry refetch, but a branch
-            // switch doesn't render the prior branch's PR under the new name.
-            var prStatus: PRStatus? = nil
-            if let branchName = branch?.name {
-                if self.repoStatuses[repoID]?.branchName == branchName {
-                    prStatus = self.repoStatuses[repoID]?.prStatus
-                }
-                switch self.prCache.get(repoID: repoID, branch: branchName) {
-                case .hit(let cached):
-                    prStatus = cached
-                case .miss:
-                    self.launchPRFetchIfNeeded(
-                        repoID: repoID,
-                        branch: branchName,
-                        directory: directory
-                    )
-                }
-            }
-
-            let status = GitRepoStatus(
-                repoID: repoID,
-                branchName: branch?.name,
-                isDetachedHead: branch?.isDetached ?? false,
-                diffSummary: diff.summary,
-                changedFiles: diff.files,
-                prStatus: prStatus,
-                lastUpdated: Date()
-            )
-
-            // Skip the Observable write when nothing visible changed — avoids
-            // sidebar re-renders on every FSEvents batch during noisy activity
-            // like an active build.
-            if self.repoStatuses[repoID] != status {
-                self.repoStatuses[repoID] = status
-            }
-
-            // Re-resolve per-worktree-root status for every worktree this repo's
-            // panes live in, so a branch switch or working-tree change (surfaced
-            // via FSEvents) updates each tab's sidebar row independently. Usually
-            // one root.
-            let roots = Set(
-                self.paneRepoAssignments
-                    .filter { $0.value == repoID }
-                    .compactMap { self.paneWorktreeRoot[$0.key] }
-            )
-            for root in roots {
-                self.refreshWorktreeStatus(worktreeRoot: root, repoID: repoID)
-            }
-
-            self.inFlightTasks.removeValue(forKey: repoID)
-        }
-
-        inFlightTasks[repoID] = task
-    }
-
-    /// Launches a PR status fetch unless one is already in flight for this
-    /// (repo, branch). The task keys itself by a per-call UUID so its
-    /// completion removes only its own entry, surviving an evict that
-    /// spawned a fresh fetch in parallel.
-    private func launchPRFetchIfNeeded(repoID: GitRepoID, branch: String, directory: String) {
-        guard let fetchGen = prCache.markPending(repoID: repoID, branch: branch) else { return }
-        let taskID = UUID()
-        let prTask = Task { [weak self] in
-            defer {
-                self?.prCache.clearPending(repoID: repoID, branch: branch, generation: fetchGen)
-                self?.prFetchTasks[repoID]?.removeValue(forKey: taskID)
-            }
-            let fetched = await GitStatusService.fetchPRStatus(directory: directory, branch: branch)
-            guard !Task.isCancelled else { return }
-            guard let self else { return }
-            self.prCache.set(repoID: repoID, branch: branch, status: fetched, generation: fetchGen)
-            // Skip the write if the branch moved (stale overwrite) or the PR
-            // didn't change (avoid Observable churn on TTL-expiry refetches).
-            if let current = self.repoStatuses[repoID],
-               current.branchName == branch,
-               current.prStatus != fetched {
-                var updated = current
-                updated.prStatus = fetched
-                self.repoStatuses[repoID] = updated
-            }
-        }
-        prFetchTasks[repoID, default: [:]][taskID] = prTask
-    }
-
-    // MARK: - Watcher Management
-
-    private func startWatcher(repoID: GitRepoID, location: RepoLocation) {
-        // Don't start a duplicate watcher/poller if one already exists
-        guard watchers[repoID] == nil, remotePollers[repoID] == nil else { return }
-
-        // Remote repo: FSEvents can't watch another host, so poll instead. Each
-        // tick reschedules the same status/branch refresh a local watcher would;
-        // `refreshRepo`/`refreshWorktreeStatus` are transparently remote via the
-        // registry, so no other change is needed.
-        if RemoteExecutionRegistry.shared.channel(forDirectory: location.workingTree) != nil {
-            let poller = PollingRefresher(interval: Self.remotePollInterval) { [weak self] in
-                guard let self, self.repoDirectories[repoID] != nil else { return }
-                let tick = (self.remotePollTicks[repoID] ?? 0) + 1
-                self.remotePollTicks[repoID] = tick
-                if tick % Self.remotePollHeavyEvery == 0 {
-                    // The signals a local FSEvents batch raises on ref/HEAD
-                    // changes — undetectable remotely, so raise them on a cadence
-                    // to force PR re-fetch and branch-graph re-render.
-                    self.prCache.evict(repoID: repoID)
-                    if !self.branchGraphDirty.contains(repoID) {
-                        self.branchGraphDirty.insert(repoID)
-                    }
-                }
-                self.refreshScheduler.schedule(key: repoID)
-            }
-            remotePollers[repoID] = poller
-            poller.start()
-            return
-        }
-
-        let watchPaths = GitRepoWatcher.resolveWatchPaths(for: location)
-        // Canonicalize once so `pathsAffectPRState` / `pathsAffectBranchGraph`
-        // don't call `realpath(3)` on every FSEvents batch.
-        let canonicalCommonDir = GitRepoWatcher.canonicalizedPath(location.commonDir)
-
-        let watcher = GitRepoWatcher(watchPaths: watchPaths) { [weak self] paths in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard self.repoDirectories[repoID] != nil else { return }
-                self.processFSEventBatch(
-                    repoID: repoID,
-                    paths: paths,
-                    canonicalCommonDir: canonicalCommonDir
-                )
-                self.refreshScheduler.schedule(key: repoID)
-            }
-        }
-
-        watchers[repoID] = watcher
-    }
-
-    /// Processes a single FSEvents batch for a repo. Evicts PR cache on remote-ref
-    /// changes (existing behaviour) and sets `branchGraphDirty` on local-ref / HEAD
-    /// changes. Extracted for testability — the production watcher calls this on
-    /// the MainActor; tests call it directly without needing live FSEvents.
-    ///
-    /// - Note: Does NOT schedule a refresh; the caller (watcher or test) does that.
-    func processFSEventBatch(repoID: GitRepoID, paths: [String], canonicalCommonDir: String) {
-        // Existing PR-cache eviction path — unchanged.
-        if GitRepoWatcher.pathsAffectPRState(paths, canonicalCommonDir: canonicalCommonDir) {
-            prCache.evict(repoID: repoID)
-        }
-        // Branch-graph dirty flag — new.
-        if GitRepoWatcher.pathsAffectBranchGraph(paths, canonicalCommonDir: canonicalCommonDir),
-           !branchGraphDirty.contains(repoID) {
-            branchGraphDirty.insert(repoID)
-        }
-    }
-
-    private func stopWatcher(repoID: GitRepoID) {
-        watchers[repoID]?.stop()
-        watchers.removeValue(forKey: repoID)
-        remotePollers[repoID]?.stop()
-        remotePollers.removeValue(forKey: repoID)
-        remotePollTicks.removeValue(forKey: repoID)
     }
 }

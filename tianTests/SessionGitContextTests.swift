@@ -2,6 +2,16 @@ import Foundation
 import Testing
 @testable import tian
 
+/// `SessionGitContext` is now a thin adapter over the process-global
+/// `GitMonitor.shared`. These tests assert the ADAPTER's behaviour — detection
+/// maps panes to repos, subscribe/unsubscribe on pane add/move/remove, and the
+/// status reads proxy the monitor — rather than any watcher/refresh internals
+/// (those live in `GitMonitorTests`).
+///
+/// Because the adapter subscribes to a shared singleton, each test uses a
+/// UNIQUE temp repo (so its `GitRepoID` never collides with another test's) and
+/// `defer { context.teardown() }` releases its subscriptions on exit, keeping
+/// `GitMonitor.shared` clean across cases.
 @MainActor
 struct SessionGitContextTests {
 
@@ -9,6 +19,7 @@ struct SessionGitContextTests {
 
     @Test func lazyDetectionDoesNotDetectOnInitForNonWorktreeSession() async {
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
 
         // Give any hypothetical init-time task a chance to run
         try? await Task.sleep(for: .milliseconds(100))
@@ -23,6 +34,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: URL(filePath: repo))
+        defer { context.teardown() }
 
         // Wait for the async detection task to complete
         try await pollUntil(timeout: 5.0) {
@@ -43,6 +55,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
 
         // Simulate restore: call paneAdded with a persisted working directory
         let paneID = UUID()
@@ -62,9 +75,9 @@ struct SessionGitContextTests {
     /// whose persisted working directory is the PARENT repo (not the worktree).
     /// A worktree and its parent share one `GitRepoID` (keyed on
     /// `--git-common-dir`), so the parent-repo pane must NOT clobber the
-    /// worktree's authoritative branch/status. Before the fix the parent
-    /// detection raced and overwrote the worktree branch; after it, the
-    /// worktree branch stays authoritative.
+    /// worktree's authoritative branch/status. The monitor's
+    /// first-subscriber-wins keeps the worktree (subscribed first, during init)
+    /// authoritative for the repo-level status.
     @Test func worktreeSessionPaneInParentRepoDoesNotClobberBranch() async throws {
         let main = try makeTempGitRepo()
         defer { cleanup(main) }
@@ -85,6 +98,7 @@ struct SessionGitContextTests {
         #expect(mainBranch != "feat/worktree-x")
 
         let context = SessionGitContext(worktreePath: URL(filePath: wtPath))
+        defer { context.teardown() }
 
         // Simulate the restore collision: the claude pane persisted in the
         // PARENT repo, added right after the worktree-init detection kicks off.
@@ -105,12 +119,12 @@ struct SessionGitContextTests {
     }
 
     /// Regression: the Session's own worktree repo is pinned at init with no
-    /// `paneRepoAssignments` entry — it's owned by the Session's worktreePath,
-    /// not by any pane. A parent-repo pane shares the worktree's `GitRepoID`,
-    /// so removing that pane must NOT garbage-collect (unpin) the worktree repo
-    /// while the Session is still alive. Before the guard, `paneRemoved` unpinned
-    /// the shared repo and the sidebar row vanished; after it, the worktree
-    /// repo stays pinned with its own branch.
+    /// `paneRepoAssignments` entry — it's owned by the Session's worktreePath
+    /// (the worktree-init subscription), not by any pane. A parent-repo pane
+    /// shares the worktree's `GitRepoID`, so removing that pane must NOT
+    /// garbage-collect (unpin) the worktree repo while the Session is still
+    /// alive: the worktree-init subscription still holds the monitor refcount,
+    /// and `unpinRepo` skips the worktree repo.
     @Test func worktreeRepoStaysPinnedAfterCollidingPaneRemoved() async throws {
         let main = try makeTempGitRepo()
         defer { cleanup(main) }
@@ -126,6 +140,7 @@ struct SessionGitContextTests {
         }
 
         let context = SessionGitContext(worktreePath: URL(filePath: wtPath))
+        defer { context.teardown() }
 
         // Add a PARENT-repo pane — it shares the worktree's GitRepoID.
         let paneID = UUID()
@@ -149,6 +164,7 @@ struct SessionGitContextTests {
 
     @Test func paneAddedIgnoresEmptyAndTildeDirectories() async {
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneAdded(paneID: paneID, workingDirectory: nil)
@@ -161,16 +177,18 @@ struct SessionGitContextTests {
         #expect(context.paneRepoAssignments.isEmpty)
     }
 
-    // MARK: - In-flight Task Cancellation
+    // MARK: - In-flight Detection Coalescing
 
     @Test func rapidRefreshesCancelPriorTask() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
-        // Fire multiple rapid directory changes — earlier tasks should be cancelled
+        // Fire multiple rapid directory changes — the pane must still resolve to
+        // exactly one repo with one subscription (no duplicate pins/subs).
         for i in 0..<5 {
             context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: repo)
             // Tiny delay to ensure tasks are actually dispatched
@@ -186,6 +204,7 @@ struct SessionGitContextTests {
         // Should end up with exactly one repo status (not duplicated)
         #expect(context.repoStatuses.count == 1)
         #expect(context.pinnedRepoOrder.count == 1)
+        #expect(context.activeSubscriptionCount == 1)
         let status = context.repoStatuses.values.first
         #expect(status?.branchName != nil)
     }
@@ -197,6 +216,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneAdded(paneID: paneID, workingDirectory: repo)
@@ -212,6 +232,7 @@ struct SessionGitContextTests {
 
         #expect(context.repoStatuses.isEmpty)
         #expect(context.pinnedRepoOrder.isEmpty)
+        #expect(context.activeSubscriptionCount == 0)
     }
 
     // MARK: - Teardown
@@ -221,6 +242,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         context.paneAdded(paneID: UUID(), workingDirectory: repo)
 
         try await pollUntil(timeout: 5.0) {
@@ -244,6 +266,7 @@ struct SessionGitContextTests {
         try runGitSync(["checkout", "-b", "feature/test-branch"], in: repo)
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: repo)
@@ -278,6 +301,7 @@ struct SessionGitContextTests {
         try "new file".write(toFile: newFilePath, atomically: true, encoding: .utf8)
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: repo)
@@ -295,13 +319,15 @@ struct SessionGitContextTests {
         #expect(status.changedFiles.count == 2)
     }
 
-    // MARK: - Watcher Lifecycle
+    // MARK: - Subscription Lifecycle (adapter over GitMonitor)
 
-    @Test func watcherStartedOnRepoDetection() async throws {
+    /// Detecting a repo creates exactly one monitor subscription for the session.
+    @Test func subscriptionCreatedOnRepoDetection() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneAdded(paneID: paneID, workingDirectory: repo)
@@ -310,14 +336,16 @@ struct SessionGitContextTests {
             !context.repoStatuses.isEmpty
         }
 
-        #expect(context.activeWatcherCount == 1)
+        #expect(context.activeSubscriptionCount == 1)
     }
 
-    @Test func watcherStoppedOnRepoUnpin() async throws {
+    /// Removing the only pane referencing a repo releases its subscription.
+    @Test func subscriptionReleasedOnRepoUnpin() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneAdded(paneID: paneID, workingDirectory: repo)
@@ -326,18 +354,20 @@ struct SessionGitContextTests {
             !context.repoStatuses.isEmpty
         }
 
-        #expect(context.activeWatcherCount == 1)
+        #expect(context.activeSubscriptionCount == 1)
 
         context.paneRemoved(paneID: paneID)
 
-        #expect(context.activeWatcherCount == 0)
+        #expect(context.activeSubscriptionCount == 0)
     }
 
-    @Test func teardownStopsAllWatchers() async throws {
+    /// `teardown()` releases every subscription the session holds.
+    @Test func teardownReleasesAllSubscriptions() async throws {
         let repo = try makeTempGitRepo()
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         context.paneAdded(paneID: UUID(), workingDirectory: repo)
 
         try await pollUntil(timeout: 5.0) {
@@ -346,7 +376,7 @@ struct SessionGitContextTests {
 
         context.teardown()
 
-        #expect(context.activeWatcherCount == 0)
+        #expect(context.activeSubscriptionCount == 0)
     }
 
     // MARK: - Pinning Behavior
@@ -357,6 +387,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo); cleanup(nonGitDir) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         context.paneAdded(paneID: paneID, workingDirectory: repo)
@@ -375,6 +406,8 @@ struct SessionGitContextTests {
 
         #expect(context.pinnedRepoOrder.contains(repoID))
         #expect(context.repoStatuses[repoID] != nil)
+        // Sticky: the subscription is kept alive too (not released on a non-git cd).
+        #expect(context.activeSubscriptionCount == 1)
     }
 
     @Test func paneReassignsFromRepoAToRepoB() async throws {
@@ -383,6 +416,7 @@ struct SessionGitContextTests {
         defer { cleanup(repoA); cleanup(repoB) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
 
         // Start in repo A
@@ -402,12 +436,14 @@ struct SessionGitContextTests {
             context.paneRepoAssignments[paneID] != repoAID
         }
 
-        // Pane should now be in repo B; repo A unpinned (no other panes)
+        // Pane should now be in repo B; repo A unpinned (no other panes) and the
+        // pane holds exactly one subscription (repo B's — repo A's was released).
         let repoBID = context.paneRepoAssignments[paneID]
         #expect(repoBID != nil)
         #expect(repoBID != repoAID)
         #expect(!context.pinnedRepoOrder.contains(repoAID))
         #expect(context.pinnedRepoOrder.contains(repoBID!))
+        #expect(context.activeSubscriptionCount == 1)
     }
 
     @Test func multipleReposDetectedFromMultiplePanes() async throws {
@@ -416,6 +452,7 @@ struct SessionGitContextTests {
         defer { cleanup(repoA); cleanup(repoB) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneA = UUID()
         let paneB = UUID()
 
@@ -436,6 +473,7 @@ struct SessionGitContextTests {
         defer { cleanup(repoA); cleanup(repoB) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
 
         // Add zzz first, then aaa
         context.paneAdded(paneID: UUID(), workingDirectory: repoB)
@@ -473,6 +511,7 @@ struct SessionGitContextTests {
 
         // Non-worktree session: both panes drive detection normally.
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneMain = UUID()
         let paneWt = UUID()
         context.paneAdded(paneID: paneMain, workingDirectory: main)
@@ -490,8 +529,8 @@ struct SessionGitContextTests {
     }
 
     /// Regression (per-worktree diff badge): two panes in different worktrees of
-    /// one repo must show their OWN diff, not a single shared one. Before the fix
-    /// both rows rendered whichever directory last drove the GitRepoID's status.
+    /// one repo must show their OWN diff, not a single shared one. The monitor
+    /// keys the diff by worktree root, so each pane sees its own.
     @Test func distinctWorktreesResolveDistinctDiffPerPane() async throws {
         let main = try makeTempGitRepo()
         defer { cleanup(main) }
@@ -510,6 +549,7 @@ struct SessionGitContextTests {
         try "# Changed only in the worktree".write(toFile: readme, atomically: true, encoding: .utf8)
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneMain = UUID()
         let paneWt = UUID()
         context.paneAdded(paneID: paneMain, workingDirectory: main)
@@ -531,6 +571,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
         context.paneAdded(paneID: paneID, workingDirectory: repo)
 
@@ -549,6 +590,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
         context.paneAdded(paneID: paneID, workingDirectory: repo)
 
@@ -578,6 +620,7 @@ struct SessionGitContextTests {
         #expect(mainBranch != "feat/nested")
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
         // Pane starts in main (what the shell reports via OSC 7).
         context.paneAdded(paneID: paneID, workingDirectory: main)
@@ -598,6 +641,7 @@ struct SessionGitContextTests {
         defer { cleanup(repo) }
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
         context.paneAdded(paneID: paneID, workingDirectory: repo)
         try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) != nil }
@@ -629,6 +673,7 @@ struct SessionGitContextTests {
         #expect(mainBranch != "feat/bridge-nested")
 
         let context = SessionGitContext(worktreePath: nil)
+        defer { context.teardown() }
         let paneID = UUID()
         context.paneAdded(paneID: paneID, workingDirectory: main)
         try await pollUntil(timeout: 5.0) { context.branch(forPane: paneID) == mainBranch }
