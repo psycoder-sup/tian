@@ -251,10 +251,13 @@
   "249": "CLIError+IPC.swift",
   "250": ".resolve",
   "251": "Git-watch redesign — implementation plan",
+  "252": "DockToggleDuringDragTests.swift",
+  "253": "async",
+  "254": "Date",
+  "255": "Duration",
   "256": "ChangeBadgeView",
   "257": "ClaudeEventOrigin",
   "258": "Swift Argument Parser",
   "259": "TOMLKit",
-  "268": "GitRepoWatcher.swift",
   "835": "tian-hook-prompt.sh"
 }
