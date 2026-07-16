@@ -30,7 +30,7 @@ struct PRStatusCacheTests {
         let pr = PRStatus(number: 1, state: .open, url: URL(string: "https://github.com/test/pr/1")!)
         cache.set(repoID: GitRepoID(path: "/repo"), branch: "main", status: pr)
 
-        currentTime = Date(timeIntervalSince1970: 1061)
+        currentTime = Date(timeIntervalSince1970: 1301)
         let result = cache.get(repoID: GitRepoID(path: "/repo"), branch: "main")
         #expect(result == .miss)
     }

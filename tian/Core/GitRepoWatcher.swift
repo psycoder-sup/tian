@@ -68,6 +68,43 @@ final class GitRepoWatcher: @unchecked Sendable {
         return [location.workingTree, location.gitDir, refsPath]
     }
 
+    /// Which subset of a repo's paths to watch. Distinguishes the cheap,
+    /// low-churn ref-metadata paths (HEAD/refs/packed-refs — only touched by
+    /// commits, branch switches, pushes, and fetches) from the expensive,
+    /// high-churn working-tree paths (every tracked/untracked file edit).
+    /// Not yet wired into `resolveWatchPaths`/`GitRepoWatcher` — this is
+    /// prep for splitting the single FSEventStream into two scoped watchers
+    /// (ADR 0005 Phase B).
+    enum WatchScope {
+        case refs
+        case workingTree
+    }
+
+    /// Resolves ONLY the low-churn ref-related paths for a repo location:
+    /// `HEAD`, `refs/`, and `packed-refs` under the shared `.git` dir
+    /// (`commonDir`, which for a regular repo equals `gitDir`). For a
+    /// worktree, also includes the worktree's own `gitDir` — that's where
+    /// the per-worktree `HEAD` lives, outside `commonDir`.
+    ///
+    /// Additive helper for ADR 0005 Phase B; not yet used by any caller.
+    static func resolveRefsWatchPaths(for location: RepoLocation) -> [String] {
+        let headPath = (location.commonDir as NSString).appendingPathComponent("HEAD")
+        let refsPath = (location.commonDir as NSString).appendingPathComponent("refs")
+        let packedRefsPath = (location.commonDir as NSString).appendingPathComponent("packed-refs")
+        guard location.isWorktree else {
+            return [headPath, refsPath, packedRefsPath]
+        }
+        return [headPath, refsPath, packedRefsPath, location.gitDir]
+    }
+
+    /// Resolves ONLY the working-tree path — the diff-relevant churn from
+    /// tracked/untracked file edits.
+    ///
+    /// Additive helper for ADR 0005 Phase B; not yet used by any caller.
+    static func resolveWorkingTreeWatchPaths(for location: RepoLocation) -> [String] {
+        [location.workingTree]
+    }
+
     /// True if any event path indicates a remote-refs or packed-refs change —
     /// i.e. a `git push`, `git fetch`, or `gh pr merge --delete-branch` that
     /// likely invalidates a cached `gh pr view` result. Local branch tip moves

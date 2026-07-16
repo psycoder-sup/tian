@@ -10,5 +10,6 @@ One row per `NNNN-*.json` in this folder — the catalog of decisions that shape
 | [0002](0002-binary-scope-orchestration-in-skill.json) | tian binary = control/monitor primitives; orchestration lives in the skill | Accepted |
 | [0003](0003-defer-delegation-token-optimization.json) | Accept parent↔child context duplication in /tian implement; defer token optimization | Accepted |
 | [0004](0004-flatten-hierarchy-to-sessions.json) | Flatten Workspace→Space→Section→Tab→Pane to Workspace→Session | Accepted |
+| [0005](0005-app-global-git-monitor.json) | Replace per-Session git watching with an app-global, repo-keyed GitMonitor (split signals + visible/busy gating) | Proposed |
 
 *Add a record only when direction changes — a choice a future session shouldn't silently reverse. When one supersedes another, set `supersedes` on the new record and `supersededBy` (+ `status: "Superseded"`) on the old. After any change, refresh this index (or just re-run `/project-kit`, which regenerates it).*
