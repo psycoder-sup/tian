@@ -36,9 +36,17 @@ struct SessionGitContextTests {
         let context = SessionGitContext(worktreePath: URL(filePath: repo))
         defer { context.teardown() }
 
-        // Wait for the async detection task to complete
-        try await pollUntil(timeout: 5.0) {
-            !context.repoStatuses.isEmpty
+        // Wait for the async detection task to complete AND branchName to
+        // resolve. `repoStatuses` can gain its entry from either the branch or
+        // the working-tree refresh (whichever wins the race for the shared
+        // `gitLocal` lane), so `!isEmpty` alone can be true with branchName
+        // still nil — poll on the actual condition asserted below. Generous
+        // timeout: under the full parallel suite, GitMonitor's bounded lanes
+        // (gitLocal=4, ghNetwork=2) can be starved by hundreds of concurrent
+        // tests, so a tight deadline flakes even though the wait itself is
+        // correct.
+        try await pollUntil(timeout: 10.0) {
+            context.repoStatuses.values.first?.branchName?.isEmpty == false
         }
 
         #expect(context.repoStatuses.count == 1)
@@ -46,6 +54,46 @@ struct SessionGitContextTests {
         let status = context.repoStatuses.values.first
         #expect(status?.branchName != nil)
         #expect(status?.branchName?.isEmpty == false)
+    }
+
+    // MARK: - Activity Feed / Working-Tree Gate (ADR 0005 change C)
+
+    /// `setActivity` forwards the visible/busy signal to `GitMonitor` for every
+    /// subscription the session holds (here the worktree-init one), gating the
+    /// expensive working-tree watcher; and a subscription created AFTER a
+    /// hidden+idle report inherits that latest activity instead of riding the
+    /// monitor's default-open gate.
+    @Test func setActivityGatesWorkingTreeWatcherAndNewSubscriptionInherits() async throws {
+        let repo = try makeTempGitRepo()
+        defer { cleanup(repo) }
+
+        let context = SessionGitContext(worktreePath: URL(filePath: repo))
+        defer { context.teardown() }
+
+        // A fresh subscriber defaults to visible, so its working-tree watcher is
+        // running once the worktree-init subscription lands.
+        try await pollUntil(timeout: 5.0) { !context.pinnedRepoOrder.isEmpty }
+        let repoID = try #require(context.pinnedRepoOrder.first)
+        try await pollUntil(timeout: 5.0) { GitMonitor.shared.hasWorkingTreeWatcher(repoID: repoID) }
+
+        // Hidden + idle → gate closes (forwarded to the worktree-init token).
+        context.setActivity(visible: false, busy: false)
+        #expect(!GitMonitor.shared.hasWorkingTreeWatcher(repoID: repoID))
+
+        // Same background session, Claude busy → gate re-opens (diff stays live).
+        context.setActivity(visible: false, busy: true)
+        #expect(GitMonitor.shared.hasWorkingTreeWatcher(repoID: repoID))
+
+        // Back to hidden + idle → closed again.
+        context.setActivity(visible: false, busy: false)
+        #expect(!GitMonitor.shared.hasWorkingTreeWatcher(repoID: repoID))
+
+        // A NEW pane subscribing to the same repo while hidden+idle must inherit
+        // the stored activity: the gate must NOT re-open on the fresh
+        // (default-visible) token.
+        context.paneAdded(paneID: UUID(), workingDirectory: repo)
+        try await pollUntil(timeout: 5.0) { context.activeSubscriptionCount >= 2 }
+        #expect(!GitMonitor.shared.hasWorkingTreeWatcher(repoID: repoID))
     }
 
     // MARK: - Restored Session
@@ -61,8 +109,17 @@ struct SessionGitContextTests {
         let paneID = UUID()
         context.paneAdded(paneID: paneID, workingDirectory: repo)
 
-        try await pollUntil(timeout: 5.0) {
-            !context.repoStatuses.isEmpty
+        // Wait for branchName to resolve, not just for the status entry to
+        // appear: `repoStatuses` can gain its entry from either the branch or
+        // the working-tree refresh (whichever wins the race for the shared
+        // `gitLocal` lane), so `!isEmpty` alone can be true with branchName
+        // still nil — poll on the actual condition asserted below. Generous
+        // timeout: under the full parallel suite, GitMonitor's bounded lanes
+        // (gitLocal=4, ghNetwork=2) can be starved by hundreds of concurrent
+        // tests, so a tight deadline flakes even though the wait itself is
+        // correct.
+        try await pollUntil(timeout: 10.0) {
+            context.repoStatuses.values.first?.branchName != nil
         }
 
         #expect(context.paneRepoAssignments[paneID] != nil)
@@ -271,8 +328,17 @@ struct SessionGitContextTests {
 
         context.paneWorkingDirectoryChanged(paneID: paneID, newDirectory: repo)
 
-        try await pollUntil(timeout: 5.0) {
-            !context.repoStatuses.isEmpty
+        // Wait for branchName to resolve to the expected branch, not just for
+        // the status entry to appear: `repoStatuses` can gain its entry from
+        // either the branch or the working-tree refresh (whichever wins the
+        // race for the shared `gitLocal` lane), so `!isEmpty` alone can be
+        // true with branchName still nil — poll on the actual condition
+        // asserted below. Generous timeout: under the full parallel suite,
+        // GitMonitor's bounded lanes (gitLocal=4, ghNetwork=2) can be starved
+        // by hundreds of concurrent tests, so a tight deadline flakes even
+        // though the wait itself is correct.
+        try await pollUntil(timeout: 10.0) {
+            context.repoStatuses.values.first?.branchName == "feature/test-branch"
         }
 
         #expect(context.repoStatuses.count == 1)
@@ -555,8 +621,19 @@ struct SessionGitContextTests {
         context.paneAdded(paneID: paneMain, workingDirectory: main)
         context.paneAdded(paneID: paneWt, workingDirectory: wtPath)
 
-        try await pollUntil(timeout: 5.0) {
-            context.status(forPane: paneMain) != nil && context.status(forPane: paneWt) != nil
+        // Poll on the actual conditions asserted below, not just "status
+        // exists": a per-root status entry can be created by either the
+        // branch or the working-tree refresh (whichever wins the race for the
+        // shared `gitLocal` lane), so `!= nil` alone can be true while
+        // paneWt's diffSummary is still the not-yet-refreshed default (empty)
+        // — indistinguishable from a genuinely clean tree. Generous timeout:
+        // under the full parallel suite, GitMonitor's bounded lanes
+        // (gitLocal=4, ghNetwork=2) can be starved by hundreds of concurrent
+        // tests, so a tight deadline flakes even though the wait itself is
+        // correct.
+        try await pollUntil(timeout: 10.0) {
+            context.status(forPane: paneMain)?.diffSummary.isEmpty == true
+                && context.status(forPane: paneWt)?.diffSummary.isEmpty == false
         }
 
         // Same repo (one GitRepoID), but each pane sees its own worktree's diff.

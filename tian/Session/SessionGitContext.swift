@@ -128,6 +128,16 @@ final class SessionGitContext {
     /// which has no owning pane. Kept apart so pane GC can never release it.
     private var worktreeInitSubscription: Subscription?
 
+    // MARK: - Activity State (working-tree gate feed, ADR 0005 change C)
+
+    /// Latest visible/busy activity the view layer has reported for this session,
+    /// forwarded to `GitMonitor` for every subscription this session holds and
+    /// re-applied to any subscription created later. Defaults to visible (safe):
+    /// before the first real `setActivity` report a fresh token rides the
+    /// monitor's default-open working-tree gate so its diff is never frozen.
+    private var latestVisible = true
+    private var latestBusy = false
+
     // MARK: - Test Seams
 
     /// Number of live `GitMonitor` subscriptions this session holds (pane
@@ -284,6 +294,27 @@ final class SessionGitContext {
         }
     }
 
+    /// Reports this session's current visibility/busy activity to `GitMonitor`
+    /// for EVERY subscription it holds (per-pane tokens + the worktree-init one).
+    /// The monitor ORs the signal across a repo's subscribers to gate the
+    /// expensive working-tree watcher (ADR 0005, change C): a background, idle
+    /// session's gate closes; the same session while Claude is busy keeps it open.
+    ///
+    /// The view layer calls this on first appearance and whenever the inputs
+    /// change (window visibility, session activeness, aggregate Claude state).
+    /// The latest values are stored so a subscription created afterwards inherits
+    /// them (see `applyLatestActivity`) instead of riding the default-open gate.
+    func setActivity(visible: Bool, busy: Bool) {
+        latestVisible = visible
+        latestBusy = busy
+        for sub in paneSubscriptions.values {
+            GitMonitor.shared.setSubscriberActivity(sub.token, visible: visible, busy: busy)
+        }
+        if let sub = worktreeInitSubscription {
+            GitMonitor.shared.setSubscriberActivity(sub.token, visible: visible, busy: busy)
+        }
+    }
+
     /// Manually triggers a git status refresh for all pinned repos, forwarding to
     /// the monitor.
     func refresh() {
@@ -403,6 +434,7 @@ final class SessionGitContext {
         }
         let token = GitMonitor.shared.subscribe(location: location, worktreeRoot: worktreeRoot)
         paneSubscriptions[paneID] = Subscription(token: token, repoID: repoID, worktreeRoot: worktreeRoot)
+        applyLatestActivity(to: token)
     }
 
     /// Ensures the worktree-init subscription (the Session's own `worktreePath`,
@@ -419,6 +451,16 @@ final class SessionGitContext {
         }
         let token = GitMonitor.shared.subscribe(location: location, worktreeRoot: worktreeRoot)
         worktreeInitSubscription = Subscription(token: token, repoID: repoID, worktreeRoot: worktreeRoot)
+        applyLatestActivity(to: token)
+    }
+
+    /// Pushes the latest reported visible/busy activity to a freshly created
+    /// subscription. Without this a pane that subscribes while the session is
+    /// already hidden+idle would ride the monitor's default-open gate (visible)
+    /// until the next `setActivity` report, leaving the working-tree watcher
+    /// running for a session nobody is looking at.
+    private func applyLatestActivity(to token: GitMonitor.SubscriptionToken) {
+        GitMonitor.shared.setSubscriberActivity(token, visible: latestVisible, busy: latestBusy)
     }
 
     /// Unpins a repo from this session's display and drops its local mapping.

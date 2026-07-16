@@ -25,6 +25,12 @@ struct SessionContentView: View {
     /// window's trailing edge (clears the inspect-panel rail).
     var windowTrailingInset: CGFloat = 0
 
+    /// Whether the hosting window is on screen (set at the window root by
+    /// `WorkspaceWindowContent`). One half of the git working-tree gate's
+    /// visible signal; the other half is `isActive` (this session is the
+    /// workspace's foreground session).
+    @Environment(\.windowIsVisible) private var windowIsVisible
+
     /// Live ratio threaded from the divider drag gesture to the two sibling
     /// areas. `nil` when no drag is active.
     @State private var liveDragRatio: Double?
@@ -51,11 +57,37 @@ struct SessionContentView: View {
                     // Geometry won't re-fire on activation (size is unchanged),
                     // so refresh region sizes from the last measured geometry.
                     if nowActive { pushContainerSizes(lastContainerSize) }
+                    pushGitActivity()
                 }
                 .onChange(of: session.terminalVisible) { _, _ in pushContainerSizes(lastContainerSize) }
                 .onChange(of: session.dockPosition) { _, _ in pushContainerSizes(lastContainerSize) }
                 .onChange(of: session.splitRatio) { _, _ in pushContainerSizes(lastContainerSize) }
+                // Feed the git working-tree gate (ADR 0005 change C): push the
+                // visible/busy signal on first appearance and whenever any input
+                // changes, so a hidden+idle session's watcher stops while a
+                // background-but-busy session keeps its diff badge live.
+                .onAppear { pushGitActivity() }
+                .onChange(of: windowIsVisible) { _, _ in pushGitActivity() }
+                .onChange(of: session.aggregateClaudeState) { _, _ in pushGitActivity() }
         }
+    }
+
+    // MARK: - Git Working-Tree Gate Feed
+
+    /// This session is visible for the git gate iff its window is on screen AND
+    /// it is the workspace's foreground session (`isActive`, set alongside the
+    /// `\.sessionIsVisible` environment by `SidebarContainerView`).
+    private var gitGateVisible: Bool { windowIsVisible && isActive }
+
+    /// This session is busy for the git gate while its Claude pane is getting on
+    /// with work (`.busy`/`.active`) — so an occluded, actively-writing session
+    /// keeps its diff badge live even though it isn't visible.
+    private var gitGateBusy: Bool { session.aggregateClaudeState?.resumesWork == true }
+
+    /// Reports the current visible/busy activity to the session's git context,
+    /// which forwards it to `GitMonitor` for every subscription it holds.
+    private func pushGitActivity() {
+        session.gitContext.setActivity(visible: gitGateVisible, busy: gitGateBusy)
     }
 
     // MARK: - Content

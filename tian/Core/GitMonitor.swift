@@ -259,6 +259,13 @@ final class GitMonitor {
     /// the gate.
     var activeWorkingTreeWatcherCount: Int { workingTreeWatchers.count }
 
+    /// Whether the gated working-tree watcher is currently running for a specific
+    /// repo (i.e. its gate is open). Exposed for testing the visible/busy feed
+    /// end-to-end against a UNIQUE repo without racing the process-global count.
+    func hasWorkingTreeWatcher(repoID: GitRepoID) -> Bool {
+        workingTreeWatchers[repoID] != nil
+    }
+
     /// Monotonic count of PR fetches launched. Exposed for testing that the
     /// working-tree refresh never triggers a PR fetch.
     @ObservationIgnored

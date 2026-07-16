@@ -21,9 +21,17 @@ struct GitMonitorTests {
         let t2 = monitor.subscribe(location: location, worktreeRoot: location.workingTree)
 
         // The repo-level and per-root statuses resolve via independent async
-        // refreshes; poll until both land before asserting on them.
-        try await pollUntil(timeout: 5.0) {
-            monitor.status(forRepo: repoID) != nil
+        // refreshes (branch vs. working-tree), and either can win the race for
+        // the shared `gitLocal` lane — so `status(forRepo:) != nil` alone can
+        // already be true from the working-tree refresh landing first, with
+        // branchName still nil. Poll on the actual condition asserted below
+        // (branchName resolved), not just object presence. Generous timeout:
+        // under the full parallel suite, GitMonitor's bounded lanes
+        // (gitLocal=4, ghNetwork=2) can be starved by hundreds of concurrent
+        // tests, so a tight deadline flakes even though the wait itself is
+        // correct.
+        try await pollUntil(timeout: 10.0) {
+            monitor.status(forRepo: repoID)?.branchName?.isEmpty == false
                 && monitor.status(forWorktreeRoot: location.workingTree) != nil
         }
 

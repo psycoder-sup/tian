@@ -525,9 +525,9 @@
     "semantic_hash": "a9d78d0ed22f86587b2331b938c6cc2a"
   },
   "tian/Session/SessionGitContext.swift": {
-    "mtime": 1784177924.4971502,
-    "ast_hash": "77a525e7d65188b8cdfb62615588293b",
-    "semantic_hash": "77a525e7d65188b8cdfb62615588293b"
+    "mtime": 1784182385.1797495,
+    "ast_hash": "609cf75fa06587b224dbe9d089b5ecf8",
+    "semantic_hash": ""
   },
   "tian/Session/SessionReaderState.swift": {
     "mtime": 1784177924.497837,
@@ -1364,15 +1364,10 @@
     "ast_hash": "0655e011d833c461ea2528d3922b3175",
     "semantic_hash": "0655e011d833c461ea2528d3922b3175"
   },
-  "tianTests/SessionGitContextBranchDirtyTests.swift": {
-    "mtime": 1784177924.5468183,
-    "ast_hash": "28165cd92a4536dd893bbbe8e047208f",
-    "semantic_hash": "28165cd92a4536dd893bbbe8e047208f"
-  },
   "tianTests/SessionGitContextTests.swift": {
-    "mtime": 1784177924.5470965,
-    "ast_hash": "97e2d3ad2cd1e865a9dcdd992ece0de4",
-    "semantic_hash": "97e2d3ad2cd1e865a9dcdd992ece0de4"
+    "mtime": 1784181807.5509176,
+    "ast_hash": "7a2b022050f2410012c86bd8ff4d77df",
+    "semantic_hash": ""
   },
   "tianTests/SessionLayoutTests.swift": {
     "mtime": 1784177924.54729,
@@ -1775,8 +1770,8 @@
     "semantic_hash": ""
   },
   "tian/Core/GitMonitor.swift": {
-    "mtime": 1784180354.5995111,
-    "ast_hash": "6bd7212d05b42a0e123c475174c15a64",
+    "mtime": 1784182374.0830736,
+    "ast_hash": "879ed0f82e198634e0952af158af689e",
     "semantic_hash": ""
   },
   "tianTests/DetectionCacheTests.swift": {
@@ -1785,8 +1780,8 @@
     "semantic_hash": ""
   },
   "tianTests/GitMonitorTests.swift": {
-    "mtime": 1784180611.7363186,
-    "ast_hash": "ca651b37857e2c972382866b263b819a",
+    "mtime": 1784182408.6595783,
+    "ast_hash": "07f8bbea3c31bfc8a156892700066ef4",
     "semantic_hash": ""
   },
   ".dev/plans/git-watch-redesign.md": {
