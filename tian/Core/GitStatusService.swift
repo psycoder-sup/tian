@@ -1093,7 +1093,7 @@ enum GitStatusService {
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
+                DispatchQueue.global(qos: .utility).async {
                     let stdoutPipe = Pipe()
                     let stderrPipe = Pipe()
                     process.standardOutput = stdoutPipe
@@ -1254,7 +1254,7 @@ enum GitStatusService {
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
+                DispatchQueue.global(qos: .utility).async {
                     let stdoutPipe = Pipe()
                     let stderrPipe = Pipe()
                     process.standardOutput = stdoutPipe

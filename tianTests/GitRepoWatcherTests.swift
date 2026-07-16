@@ -40,6 +40,55 @@ struct GitRepoWatcherTests {
         #expect(paths == ["/Users/dev/project"])
     }
 
+    // MARK: - Scoped Watch Path Resolution (ADR 0005 Phase B prep)
+
+    @Test func refsScopeForRegularRepoIncludesHeadRefsAndPackedRefsNotWorkingTree() {
+        let paths = GitRepoWatcher.resolveRefsWatchPaths(for: RepoLocation(
+            gitDir: "/Users/dev/project/.git",
+            commonDir: "/Users/dev/project/.git",
+            workingTree: "/Users/dev/project",
+            isWorktree: false
+        ))
+        #expect(paths.contains("/Users/dev/project/.git/HEAD"))
+        #expect(paths.contains("/Users/dev/project/.git/refs"))
+        #expect(paths.contains("/Users/dev/project/.git/packed-refs"))
+        #expect(!paths.contains("/Users/dev/project"))
+        #expect(paths.count == 3)
+    }
+
+    @Test func refsScopeForWorktreeIncludesCommonDirRefsAndWorktreeGitDir() {
+        let paths = GitRepoWatcher.resolveRefsWatchPaths(for: RepoLocation(
+            gitDir: "/Users/dev/project/.git/worktrees/feature-branch",
+            commonDir: "/Users/dev/project/.git",
+            workingTree: "/Users/dev/worktrees/feature-branch",
+            isWorktree: true
+        ))
+        #expect(paths.contains("/Users/dev/project/.git/HEAD"))
+        #expect(paths.contains("/Users/dev/project/.git/refs"))
+        #expect(paths.contains("/Users/dev/project/.git/packed-refs"))
+        #expect(paths.contains("/Users/dev/project/.git/worktrees/feature-branch"))
+        #expect(!paths.contains("/Users/dev/worktrees/feature-branch"))
+        #expect(paths.count == 4)
+    }
+
+    @Test func workingTreeScopeReturnsOnlyWorkingTree() {
+        let regular = GitRepoWatcher.resolveWorkingTreeWatchPaths(for: RepoLocation(
+            gitDir: "/Users/dev/project/.git",
+            commonDir: "/Users/dev/project/.git",
+            workingTree: "/Users/dev/project",
+            isWorktree: false
+        ))
+        #expect(regular == ["/Users/dev/project"])
+
+        let worktree = GitRepoWatcher.resolveWorkingTreeWatchPaths(for: RepoLocation(
+            gitDir: "/Users/dev/project/.git/worktrees/feature-branch",
+            commonDir: "/Users/dev/project/.git",
+            workingTree: "/Users/dev/worktrees/feature-branch",
+            isWorktree: true
+        ))
+        #expect(worktree == ["/Users/dev/worktrees/feature-branch"])
+    }
+
     // MARK: - pathsAffectPRState
 
     @Test func pathsAffectPRStateTrueForRemoteRef() {

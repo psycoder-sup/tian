@@ -1,6 +1,6 @@
 import Foundation
 
-/// In-memory cache for `gh pr view` results with 60-second TTL.
+/// In-memory cache for `gh pr view` results with 300-second (5-minute) TTL.
 @MainActor @Observable
 final class PRStatusCache {
 
@@ -33,7 +33,7 @@ final class PRStatusCache {
         let fetchedAt: Date
     }
 
-    private let ttl: TimeInterval = 60
+    private let ttl: TimeInterval = 300
     private let now: @Sendable () -> Date
     private var entries: [CacheKey: CacheEntry] = [:]
 
