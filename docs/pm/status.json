@@ -1,7 +1,7 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-16",
+  "lastUpdated": "2026-07-17",
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
@@ -22,6 +22,12 @@
   ],
   "blocked": [],
   "shipped": [
+    {
+      "date": "2026-07-17",
+      "summary": "Dead-teammate busy-floor fix (PR #95): Claude's Stop-hook background_tasks re-lists idle teammates as 'running'; tian now retires ids ended by TeammateIdle/SubagentStop, ages re-listed teammates from first sight (900s hard cap), and prune-retires expiry so wakeup-loop sessions no longer read busy forever. 1220 tests green + live CLI verify vs tian-debug.app.",
+      "commit": "",
+      "link": "https://github.com/psycoder-sup/tian/pull/95"
+    },
     {
       "date": "2026-07-16",
       "summary": "Released v1.5.12 (build 562) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the git-watch redesign (ADR 0005 / PR #94) plus follow-up fixes merged since v1.5.11.",
