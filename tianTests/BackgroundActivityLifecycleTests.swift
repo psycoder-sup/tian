@@ -389,6 +389,174 @@ struct BackgroundActivityLifecycleTests {
         #expect(manager.backgroundActivities.isEmpty)
     }
 
+    // MARK: - Retired teammates (lying snapshots)
+
+    /// The dead-teammate loop: Claude keeps re-listing an idle teammate as
+    /// `"running"` in every turn-end `background_tasks`. Once `TeammateIdle`/
+    /// `SubagentStop` ended it, the re-listing must not resurrect it — that
+    /// resurrection is what pinned wakeup-loop sessions busy forever.
+    @Test func reconcileDoesNotResurrectAnEndedTeammate() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        let snapshot = [task("t1", kind: .teammate)]
+
+        manager.reconcileActivities(paneID: pane, snapshot)
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["t1"])
+
+        manager.endActivity(paneID: pane, id: "t1")        // TeammateIdle
+        manager.reconcileActivities(paneID: pane, snapshot) // Claude lies again
+
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    @Test func syncDoesNotResurrectAnEndedTeammate() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        let snapshot = [task("t1", kind: .teammate)]
+
+        manager.syncActivities(paneID: pane, snapshot)
+        manager.endActivity(paneID: pane, id: "t1")
+        manager.syncActivities(paneID: pane, snapshot)
+
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    /// Retirement is teammate-scoped: an ended id whose snapshot entry is a bash
+    /// task keeps the whole-set-replace semantics and comes back on re-sync.
+    @Test func endedBashTaskIsStillReplacedBySnapshots() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        manager.endActivity(paneID: pane, id: "b1")
+        manager.syncActivities(paneID: pane, [task("b1")])
+
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["b1"])
+    }
+
+    /// The label-fallback end (a teammate event with no id) retires the *entry's*
+    /// id, so the roster re-listing is blocked the same as an id-keyed end.
+    @Test func endByLabelRetiresTheEndedEntryId() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+        let snapshot = [task("t9", kind: .teammate)]   // task() labels with the id
+
+        manager.reconcileActivities(paneID: pane, snapshot)
+        manager.endActivity(paneID: pane, label: "t9")
+        manager.reconcileActivities(paneID: pane, snapshot)
+
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    /// A fresh lifecycle begin un-retires the id — a new start is proof the worker
+    /// is alive again, so later snapshots may report it once more.
+    @Test func freshBeginUnretiresTheId() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        manager.endActivity(paneID: pane, id: "t1")            // event-retired
+        manager.beginActivity(paneID: pane, agent("t1"))       // re-spawned
+        // Reconcile drops the lifecycle agent entry, then admits the snapshot's
+        // teammate entry — which only works if the id was un-retired.
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["t1"])
+        #expect(manager.backgroundActivities[pane]?.first?.source == .snapshot)
+    }
+
+    /// A re-listed teammate ages from *first sight*: the merge keeps the original
+    /// `lastSeen` instead of the fresh decode stamp, so the (long) teammate TTL is
+    /// a hard cap rather than a sliding window Claude re-arms every turn-end.
+    @Test func relistedTeammateKeepsItsOriginalLastSeen() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        var first = task("t1", kind: .teammate)
+        first.lastSeen = Date(timeIntervalSinceNow: -500)
+        manager.reconcileActivities(paneID: pane, [first])
+
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+
+        let merged = manager.backgroundActivities[pane]?.first
+        #expect(merged.map { $0.lastSeen.timeIntervalSinceNow < -400 } == true)
+    }
+
+    /// Bash/task snapshot entries keep the old behavior: every re-sync refreshes
+    /// them, because for genuinely running background work the snapshot *is* the
+    /// liveness feed.
+    @Test func relistedBashIsRefreshed() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        var first = task("b1")
+        first.lastSeen = Date(timeIntervalSinceNow: -100)
+        manager.syncActivities(paneID: pane, [first])
+
+        manager.syncActivities(paneID: pane, [task("b1")])
+
+        let merged = manager.backgroundActivities[pane]?.first
+        #expect(merged.map { $0.lastSeen.timeIntervalSinceNow > -5 } == true)
+    }
+
+    /// TTL expiry is itself a retirement: once a snapshot teammate ages out and the
+    /// sweep drops it, the next lying re-list may not floor the session for another
+    /// full TTL — that would be an endless busy/idle oscillation.
+    @Test func pruneRetiresStaleSnapshotTeammates() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        var old = task("t1", kind: .teammate)
+        old.lastSeen = Date(timeIntervalSinceNow: -(BackgroundActivity.lifecycleStalenessTTL + 1))
+        manager.reconcileActivities(paneID: pane, [old])
+
+        manager.pruneStaleActivities()
+        #expect(manager.backgroundActivities[pane] == nil)
+
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    /// The turn-scoped resets (`UserPromptSubmit`, idle) must NOT forget
+    /// retirements — the next prompt's turn-end snapshot still lies.
+    @Test func resetLifecycleKeepsRetirements() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        manager.endActivity(paneID: pane, id: "t1")
+        manager.resetLifecycleActivities(paneID: pane)
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+
+        #expect(manager.backgroundActivities[pane] == nil)
+    }
+
+    /// `SessionEnd` ends the id space along with the session: the next Claude
+    /// session in this pane mints fresh ids and must start unfiltered.
+    @Test func clearActivitiesForgetsRetirements() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        manager.endActivity(paneID: pane, id: "t1")
+        manager.clearActivities(paneID: pane)
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+
+        #expect(manager.backgroundActivities[pane]?.map(\.id) == ["t1"])
+    }
+
+    /// End-to-end shape of the released-attention regression: with only a retired
+    /// (re-listed) teammate left, an ended attention owner falls to `.idle`, not to
+    /// a phantom `.busy`.
+    @Test func attentionReleaseFallsToIdleWhenOnlyRetiredTeammatesRemain() {
+        let manager = PaneStatusManager()
+        let pane = UUID()
+
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+        manager.setSessionState(paneID: pane, state: .needsAttention, origin: .agent("a1"))
+        manager.endActivity(paneID: pane, id: "t1")        // TeammateIdle
+        manager.reconcileActivities(paneID: pane, [task("t1", kind: .teammate)])
+        manager.endActivity(paneID: pane, id: "a1")        // attention owner dies
+
+        #expect(manager.sessionState(for: pane) == .idle)
+    }
+
     // MARK: - Source-aware staleness
 
     /// 200s past `lastSeen`: a snapshot entry (180s TTL) is stale, a lifecycle entry
