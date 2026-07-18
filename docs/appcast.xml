@@ -497,6 +497,18 @@
                  type="application/octet-stream"
                  sparkle:edSignature="CvfdlydQFZoCKj11kJOnLHqsPKZALyUnDVLLlgC7LFPFDI8YUyPWnM7RPQhSGyIOqSNoNu+ps0mB32tPe2ViAQ==" />
     </item>
+        <item>
+      <title>v1.5.13</title>
+      <sparkle:releaseNotesLink>https://github.com/psycoder-sup/tian/releases/tag/v1.5.13</sparkle:releaseNotesLink>
+      <pubDate>Sat, 18 Jul 2026 08:09:39 +0000</pubDate>
+      <sparkle:version>569</sparkle:version>
+      <sparkle:shortVersionString>1.5.13</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/psycoder-sup/tian/releases/download/v1.5.13/tian-1.5.13.dmg"
+                 length="13047001"
+                 type="application/octet-stream"
+                 sparkle:edSignature="Z9vrFZELeS/ZUcCBn0Qs4rvnDw+dnEqs5vqoDVPOlL9x+rAApFB/aCx4j6TbQRC1wS41FKPa0pgyaJlcgFdxBQ==" />
+    </item>
     <!-- items prepended by scripts/publish.sh -->
   </channel>
 </rss>
