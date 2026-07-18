@@ -1,11 +1,11 @@
 {
   "project": "tian",
   "oneLiner": "A native macOS terminal emulator (SwiftUI + embedded Ghostty) with a workspace model and CLI built for driving Claude Code sessions.",
-  "lastUpdated": "2026-07-17",
+  "lastUpdated": "2026-07-18",
   "now": [],
   "next": [
     "Remote-workspace phase 2: forward the IPC socket + install shell integration remotely so a remote Claude pane gets live busy/idle, auto-title, and OSC-7 pwd tracking (deferred from PR #66).",
-    "Daily-drive the shipped app (now v1.5.12) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
+    "Daily-drive the shipped app (now v1.5.13) and triage regressions; small follow-up candidates: Reset Name (custom→auto), worktree-leak-on-close, Escape-vs-⌘W placeholder binding.",
     "Validate the /tian implement harness (bumped to v1.2.0 for the session model) on a real multi-slice run: async fan-out overlap + structured handoff (ADR 0003)."
   ],
   "milestones": [
@@ -23,10 +23,10 @@
   "blocked": [],
   "shipped": [
     {
-      "date": "2026-07-17",
-      "summary": "Dead-teammate busy-floor fix (PR #95): Claude's Stop-hook background_tasks re-lists idle teammates as 'running'; tian now retires ids ended by TeammateIdle/SubagentStop, ages re-listed teammates from first sight (900s hard cap), and prune-retires expiry so wakeup-loop sessions no longer read busy forever. 1220 tests green + live CLI verify vs tian-debug.app.",
-      "commit": "",
-      "link": "https://github.com/psycoder-sup/tian/pull/95"
+      "date": "2026-07-18",
+      "summary": "Released v1.5.13 (build 570) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships the dead-teammate busy-floor fix (PR #95): Claude's Stop-hook background_tasks re-lists idle teammates as 'running'; tian now retires ids ended by TeammateIdle/SubagentStop, ages re-listed teammates from first sight (900s hard cap), and prune-retires expiry so wakeup-loop sessions no longer read busy forever. Verified with 1220 green tests + live CLI verify against tian-debug.app.",
+      "commit": "54f93db",
+      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.13"
     },
     {
       "date": "2026-07-16",
@@ -39,12 +39,6 @@
       "summary": "Git-watch redesign (ADR 0005): replaced per-Session git watching with an app-global, repo-keyed GitMonitor — dedup watchers + global concurrency lanes (git-local 4 / gh-network 2), split refs(always-on)/working-tree(gated) FSEvents signal, visible+busy working-tree gating, cached repo detection, QoS .userInitiated→.utility, PR off the hot path (TTL 300s + backoff). Fixes the daily-drive lag (logs showed ~12k git spawns/3d, a 96/min 'Not a git repo' storm, dead-worktree churn, 899 uncapped gh calls, all while app CPU sat at 0.1%). SessionGitContext is now a thin adapter. Build + 1207 tests green; /code-review medium ran, 5 findings fixed. Shipped via 5-wave /orchestrate run.",
       "commit": "e3e773d",
       "link": "https://github.com/psycoder-sup/tian/pull/94"
-    },
-    {
-      "date": "2026-07-14",
-      "summary": "Released v1.5.11 (build 553) — notarized + stapled, Gatekeeper-accepted, Sparkle appcast live. Ships PR #93 (busy-session CPU spike fix: TimelineView-driven relayout replaced with a static rainbow fill + CALayer-driven RainbowBorder) and PR #92 (Ghostty preference overrides in tian Settings).",
-      "commit": "77e3ecd",
-      "link": "https://github.com/psycoder-sup/tian/releases/tag/v1.5.11"
     }
   ]
 }
