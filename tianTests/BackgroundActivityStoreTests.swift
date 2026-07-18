@@ -63,6 +63,24 @@ struct BackgroundActivityStoreTests {
         #expect(acts[0].label == "o")
     }
 
+    @Test func teammateKindFromTeammateType() {
+        // The shape Claude actually sends for team members in `background_tasks`.
+        let acts = BackgroundActivity.fromClaudeSnapshot(json: #"[{"id":"t1","type":"teammate","status":"running","description":"api work"}]"#)
+        #expect(acts[0].kind == .teammate)
+        #expect(acts[0].label == "api work")
+    }
+
+    /// Snapshot teammates get the long lifecycle TTL: their `lastSeen` is never
+    /// re-stamped on re-sync (roster, not liveness), so the TTL acts as a hard cap
+    /// from first sight and must be sized for a real teammate's working stretch.
+    @Test func snapshotTeammateUsesTheLifecycleTTL() {
+        let teammate = BackgroundActivity(id: "t", kind: .teammate, label: "t", status: "running")
+        #expect(teammate.stalenessTTL == BackgroundActivity.lifecycleStalenessTTL)
+
+        let bash = BackgroundActivity(id: "b", kind: .bash, label: "b", status: "running")
+        #expect(bash.stalenessTTL == BackgroundActivity.stalenessTTL)
+    }
+
     // MARK: - fromClaudeSnapshot: label priority
 
     @Test func labelPrefersDescriptionOverAgentTypeAndCommand() {

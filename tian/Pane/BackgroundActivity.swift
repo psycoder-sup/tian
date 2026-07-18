@@ -96,11 +96,19 @@ struct BackgroundActivity: Identifiable, Equatable, Codable, Sendable {
     /// and is sized to sit well past any plausible agent run.
     static let lifecycleStalenessTTL: TimeInterval = 900
 
-    /// The staleness backstop that applies to this entry, chosen by `source`.
+    /// The staleness backstop that applies to this entry, chosen by `source` —
+    /// with one carve-out: **snapshot teammates** get the long lifecycle TTL.
+    ///
+    /// Claude's `background_tasks` keeps re-listing teammates that went idle long
+    /// ago as `"running"`, so for them the snapshot is *roster*, not liveness.
+    /// `PaneStatusManager` therefore never re-stamps a re-listed teammate's
+    /// `lastSeen` (it ages from first sight), and this TTL is the hard cap on how
+    /// long a lying roster entry can floor the session busy when no
+    /// `TeammateIdle`/`SubagentStop` ever retires it.
     var stalenessTTL: TimeInterval {
         switch source {
         case .lifecycle: Self.lifecycleStalenessTTL
-        case .snapshot: Self.stalenessTTL
+        case .snapshot: kind == .teammate ? Self.lifecycleStalenessTTL : Self.stalenessTTL
         }
     }
 
@@ -132,9 +140,11 @@ extension BackgroundActivity {
     /// array (or is outright garbage) yields `[]`, and non-object / id-less elements
     /// are skipped rather than aborting the whole decode.
     ///
-    /// Kind mapping: an element with an `agent_type` — or a type-ish value
-    /// containing "agent" — becomes `.agent`; a "bash"/"shell" type becomes `.bash`;
-    /// anything else is `.other`. Label prefers `description` (the task-specific
+    /// Kind mapping: a type-ish value containing "teammate" becomes `.teammate`
+    /// (checked first — Claude reports team members as `type: "teammate"`); an
+    /// element with an `agent_type` — or a type-ish value containing "agent" —
+    /// becomes `.agent`; a "bash"/"shell" type becomes `.bash`; anything else is
+    /// `.other`. Label prefers `description` (the task-specific
     /// summary Claude sends for both subagents and background bash), then
     /// `agent_type`, then `command`, falling back to the id — the `kind` glyph
     /// already conveys agent-vs-bash, so the label surfaces *what* the work is.
@@ -173,7 +183,9 @@ extension BackgroundActivity {
             let command = string(dict["command"])
 
             let kind: Kind
-            if agentType != nil || (typeHint?.contains("agent") ?? false) {
+            if let typeHint, typeHint.contains("teammate") {
+                kind = .teammate
+            } else if agentType != nil || (typeHint?.contains("agent") ?? false) {
                 kind = .agent
             } else if let typeHint, typeHint.contains("bash") || typeHint.contains("shell") {
                 kind = .bash

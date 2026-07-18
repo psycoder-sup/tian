@@ -81,6 +81,7 @@ final class PaneStatusManager {
         lastPrompts.removeValue(forKey: paneID)
         backgroundActivities.removeValue(forKey: paneID)
         attentionOwners.removeValue(forKey: paneID)
+        retiredActivityIDs.removeValue(forKey: paneID)
         lifecycleSeen.remove(paneID)
         if let pvm = owner(of: paneID) {
             pvm.paneStatuses.removeValue(forKey: paneID)
@@ -97,6 +98,7 @@ final class PaneStatusManager {
             lastPrompts.removeValue(forKey: id)
             backgroundActivities.removeValue(forKey: id)
             attentionOwners.removeValue(forKey: id)
+            retiredActivityIDs.removeValue(forKey: id)
             lifecycleSeen.remove(id)
             if let pvm = owner(of: id) {
                 pvm.paneStatuses.removeValue(forKey: id)
@@ -249,6 +251,37 @@ final class PaneStatusManager {
     /// "this CLI can't tell us about subagents".
     private var lifecycleSeen: Set<UUID> = []
 
+    /// Ids whose work has been *ended by an event* (`SubagentStop`, `TeammateIdle`)
+    /// and must not be resurrected by a later `background_tasks` snapshot.
+    ///
+    /// Claude keeps re-listing a team's teammates as `"running"` long after they
+    /// went idle, so for teammates the snapshot is roster, not liveness — without
+    /// this, every turn-end reconcile would re-mint the dead teammate fresh and
+    /// the busy floor would never lift (a wakeup-loop session then reads busy
+    /// forever). Every ended id is recorded (agent and teammate ids live in
+    /// disjoint id spaces, so over-recording is harmless), but only incoming
+    /// `.teammate` snapshot entries are filtered against it — bash/task snapshot
+    /// entries keep their whole-set-replace semantics untouched.
+    ///
+    /// A fresh lifecycle `begin` for a retired id un-retires it: a new start is
+    /// proof the worker is alive again. Insertion-ordered and capped so a very
+    /// long session can't grow it unboundedly.
+    private var retiredActivityIDs: [UUID: [String]] = [:]
+
+    /// Cap per pane for `retiredActivityIDs`; oldest ids drop off first.
+    private static let retiredIDCap = 128
+
+    /// Records `id` as event-ended for this pane (idempotent, capped FIFO).
+    private func retire(paneID: UUID, id: String) {
+        var ids = retiredActivityIDs[paneID] ?? []
+        guard !ids.contains(id) else { return }
+        ids.append(id)
+        if ids.count > Self.retiredIDCap {
+            ids.removeFirst(ids.count - Self.retiredIDCap)
+        }
+        retiredActivityIDs[paneID] = ids
+    }
+
     /// Records the start of a subagent or teammate reported by a lifecycle hook.
     ///
     /// This is the feed that fixes the stuck badge: `background_tasks` only ever
@@ -261,6 +294,10 @@ final class PaneStatusManager {
     /// double-count and the list doesn't reshuffle.
     func beginActivity(paneID: UUID, _ activity: BackgroundActivity) {
         lifecycleSeen.insert(paneID)
+
+        // A fresh start un-retires the id: the worker is provably alive again,
+        // so later snapshots may report it once more.
+        retiredActivityIDs[paneID]?.removeAll { $0 == activity.id }
 
         var activities = backgroundActivities[paneID] ?? []
         if let index = activities.firstIndex(where: { $0.id == activity.id }) {
@@ -284,6 +321,7 @@ final class PaneStatusManager {
     /// attention owner is only ever keyed by an `agent_id`, so a teammate/task id
     /// simply matches no owner and releases nothing.
     func endActivity(paneID: UUID, id: String) {
+        retire(paneID: paneID, id: id)
         if var activities = backgroundActivities[paneID] {
             let before = activities.count
             activities.removeAll { $0.id == id }
@@ -304,6 +342,7 @@ final class PaneStatusManager {
         guard var activities = backgroundActivities[paneID] else { return }
         guard let index = activities.firstIndex(where: { $0.label == label }) else { return }
         let ended = activities.remove(at: index)
+        retire(paneID: paneID, id: ended.id)
         write(paneID: paneID, activities)
 
         // Only a subagent's id lives in the same id space as an attention owner
@@ -370,10 +409,11 @@ final class PaneStatusManager {
     /// An emptied pane loses its dictionary entry entirely, so "no outstanding
     /// work" reads as absent rather than as an empty array.
     func syncActivities(paneID: UUID, _ snapshot: [BackgroundActivity]) {
+        let admitted = filterAndAgeSnapshot(paneID: paneID, snapshot)
         let existing = backgroundActivities[paneID] ?? []
         let live = existing.filter { $0.source == .lifecycle }
         let liveIDs = Set(live.map(\.id))
-        write(paneID: paneID, live + snapshot.filter { !liveIDs.contains($0.id) })
+        write(paneID: paneID, live + admitted.filter { !liveIDs.contains($0.id) })
     }
 
     /// The authoritative turn-end reconcile, driven by the `Stop` hook.
@@ -393,10 +433,41 @@ final class PaneStatusManager {
     /// `live + snapshot`, and are deduped against it the same way: a teammate whose id
     /// also shows up in the snapshot counts once, and lifecycle wins.
     func reconcileActivities(paneID: UUID, _ snapshot: [BackgroundActivity]) {
+        let admitted = filterAndAgeSnapshot(paneID: paneID, snapshot)
         let existing = backgroundActivities[paneID] ?? []
         let live = existing.filter { $0.source == .lifecycle && $0.kind == .teammate }
         let liveIDs = Set(live.map(\.id))
-        write(paneID: paneID, live + snapshot.filter { !liveIDs.contains($0.id) })
+        write(paneID: paneID, live + admitted.filter { !liveIDs.contains($0.id) })
+    }
+
+    /// Applies the teammate carve-outs to an incoming `background_tasks` snapshot
+    /// before it is merged.
+    ///
+    /// Claude keeps re-listing a team's idle teammates as `"running"`, so for
+    /// `.teammate` entries the snapshot is *roster*, not liveness. Two rules
+    /// restore truth without touching any other entry kind:
+    /// - an event-retired teammate id (see `retiredActivityIDs`) is dropped — a
+    ///   `TeammateIdle`/`SubagentStop` already proved it dead, and re-listing is
+    ///   not evidence of resurrection;
+    /// - a re-listed teammate that survives keeps its existing entry's `lastSeen`,
+    ///   so its freshness ages from *first sight* and the (long) teammate TTL is a
+    ///   hard cap — instead of being re-stamped fresh by every turn-end, which is
+    ///   what let a wakeup-loop session floor itself busy forever.
+    /// Non-teammate entries pass through untouched: the snapshot stays
+    /// authoritative (and self-refreshing) for backgrounded bash/tasks.
+    private func filterAndAgeSnapshot(paneID: UUID, _ snapshot: [BackgroundActivity]) -> [BackgroundActivity] {
+        let retired = retiredActivityIDs[paneID] ?? []
+        let existing = backgroundActivities[paneID] ?? []
+        return snapshot.compactMap { incoming in
+            guard incoming.kind == .teammate else { return incoming }
+            if retired.contains(incoming.id) { return nil }
+            guard let previous = existing.first(where: { $0.id == incoming.id && $0.source == .snapshot }) else {
+                return incoming
+            }
+            var aged = incoming
+            aged.lastSeen = previous.lastSeen
+            return aged
+        }
     }
 
     /// Drops the pane's `.lifecycle`+`.agent` entries, keeping teammates and snapshots.
@@ -429,6 +500,9 @@ final class PaneStatusManager {
     /// (status label, session state, last prompt, lifecycle mark) — here the pane
     /// itself is still very much alive.
     func clearActivities(paneID: UUID) {
+        // The Claude *session* is over, so its id space is too — the next session
+        // in this pane mints fresh teammate ids and must start unfiltered.
+        retiredActivityIDs.removeValue(forKey: paneID)
         guard backgroundActivities[paneID] != nil else { return }
         write(paneID: paneID, [])
     }
@@ -476,6 +550,14 @@ final class PaneStatusManager {
         for (paneID, activities) in backgroundActivities {
             let fresh = activities.filter { !$0.isStale }
             guard fresh.count != activities.count else { continue }   // nothing aged out
+            // A snapshot teammate that aged out is retired, not just removed:
+            // Claude will re-list it as "running" on the very next turn-end, and
+            // without the tombstone that re-mint would floor the session busy for
+            // another full TTL — an endless 15-minute busy/idle oscillation.
+            for stale in activities where stale.isStale
+                && stale.kind == .teammate && stale.source == .snapshot {
+                retire(paneID: paneID, id: stale.id)
+            }
             if fresh.isEmpty {
                 backgroundActivities.removeValue(forKey: paneID)
                 owner(of: paneID)?.paneBackgroundActivities.removeValue(forKey: paneID)   // dual-write
